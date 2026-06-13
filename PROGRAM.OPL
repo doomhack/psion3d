@@ -1,0 +1,492 @@
+PROC main:
+
+	GLOBAL gamewin%(2), currbuf%, dbgwin%
+	GLOBAL m$(64,64), posx, posy, angle
+  
+m$(1)="XXXXXXXXXXXXXXXXXXXXXXXXXXXPXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(2)="XXXXXXXXXXXXXXXXXXXXXXXXXXX0000D0H00000000XXXXXXXXXXXXXXXXXXXXXX"
+m$(3)="XXXXXXXXXXXXXXXXXXXXXXXXXXXAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(4)="XXXXXXXXXXXXXXXXXXXXXXXXX00000XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(5)="XXXXXXXXXXXXXXXXXXXXXXXXX00000XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(6)="XXXXXXXXXXXXXXXXXXX00000D00000D0A00XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(7)="XXXXXXXXXXXXXXXXXXXXXX0XX00000XXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(8)="XXXXXXXXXXXXXXXXXXXXXX0XXXX0XXXXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(9)="XXXXXXXXXXXXXXXXXXXXXX0XXXXDXXXXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(10)="XXXXXXXXXXXXXXXXXXXXXX0XXXX0XXXXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(11)="XXXXXXXXXXXXXXXXXXXXXX000X000XXXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(12)="XXXXXXXXXXXXXXXXXXXXXX000W0P0XXXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(13)="XXXXXXXXXXXXXXXXXXXXXX000X000XXXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(14)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(15)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(16)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(17)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(18)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(19)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(20)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(21)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(22)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(23)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(24)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(25)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(26)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(27)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(28)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(29)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(30)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(31)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(32)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(33)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(34)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(35)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(36)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(37)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(38)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(39)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(40)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(41)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(42)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(43)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(44)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(45)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(46)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(47)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(48)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(49)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(50)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(51)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(52)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(53)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(54)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(55)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(56)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(57)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(58)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(59)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(60)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(61)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(62)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(63)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(64)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
+
+	dbgwin% = gCREATE(0,0,120,160,1,0)
+
+	gamewin%(1) = gCREATE(120,0,240,160,0,1)
+	gamewin%(2) = gCREATE(120,0,240,160,1,1)
+	currbuf% = 0
+	
+	gUSE gamewin%(1)
+	
+	CACHE 10000,10000
+
+	posx=27.5 : posy=1.5 : angle=0
+
+	gUPDATE OFF
+
+	mainloop:
+  
+ENDP
+
+PROC mainloop:
+
+  LOCAL k%, frames%, lastsec%, sec%
+
+  DO 
+  
+    draw2:
+	
+	REM bufflip:
+	buffcpy:
+	
+
+    k%=input%:
+
+	frames% = frames% + 1
+	
+	sec% = SECOND
+	
+	IF(sec% <> lastsec%)
+		gUSE dbgwin%
+		gCLS
+		gAT 10,10
+		gPRINT frames%
+		gUSE gamewin%(currbuf% + 1)
+		
+		frames% = 0
+		lastsec% = sec%
+	ENDIF
+	
+  UNTIL k%=27
+
+ENDP
+
+PROC bufflip:
+
+	LOCAL backbuf%, frntbuf%
+	
+	backbuf% = gamewin%(currbuf% + 1)
+	
+	currbuf% = 1 - currbuf%
+	
+	frntbuf% = gamewin%(currbuf% + 1)
+	
+	
+	gUSE frntbuf%
+	gVISIBLE OFF
+	
+	gUSE backbuf%
+	gVISIBLE ON
+	
+	gUSE frntbuf%
+ENDP
+
+PROC buffcpy:
+
+	LOCAL backbuf%, frntbuf%
+	
+	backbuf% = gamewin%(currbuf% + 1)
+		
+	frntbuf% = gamewin%((1 - currbuf%) + 1)
+	
+	gUSE frntbuf%
+	gGREY 2
+	gCOPY backbuf%, 0, 0, 240, 160, 3
+	
+	gUPDATE
+	
+	gUSE backbuf%
+	
+ENDP
+
+PROC input%:
+	LOCAL k%, dx, dy
+
+	k%=KEY
+
+    IF k%=259
+	   angle=angle-0.1
+    ENDIF
+	
+    IF k%=258
+	   angle=angle+0.1
+	ENDIF
+	
+	
+	IF k% = 256 OR k% = 257
+	  dx = COS(angle)*0.2
+	  dy = SIN(angle)*0.2
+
+	  IF k%=257
+		dx = -dx
+		dy = -dy
+	  ENDIF
+
+	trymove:(dx, dy)
+
+	ENDIF
+	
+	RETURN k%
+ENDP
+
+PROC trymove:(dx, dy)
+
+	LOCAL nx, ny, nx%, ny%, cell$(1)
+
+	REM try X movement only
+	nx = posx + dx
+	ny = posy
+
+	nx% = nx
+	ny% = ny
+
+	cell$ = mapcell$:(nx%,ny%)
+
+	IF canwalk%:(cell$)
+		posx = nx
+	ENDIF
+
+	REM try Y movement only
+	nx = posx
+	ny = posy + dy
+
+	nx% = nx
+	ny% = ny
+
+	cell$ = mapcell$:(nx%,ny%)
+
+	IF canwalk%:(cell$)
+		posy = ny
+	ENDIF
+	  
+ENDP
+
+PROC draw2:
+  LOCAL i%,ra,dx,dy
+  LOCAL mapx%,mapy%,stepx%,stepy%
+  LOCAL sidedx,sidedy,deltax,deltay
+  LOCAL hit%,side%,dist,h%, solid%, hits%, hitcell$(1), wallx, rayhits%
+  LOCAL wsx%(180), wh%(180), wdist%(180), cell$(180,1), sides%(180), wallx%(180)
+
+  i%=0
+  hits% = 0
+  WHILE i%<60
+
+    REM 60 degree FOV, 120 rays, 4 pixels each
+    ra=angle-0.5236+(i%*1.0472)/59.0
+	
+    dx=COS(ra)
+    dy=SIN(ra)
+
+    mapx%=posx
+    mapy%=posy
+
+    IF dx<0
+      stepx%=-1
+      deltax=-1/dx
+      sidedx=(posx-mapx%)*deltax
+    ELSE
+      stepx%=1
+      deltax=1/dx
+      sidedx=(mapx%+1-posx)*deltax
+    ENDIF
+
+    IF dy<0
+      stepy%=-1
+      deltay=-1/dy
+      sidedy=(posy-mapy%)*deltay
+    ELSE
+      stepy%=1
+      deltay=1/dy
+      sidedy=(mapy%+1-posy)*deltay
+    ENDIF
+
+
+	solid% = 0
+	rayhits% = 0
+	
+	WHILE solid% = 0
+	
+	    hit%=0
+	
+		WHILE hit%=0
+		  IF sidedx<sidedy
+			sidedx=sidedx+deltax
+			mapx%=mapx%+stepx%
+			side%=0
+		  ELSE
+			sidedy=sidedy+deltay
+			mapy%=mapy%+stepy%
+			side%=1
+		  ENDIF
+		  
+		  hitcell$ = mapcell$:(mapx%, mapy%)
+		  hit% = hitcell$ <> "0"
+
+
+		  IF(hit%)
+			hits% = hits% + 1
+			rayhits% = rayhits% + 1
+		    solid% = hitcell$ = "X"
+			
+			IF rayhits% = 3
+				solid% = 1
+			ENDIF
+			
+		  ENDIF
+		  
+		ENDWH
+		
+		cell$(hits%) = hitcell$
+		sides%(hits%) = side%
+
+		IF side%=0
+		  dist=(mapx%-posx+(1-stepx%)/2)/dx
+		  wallx = posy + dist * dy
+		ELSE
+		  dist=(mapy%-posy+(1-stepy%)/2)/dy
+		  wallx = posx + dist * dx
+		ENDIF
+		
+		IF dist < 0.005
+		   h% = 32000
+		ELSE
+		   h%=INT(120/dist)
+		ENDIF
+			
+		wsx%(hits%) = i%*4
+		wh%(hits%) = h%
+		wdist%(hits%) = (dist * 8)
+		wallx%(hits%) = ((wallx - INT(wallx)) * 16)
+		
+	ENDWH
+	
+	i%=i%+1
+	
+  ENDWH
+  
+  i% = hits%
+  
+	gGREY 2
+    gCLS
+	
+  	REM gGREY 0
+	REM gCLS
+
+	gBOX 240, 160
+  
+	WHILE i% > 0
+		drawwall:(wsx%(i%), wh%(i%), wdist%(i%), cell$(i%), sides%(i%), wallx%(i%))
+				
+		i% = i% - 1
+	ENDWH
+	
+ENDP
+
+PROC drawwall:(sx%, h2%, dist%, cx$, side%, wallx%)
+
+	LOCAL top%, height%, cell$(1), shade%, qheight%, doorgap%, dleft%, dright%
+	
+	top% = INT(80-h2%/2)
+	height% = h2%
+	shade% = side%
+	qheight% = height% / 4
+
+	cell$ = cx$
+	
+	IF cell$ = "H"
+		RETURN
+	ENDIF
+	
+	IF cell$ = "A"
+		IF wallx% > 1 AND wallx% < 14
+			height% = height% / 4
+		ENDIF
+		
+		cell$ = "X"
+	ELSEIF cell$ = "W"
+		shade% = 0
+	ELSEIF cell$ = "S"
+		cell$ = "X"
+	ENDIF
+		
+	gGREY 0
+	gAT sx%,top%
+
+	IF(cell$ = "X")
+		
+		depthbox:(sx%,top%,4,height%,dist%,shade%)
+				
+		IF(cx$ <> "A" AND dist% < 48)
+			gAT sx%, 80 - qheight%
+			gLINEBY 4,0
+			gAT sx%, 80
+			gLINEBY 4,0
+			gAT sx%, 80 + qheight%
+			gLINEBY 4,0
+		ELSE
+			gAT sx%, top% + height%
+			gLINEBY 4,0
+		ENDIF
+		
+	ELSEIF cell$ = "D"
+		
+		IF dist% > 16
+			doorgap% = 0
+		ELSE
+			doorgap% = 16 - dist%
+		ENDIF
+		
+		dleft% = 8 - (doorgap% / 2)
+		dright% = 8 + (doorgap% / 2)
+		
+		IF(wallx% = dleft% OR wallx% = dright%)
+			gGREY 0
+			gFILL 4,height%,0
+		ELSEIF(wallx% < dleft% OR wallx% > dright%)
+			
+			IF (((wallx% < (dleft% - 2)) AND (wallx% >= (dleft% - 5))) OR ((wallx% > (dright% + 2)) AND (wallx% <= (dright% + 5))))
+				gGREY 1
+				gFILL 4,height%,0
+				
+				gAT sx%, top%
+				gGREY 0
+				gFILL 4,qheight%,1
+				
+				gAT sx%, 80
+				gFILL 4,qheight% * 2,1
+			ELSE
+				gGREY 0
+				gFILL 4,height%,1
+				gGREY 1
+				gFILL 4,height%,0			
+			ENDIF
+			
+			gGREY 0
+
+			gAT sx%, top% + height% - (qheight% / 2)
+			gPATT -1,4,qheight% / 2,0
+			
+		ENDIF
+				
+	ELSEIF cell$ = "P"
+	   gFILL 4,height%,0
+	ELSEIF cell$ = "W"
+		gAT sx%, top% + qheight%
+		
+		gGREY 1
+		gFILL 4,qheight% * 2,0
+		
+		gGREY 0
+		gLINEBY 4,0
+		
+		gAT sx%, top% + qheight%
+		gLINEBY 4,0
+		
+		depthbox:(sx%,top%,4,qheight%, dist%, shade%)
+		depthbox:(sx%,80 + qheight%, 4, qheight%, dist%, shade%)
+	ENDIF
+	
+ENDP
+
+PROC depthbox:(x%,y%,w%,h%,dist%,shade%)
+
+	gAT x%, y%
+	
+	IF shade% = 1
+		gGREY 1
+		gFILL 4,h%,0
+    ELSE
+		gGREY 1
+		gFILL w%,h%,1
+	ENDIF
+
+	IF dist% >= 48
+		gGREY 0
+		gFILL w%,h%,0
+	ELSEIF dist% >= 32
+		gGREY 1
+		gFILL w%,h%,0
+		gGREY 0
+		gPATT -1,w%,h%,3
+	ELSE
+		gGREY 0
+		gPATT -1,w%,h%,3
+	ENDIF
+		
+ENDP
+
+PROC mapcell$:(mx%,my%)
+	IF mx%<0 OR mx%>63 OR my%<0 OR my%>63
+		RETURN "X"
+	ENDIF
+
+	RETURN MID$(m$(my%+1),(mx%+1),1)
+ENDP
+
+PROC canwalk%:(cell$)
+	IF cell$="0" OR cell$="A" OR cell$="D" OR cell$="H" OR cell$ = "S"
+		RETURN 1
+	ENDIF
+	
+	RETURN 0
+ENDP
