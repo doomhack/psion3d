@@ -236,7 +236,9 @@ PROC draw2:
   LOCAL mapx%,mapy%,stepx%,stepy%
   LOCAL sidedx,sidedy,deltax,deltay
   LOCAL hit%,side%,dist,h%, solid%, hits%, hitcell$(1), wallx, rayhits%
-  LOCAL wh%(3), wdist%(3), cell$(3,1), sides%(3), wallx%(3)
+	LOCAL wh%(3), wdist%(3), cell$(3,1), sides%(3), wallx%(3)
+
+	GLOBAL sprh%(60)
 
   i%=0
   hits% = 0
@@ -294,6 +296,9 @@ PROC draw2:
 		  hitcell$ = mapcell$:(mapx%, mapy%)
 		  hit% = hitcell$ <> "0"
 
+		  IF(hitcell$ = "Q") AND (sprh%(i% + 1) = 0)
+		     hit% = 0
+		  ENDIF
 
 		  IF(hit%)
 			hits% = hits% + 1
@@ -302,6 +307,12 @@ PROC draw2:
 			
 			IF rayhits% = 3
 				solid% = 1
+			ENDIF
+			
+			IF(hitcell$ = "H")
+				updtcell:(mapx%, mapy%, "Q")
+				
+				projspr:(i%,mapx%, mapy%)
 			ENDIF
 			
 		  ENDIF
@@ -332,14 +343,56 @@ PROC draw2:
 	
 	
 	WHILE hits% > 0
-		drawwall:(i%*4, wh%(hits%), wdist%(hits%), cell$(hits%), sides%(hits%), wallx%(hits%))
+	
+		IF cell$(hits%) = "Q"
+			drawspr:(i% * 4, sprh%(i% + 1))
+			sprh%(i% + 1) = 0
+		ELSE
+			drawwall:(i%*4, wh%(hits%), wdist%(hits%), cell$(hits%), sides%(hits%), wallx%(hits%))
+		ENDIF
+
 		hits% = hits% - 1
 	ENDWH
 	
 	i%=i%+1
 	
   ENDWH
+  
+updtcell:(33, 1, "H")
+updtcell:(26, 4, "H")
+updtcell:(28, 4, "H")
+
    
+ENDP
+
+PROC projspr:(xs% ,mx%, my%)
+
+	LOCAL rx,ry,depth,side,spanx%,height%
+
+	rx=mx%-posx+0.5
+	ry=my%-posy+0.5
+
+	depth=rx*COS(angle)+ry*SIN(angle)
+	IF depth <= 0
+		RETURN
+	ENDIF
+
+	side=-rx*SIN(angle)+ry*COS(angle)
+
+	spanx%=30+INT((side/depth)*52)
+	height%=INT(120/depth)
+
+	IF(spanx% >= 0 AND spanx% < 60)
+		sprh%(spanx% + 1) = height%
+	ENDIF
+ENDP
+
+PROC drawspr:(sx%, height%)
+
+	gAT sx% + 2 - (height% / 4), 80 + height%/4
+	
+	gFILL height% / 2,height% / 4,0
+	
 ENDP
 
 PROC drawwall:(sx%, h2%, dist%, cx$, side%, wallx%)
@@ -352,11 +405,7 @@ PROC drawwall:(sx%, h2%, dist%, cx$, side%, wallx%)
 	qheight% = height% / 4
 
 	cell$ = cx$
-	
-	IF cell$ = "H"
-		RETURN
-	ENDIF
-	
+		
 	IF cell$ = "A"
 		IF wallx% > 1 AND wallx% < 14
 			height% = height% / 4
@@ -481,6 +530,16 @@ PROC mapcell$:(mx%,my%)
 	ENDIF
 
 	RETURN MID$(m$(my%+1),(mx%+1),1)
+ENDP
+
+PROC updtcell:(mx%,my%,cell$)
+
+	IF mx%<0 OR mx%>63 OR my%<0 OR my%>63
+		RETURN
+	ENDIF
+	
+	m$(my% + 1) = LEFT$(m$(my% + 1), mx%) + cell$ + MID$(m$(my% + 1), mx% + 2, mx%-1)
+	
 ENDP
 
 PROC canwalk%:(cell$)
