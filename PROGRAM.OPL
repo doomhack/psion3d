@@ -95,8 +95,8 @@ PROC mainloop:
   
     draw2:
 	
-	REM bufflip:
-	buffcpy:
+	bufflip:
+	REM buffcpy:
 	
 
     k%=input%:
@@ -138,6 +138,12 @@ PROC bufflip:
 	gVISIBLE ON
 	
 	gUSE frntbuf%
+	
+	gGREY 2
+    gCLS
+	
+	gBOX 240, 160
+	
 ENDP
 
 PROC buffcpy:
@@ -155,6 +161,11 @@ PROC buffcpy:
 	gUPDATE
 	
 	gUSE backbuf%
+	
+	gGREY 2
+    gCLS
+	
+	gBOX 240, 160
 	
 ENDP
 
@@ -225,7 +236,7 @@ PROC draw2:
   LOCAL mapx%,mapy%,stepx%,stepy%
   LOCAL sidedx,sidedy,deltax,deltay
   LOCAL hit%,side%,dist,h%, solid%, hits%, hitcell$(1), wallx, rayhits%
-  LOCAL wsx%(180), wh%(180), wdist%(180), cell$(180,1), sides%(180), wallx%(180)
+  LOCAL wh%(3), wdist%(3), cell$(3,1), sides%(3), wallx%(3)
 
   i%=0
   hits% = 0
@@ -263,6 +274,7 @@ PROC draw2:
 
 	solid% = 0
 	rayhits% = 0
+	hits% = 0
 	
 	WHILE solid% = 0
 	
@@ -313,33 +325,21 @@ PROC draw2:
 		   h%=INT(120/dist)
 		ENDIF
 			
-		wsx%(hits%) = i%*4
 		wh%(hits%) = h%
 		wdist%(hits%) = (dist * 8)
 		wallx%(hits%) = ((wallx - INT(wallx)) * 16)
-		
+	ENDWH
+	
+	
+	WHILE hits% > 0
+		drawwall:(i%*4, wh%(hits%), wdist%(hits%), cell$(hits%), sides%(hits%), wallx%(hits%))
+		hits% = hits% - 1
 	ENDWH
 	
 	i%=i%+1
 	
   ENDWH
-  
-  i% = hits%
-  
-	gGREY 2
-    gCLS
-	
-  	REM gGREY 0
-	REM gCLS
-
-	gBOX 240, 160
-  
-	WHILE i% > 0
-		drawwall:(wsx%(i%), wh%(i%), wdist%(i%), cell$(i%), sides%(i%), wallx%(i%))
-				
-		i% = i% - 1
-	ENDWH
-	
+   
 ENDP
 
 PROC drawwall:(sx%, h2%, dist%, cx$, side%, wallx%)
