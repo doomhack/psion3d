@@ -171,14 +171,19 @@ PROC draw2:
 	LOCAL i%,ra,dx,dy
 	LOCAL mapx%,mapy%,stepx%,stepy%
 	LOCAL sidedx,sidedy,deltax,deltay
-	LOCAL hit%,side%,dist,h%, solid%, hits%, hitcell$(1), wallx, rayhits%
+	LOCAL hit%,side%,dist,h%, solid%, hits%, hitcell$(1), wallx, rayhits%, sprhits%, marks%
 	LOCAL wh%(3), wdist%(3), cell$(3,1), sides%(3), wallx%(3)
 
-	GLOBAL sprh%(60)
+	GLOBAL wdepth%(60), sprx%(8), sprh%(8), sdepth%(8), markx%(8), marky%(8)
 
-	i%=0
+	i% = 0
 	hits% = 0
+	sprhits% = 0
+	marks% = 0
+	
 	WHILE i%<60
+
+		wdepth%(i%+1) = 32000
 
 		REM 60 degree FOV, 120 rays, 4 pixels each
 		ra=angle-0.5236+(i%*1.0472)/59.0
@@ -232,9 +237,22 @@ PROC draw2:
 			  hitcell$ = mapcell$:(mapx%, mapy%)
 			  hit% = hitcell$ <> "0"
 
-			  IF(hitcell$ = "h") AND (sprh%(i% + 1) = 0)
-				 hit% = 0
-			  ENDIF
+			IF(isspr%:(hitcell$))
+				mrkspr:(mapx%, mapy%)
+				marks%=marks%+1
+				markx%(marks%)=mapx%
+				marky%(marks%)=mapy%
+					
+				IF(projspr%:(sprhits%,mapx%, mapy%))
+					sprhits% = sprhits% + 1
+				ENDIF
+				
+				hit% = 0
+			ENDIF
+
+			IF(ismarkd%:(hitcell$))
+				hit% = 0
+			ENDIF
 
 			  IF(hit%)
 				hits% = hits% + 1
@@ -244,13 +262,6 @@ PROC draw2:
 				IF rayhits% = 3
 					solid% = 1
 				ENDIF
-				
-				IF(hitcell$ = "H")
-					updtcell:(mapx%, mapy%, "h")
-					
-					projspr:(i%,mapx%, mapy%)
-				ENDIF
-				
 			  ENDIF
 			  
 			ENDWH
@@ -280,11 +291,8 @@ PROC draw2:
 	
 		WHILE hits% > 0
 		
-			IF cell$(hits%) = "h"
-				drawspr:(i% * 4, sprh%(i% + 1))
-				sprh%(i% + 1) = 0
-			ELSE
-				drawwall:(i%*4, wh%(hits%), wdist%(hits%), cell$(hits%), sides%(hits%), wallx%(hits%))
+			IF (drwwall%:(i%*4, wh%(hits%), wdist%(hits%), cell$(hits%), sides%(hits%), wallx%(hits%)))
+				wdepth%(i% + 1) = wdist%(hits%)
 			ENDIF
 
 			hits% = hits% - 1
@@ -293,12 +301,22 @@ PROC draw2:
 		i%=i%+1
 	
 	ENDWH
-  
-	loadlvl:
+	
+	WHILE sprhits% > 0
+		drawspr:(sprx%(sprhits%), sprh%(sprhits%), sdepth%(sprhits%))
+		
+		sprhits% = sprhits% - 1
+	ENDWH
+	
+	WHILE marks% > 0
+		umrkspr:(markx%(marks%), marky%(marks%))
+		
+		marks% = marks% - 1
+	ENDWH
 
 ENDP
 
-PROC projspr:(xs% ,mx%, my%)
+PROC projspr%:(i% ,mx%, my%)
 
 	LOCAL rx,ry,depth,side,spanx%,height%
 
@@ -316,26 +334,37 @@ PROC projspr:(xs% ,mx%, my%)
 	height%=INT(120/depth)
 
 	IF(spanx% >= 0 AND spanx% < 60)
-		sprh%(spanx% + 1) = height%
+		sprh%(i% + 1) = height%
+		sdepth%(i% + 1) = (depth * 8)
+		sprx%(i% + 1) = spanx%
+		
+		RETURN 1
 	ENDIF
+	
+	RETURN 0
 ENDP
 
-PROC drawspr:(sx%, height%)
+PROC drawspr:(span%, height%, depth%)
 
-	gAT sx% + 2 - (height% / 4), 80 + height%/4
+	IF(depth% > wdepth%(span% + 1))
+		RETURN
+	ENDIF
+
+	gAT (span% * 4) + 2 - (height% / 4), 80 + height%/4
 	
 	gFILL height% / 2,height% / 4,0
 	
 ENDP
 
-PROC drawwall:(sx%, h2%, dist%, cx$, side%, wallx%)
+PROC drwwall%:(sx%, h2%, dist%, cx$, side%, wallx%)
 
-	LOCAL top%, height%, cell$(1), shade%, qheight%, doorgap%, dleft%, dright%
+	LOCAL top%, height%, cell$(1), shade%, qheight%, doorgap%, dleft%, dright%, updz%
 	
 	top% = INT(80-h2%/2)
 	height% = h2%
 	shade% = side%
 	qheight% = height% / 4
+	updz% = 1
 
 	cell$ = cx$
 		
@@ -368,6 +397,11 @@ PROC drawwall:(sx%, h2%, dist%, cx$, side%, wallx%)
 		ELSE
 			gAT sx%, top% + height%
 			gLINEBY 4,0
+			
+			IF((cx$ = "A") AND (wallx% > 1) AND (wallx% < 14))
+				updz% = 0
+			ENDIF
+			
 		ENDIF
 		
 	ELSEIF cell$ = "D"
@@ -407,9 +441,10 @@ PROC drawwall:(sx%, h2%, dist%, cx$, side%, wallx%)
 
 			gAT sx%, top% + height% - (qheight% / 2)
 			gPATT -1,4,qheight% / 2,0
-			
+		ELSE
+			updz% = 0
 		ENDIF
-				
+
 	ELSEIF cell$ = "P"
 	   gFILL 4,height%,0
 	ELSEIF cell$ = "W"
@@ -426,7 +461,12 @@ PROC drawwall:(sx%, h2%, dist%, cx$, side%, wallx%)
 		
 		depthbox:(sx%,top%,4,qheight%, dist%, shade%)
 		depthbox:(sx%,80 + qheight%, 4, qheight%, dist%, shade%)
+		
+		updz% = 0
+		
 	ENDIF
+	
+	RETURN updz%
 	
 ENDP
 
@@ -471,12 +511,46 @@ PROC updtcell:(mx%,my%,cell$)
 		RETURN
 	ENDIF
 	
-	m$(my% + 1) = LEFT$(m$(my% + 1), mx%) + cell$ + MID$(m$(my% + 1), mx% + 2, mx%-1)
+	m$(my%+1) = LEFT$(m$(my%+1),mx%) + cell$ + MID$(m$(my%+1),mx%+2,63-mx%)
 	
 ENDP
 
+PROC mrkspr:(mx%, my%)
+
+	LOCAL cell$(1)
+	
+	cell$ = mapcell$:(mx%, my%)
+	cell$ = LOWER$(cell$)
+	
+	updtcell:(mx%, my%, cell$)
+
+ENDP
+
+PROC umrkspr:(mx%, my%)
+
+	LOCAL cell$(1)
+	
+	cell$ = mapcell$:(mx%, my%)
+	cell$ = UPPER$(cell$)
+	
+	updtcell:(mx%, my%, cell$)
+
+ENDP
+
+PROC isspr%:(cell$)
+	IF cell$="H"
+		RETURN 1
+	ENDIF
+	
+	RETURN 0
+ENDP
+
+PROC ismarkd%:(cell$)
+	RETURN cell$ >= "a" AND cell$ <= "z"
+ENDP
+
 PROC canwalk%:(cell$)
-	IF cell$="0" OR cell$="A" OR cell$="D" OR cell$="H" OR cell$ = "S"
+	IF cell$="0" OR cell$="A" OR cell$="D" OR cell$="H" OR cell$ = "S" OR cell$ = "h"
 		RETURN 1
 	ENDIF
 	
