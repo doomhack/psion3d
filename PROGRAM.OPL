@@ -13,7 +13,7 @@ PROC main:
 	
 	gUSE gamewin%(1)
 	
-	CACHE 10000,10000
+	CACHE 16384,16384
 
 	posx=27.5 : posy=1.5 : angle=0
 
@@ -29,12 +29,12 @@ PROC mainloop:
 
   DO 
   
+	clrscrn:
     draw2:
 	
 	bufflip:
 	REM buffcpy:
 	
-
     k%=input%:
 
 	frames% = frames% + 1
@@ -56,6 +56,14 @@ PROC mainloop:
 
 ENDP
 
+PROC clrscrn:
+	gGREY 2
+    gCLS
+	
+	gGREY 0
+	gBOX 240, 160
+ENDP
+
 PROC bufflip:
 
 	LOCAL backbuf%, frntbuf%
@@ -74,12 +82,7 @@ PROC bufflip:
 	gVISIBLE ON
 	
 	gUSE frntbuf%
-	
-	gGREY 2
-    gCLS
-	
-	gBOX 240, 160
-	
+
 ENDP
 
 PROC buffcpy:
@@ -97,12 +100,7 @@ PROC buffcpy:
 	gUPDATE
 	
 	gUSE backbuf%
-	
-	gGREY 2
-    gCLS
-	
-	gBOX 240, 160
-	
+
 ENDP
 
 PROC input%:
@@ -195,23 +193,23 @@ PROC draw2:
 		mapy%=posy
 
 		IF dx<0
-		  stepx%=-1
-		  deltax=-1/dx
-		  sidedx=(posx-mapx%)*deltax
+			stepx%=-1
+			deltax=-1/dx
+			sidedx=(posx-mapx%)*deltax
 		ELSE
-		  stepx%=1
-		  deltax=1/dx
-		  sidedx=(mapx%+1-posx)*deltax
+			stepx%=1
+			deltax=1/dx
+			sidedx=(mapx%+1-posx)*deltax
 		ENDIF
 
 		IF dy<0
-		  stepy%=-1
-		  deltay=-1/dy
-		  sidedy=(posy-mapy%)*deltay
+			stepy%=-1
+			deltay=-1/dy
+			sidedy=(posy-mapy%)*deltay
 		ELSE
-		  stepy%=1
-		  deltay=1/dy
-		  sidedy=(mapy%+1-posy)*deltay
+			stepy%=1
+			deltay=1/dy
+			sidedy=(mapy%+1-posy)*deltay
 		ENDIF
 
 
@@ -224,63 +222,58 @@ PROC draw2:
 			hit%=0
 		
 			WHILE hit%=0
-			  IF sidedx<sidedy
-				sidedx=sidedx+deltax
-				mapx%=mapx%+stepx%
-				side%=0
-			  ELSE
-				sidedy=sidedy+deltay
-				mapy%=mapy%+stepy%
-				side%=1
-			  ENDIF
-			  
-			  hitcell$ = mapcell$:(mapx%, mapy%)
-			  hit% = hitcell$ <> "0"
-
-			IF(isspr%:(hitcell$))
-				mrkspr:(mapx%, mapy%)
-				marks%=marks%+1
-				markx%(marks%)=mapx%
-				marky%(marks%)=mapy%
-					
-				IF(projspr%:(sprhits%,mapx%, mapy%))
-					sprhits% = sprhits% + 1
+				IF sidedx<sidedy
+					sidedx=sidedx+deltax
+					mapx%=mapx%+stepx%
+					side%=0
+				ELSE
+					sidedy=sidedy+deltay
+					mapy%=mapy%+stepy%
+					side%=1
 				ENDIF
-				
-				hit% = 0
-			ENDIF
-
-			IF(ismarkd%:(hitcell$))
-				hit% = 0
-			ENDIF
-
-			  IF(hit%)
+			  
+				hitcell$ = mapcell$:(mapx%, mapy%)
+				hit% = iswall%:(hitcell$)
+			ENDWH
+			
+			IF(hit%)
 				hits% = hits% + 1
 				rayhits% = rayhits% + 1
-				solid% = hitcell$ = "X"
-				
-				IF rayhits% = 3
+				solid% = issolid%:(hitcell$)
+
+				IF (rayhits% = 3)
 					solid% = 1
 				ENDIF
-			  ENDIF
-			  
-			ENDWH
+			ELSE
+
+				IF(isspr%:(hitcell$))
+					mrkspr:(mapx%, mapy%)
+					marks%=marks%+1
+					markx%(marks%)=mapx%
+					marky%(marks%)=mapy%
+
+					IF(projspr%:(sprhits%,mapx%, mapy%))
+						sprhits% = sprhits% + 1
+					ENDIF
+				ENDIF				
+
+			ENDIF
 			
 			cell$(hits%) = hitcell$
 			sides%(hits%) = side%
 
 			IF side%=0
-			  dist=(mapx%-posx+(1-stepx%)/2)/dx
-			  wallx = posy + dist * dy
+				dist=(mapx%-posx+(1-stepx%)/2)/dx
+				wallx = posy + dist * dy
 			ELSE
-			  dist=(mapy%-posy+(1-stepy%)/2)/dy
-			  wallx = posx + dist * dx
+				dist=(mapy%-posy+(1-stepy%)/2)/dy
+				wallx = posx + dist * dx
 			ENDIF
 			
 			IF dist < 0.005
-			   h% = 32000
+				h% = 32000
 			ELSE
-			   h%=INT(120/dist)
+				h%=INT(120/dist)
 			ENDIF
 				
 			wh%(hits%) = h%
@@ -358,25 +351,24 @@ ENDP
 
 PROC drwwall%:(sx%, h2%, dist%, cx$, side%, wallx%)
 
-	LOCAL top%, height%, cell$(1), shade%, qheight%, doorgap%, dleft%, dright%, updz%
+	LOCAL top%, height%, cell$(1), shade%, qheight%, doorgap%, dleft%, dright%, updz%, hheight%, bottom%
 	
-	top% = INT(80-h2%/2)
+	hheight% = h2%/2
+	qheight% = h2% / 4
+	top% = 80 - hheight%
+	bottom% = 80 + hheight%
 	height% = h2%
 	shade% = side%
-	qheight% = height% / 4
+
 	updz% = 1
 
 	cell$ = cx$
 		
-	IF cell$ = "A"
-		IF wallx% > 1 AND wallx% < 14
-			height% = height% / 4
-		ENDIF
-		
-		cell$ = "X"
-	ELSEIF cell$ = "W"
+	IF cell$ = "W"
 		shade% = 0
 	ELSEIF cell$ = "S"
+		top% = top% + 2
+		height% = height% - 4
 		cell$ = "X"
 	ENDIF
 		
@@ -387,23 +379,27 @@ PROC drwwall%:(sx%, h2%, dist%, cx$, side%, wallx%)
 		
 		depthbox:(sx%,top%,4,height%,dist%,shade%)
 				
-		IF(cx$ <> "A" AND dist% < 48)
+		IF(dist% < 48)
 			gAT sx%, 80 - qheight%
 			gLINEBY 4,0
 			gAT sx%, 80
 			gLINEBY 4,0
 			gAT sx%, 80 + qheight%
 			gLINEBY 4,0
-		ELSE
-			gAT sx%, top% + height%
-			gLINEBY 4,0
-			
-			IF((cx$ = "A") AND (wallx% > 1) AND (wallx% < 14))
-				updz% = 0
-			ENDIF
-			
 		ENDIF
-		
+	
+	ELSEIF cell$ = "A"
+	
+		IF wallx% > 1 AND wallx% < 14
+			height% = height% / 4
+			updz% = 0
+		ENDIF
+	
+		depthbox:(sx%,top%,4,height%,dist%,shade%)
+				
+		gAT sx%, top% + height%
+		gLINEBY 4,0
+						
 	ELSEIF cell$ = "D"
 		
 		IF dist% > 16
@@ -439,19 +435,33 @@ PROC drwwall%:(sx%, h2%, dist%, cx$, side%, wallx%)
 			
 			gGREY 0
 
-			gAT sx%, top% + height% - (qheight% / 2)
+			gAT sx%, bottom% - (qheight% / 2)
 			gPATT -1,4,qheight% / 2,0
 		ELSE
 			updz% = 0
 		ENDIF
 
 	ELSEIF cell$ = "P"
-	   gFILL 4,height%,0
+		gFILL 4,height%,0
+	ELSEIF cell$ = "B"
+		
+		depthbox:(sx%,top%,4,qheight% / 2, dist%, shade%)
+
+		depthbox:(sx%,bottom% - (qheight% / 2),4,qheight% / 2, dist%, shade%)
+
+		IF(wallx% AND 1)
+			gAT sx%, top% + (qheight% / 2)
+
+			gFILL 4,height% - qheight%,0
+		ELSE
+			updz% = 0
+		ENDIF
+	   
 	ELSEIF cell$ = "W"
 		gAT sx%, top% + qheight%
 		
 		gGREY 1
-		gFILL 4,qheight% * 2,0
+		gFILL 4,hheight%,0
 		
 		gGREY 0
 		gLINEBY 4,0
@@ -464,6 +474,9 @@ PROC drwwall%:(sx%, h2%, dist%, cx$, side%, wallx%)
 		
 		updz% = 0
 		
+	ELSEIF cell$ = "V"
+		gAT sx%, 80
+		gLINEBY 4,0
 	ENDIF
 	
 	RETURN updz%
@@ -499,7 +512,7 @@ ENDP
 
 PROC mapcell$:(mx%,my%)
 	IF mx%<0 OR mx%>63 OR my%<0 OR my%>63
-		RETURN "X"
+		RETURN "V"
 	ENDIF
 
 	RETURN MID$(m$(my%+1),(mx%+1),1)
@@ -549,8 +562,24 @@ PROC ismarkd%:(cell$)
 	RETURN cell$ >= "a" AND cell$ <= "z"
 ENDP
 
+PROC iswall%:(cell$)
+	IF(cell$ <> "0" AND isspr%:(cell$) = 0 AND ismarkd%:(cell$) = 0)
+		RETURN 1
+	ENDIF
+	
+	RETURN 0
+ENDP
+
+PROC issolid%:(cell$)
+	IF(cell$ = "X" OR cell$ = "P" OR cell$ = "V" OR cell$ = "S")
+		RETURN 1
+	ENDIF
+	
+	RETURN 0
+ENDP
+
 PROC canwalk%:(cell$)
-	IF cell$="0" OR cell$="A" OR cell$="D" OR cell$="H" OR cell$ = "S" OR cell$ = "h"
+	IF cell$="0" OR cell$="A" OR cell$="D" OR cell$ = "S" OR ismarkd%:(cell$) OR isspr%:(cell$)
 		RETURN 1
 	ENDIF
 	
@@ -558,18 +587,17 @@ PROC canwalk%:(cell$)
 ENDP
 
 PROC loadlvl:
-
-m$(1)="XXXXXXXXXXXXXXXXXXXXXXXXXXXPXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-m$(2)="XXXXXXXXXXXXXXXXXXXXXXXXXXX0000D0H00000000XXXXXXXXXXXXXXXXXXXXXX"
-m$(3)="XXXXXXXXXXXXXXXXXXXXXXXXXXXAXXXXXSXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(1)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(2)="XXXXXXXXXXXXXXXXXXXXXXXXXXX0000D0H00A00A00XXXXXXXXXXXXXXXXXXXXXX"
+m$(3)="XXXXXXXXXXXXXXXXXXXXXXXXXXXAXBXXXSXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 m$(4)="XXXXXXXXXXXXXXXXXXXXXXXXX00000XXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 m$(5)="XXXXXXXXXXXXXXXXXXXXXXXXX0H0H0XXXSXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 m$(6)="XXXXXXXXXXXXXXXXXXX00000D00000D0A00XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 m$(7)="XXXXXXXXXXXXXXXXXXXXXX0XX00000XXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-m$(8)="XXXXXXXXXXXXXXXXXXXXXX0XXXX0XXXXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(8)="XXXXXXXXXXXXXXXXXXXXXX0XXXX0XXXXXXAXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 m$(9)="XXXXXXXXXXXXXXXXXXXXXX0XXXXDXXXXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-m$(10)="XXXXXXXXXXXXXXXXXXXXXX0XXXX0XXXXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-m$(11)="XXXXXXXXXXXXXXXXXXXXXX000X000XXXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(10)="XXXXXXXXXXXXXXXXXXXXXXAXXXX0XXXXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+m$(11)="XXXXXXXXXXXXXXXXXXXXXX000X000XXXXXAXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 m$(12)="XXXXXXXXXXXXXXXXXXXXXX000W0P0XXXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 m$(13)="XXXXXXXXXXXXXXXXXXXXXX000X000XXXXX0XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 m$(14)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
@@ -624,5 +652,4 @@ m$(62)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 m$(63)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 m$(64)="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 
-	
 ENDP
