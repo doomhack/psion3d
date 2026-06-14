@@ -234,14 +234,16 @@ PROC draw2:
 				hitcell$ = mapcell$:(mapx%, mapy%)
 				hit% = iswall%:(hitcell$)
 				
-				IF(hit% = 0 AND isspr%:(hitcell$))
-					mrkspr:(mapx%, mapy%)
-					marks%=marks%+1
-					markx%(marks%)=mapx%
-					marky%(marks%)=mapy%
+				IF(hit% = 0)
+					IF(isspr%:(hitcell$))
+						mrkspr:(mapx%, mapy%)
+						marks%=marks%+1
+						markx%(marks%)=mapx%
+						marky%(marks%)=mapy%
 
-					IF(projspr%:(sprhits%,mapx%, mapy%))
-						sprhits% = sprhits% + 1
+						IF(projspr%:(sprhits%,mapx%, mapy%))
+							sprhits% = sprhits% + 1
+						ENDIF
 					ENDIF
 				ENDIF	
 			ENDWH
@@ -332,6 +334,8 @@ PROC drawspr:(span%, height%, depth%)
 		RETURN
 	ENDIF
 
+	gGREY 0
+
 	gAT (span% * 4) + 2 - (height% / 4), 80 + height%/4
 	
 	gFILL height% / 2,height% / 4,0
@@ -368,76 +372,39 @@ PROC drwwall%:(sx%, h2%, dist%, cx$, side%, wallx%)
 		
 		depthbox:(sx%,top%,4,height%,dist%,shade%)
 				
-		IF(dist% < 48)
-			gAT sx%, 80 - qheight%
-			gLINEBY 4,0
-			gAT sx%, 80
-			gLINEBY 4,0
-			gAT sx%, 80 + qheight%
-			gLINEBY 4,0
+		IF (dist% < 48)
+			brick:(sx%, top%, qheight%, wallx%,0)
 		ENDIF
+		
 	
 	ELSEIF cell$ = "A"
 	
 		IF wallx% > 1 AND wallx% < 14
-			height% = height% / 4
+			height% = qheight%
 			updz% = 0
 		ENDIF
 	
 		depthbox:(sx%,top%,4,height%,dist%,shade%)
-				
-		gAT sx%, top% + height%
-		gLINEBY 4,0
-						
+								
 	ELSEIF cell$ = "D"
-		
-		IF dist% > 16
-			doorgap% = 0
-		ELSE
-			doorgap% = 16 - dist%
-		ENDIF
-		
-		dleft% = 8 - (doorgap% / 2)
-		dright% = 8 + (doorgap% / 2)
-		
-		IF(wallx% = dleft% OR wallx% = dright%)
-			gGREY 0
-			gFILL 4,height%,0
-		ELSEIF(wallx% < dleft% OR wallx% > dright%)
-			
-			IF (((wallx% < (dleft% - 2)) AND (wallx% >= (dleft% - 5))) OR ((wallx% > (dright% + 2)) AND (wallx% <= (dright% + 5))))
-				gGREY 1
-				gFILL 4,height%,0
-				
-				gAT sx%, top%
-				gGREY 0
-				gFILL 4,qheight%,1
-				
-				gAT sx%, 80
-				gFILL 4,qheight% * 2,1
-			ELSE
-				gGREY 0
-				gFILL 4,height%,1
-				gGREY 1
-				gFILL 4,height%,0			
-			ENDIF
-			
-			gGREY 0
-
-			gAT sx%, bottom% - (qheight% / 2)
-			gPATT -1,4,qheight% / 2,0
-		ELSE
-			updz% = 0
-		ENDIF
-
+		updz% = door%:(sx%, top%, height%, qheight%, wallx%, dist%)
 	ELSEIF cell$ = "P"
+	
+		gGREY 0
 		gFILL 4,height%,0
+		
+		IF (dist% < 48)
+			brick:(sx%, top%, qheight%, wallx%,1)
+		ENDIF
+		
 	ELSEIF cell$ = "B"
 		
 		depthbox:(sx%,top%,4,qheight% / 2, dist%, shade%)
 
 		depthbox:(sx%,bottom% - (qheight% / 2),4,qheight% / 2, dist%, shade%)
-
+		
+		gGREY 0
+		
 		IF(wallx% AND 1)
 			gAT sx%, top% + (qheight% / 2)
 
@@ -472,31 +439,95 @@ PROC drwwall%:(sx%, h2%, dist%, cx$, side%, wallx%)
 	
 ENDP
 
+PROC door%:(sx%, top%, height%, qheight%, wallx%, dist%)
+
+	LOCAL doorgap%, dleft%, dright%
+
+	IF dist% > 16
+		doorgap% = 0
+	ELSE
+		doorgap% = 16 - dist%
+	ENDIF
+	
+	dleft% = 8 - (doorgap% / 2)
+	dright% = 8 + (doorgap% / 2)
+	
+	IF(wallx% = dleft% OR wallx% = dright%)
+		gGREY 0
+		gFILL 4,height%,0
+	ELSEIF(wallx% < dleft% OR wallx% > dright%)
+		
+		IF (((wallx% < (dleft% - 2)) AND (wallx% >= (dleft% - 5))) OR ((wallx% > (dright% + 2)) AND (wallx% <= (dright% + 5))))
+			gGREY 1
+			gFILL 4,height%,0
+			
+			gAT sx%, top%
+			gGREY 0
+			gFILL 4,qheight%,1
+			
+			gAT sx%, 80
+			gFILL 4,qheight% * 2,1
+		ELSE
+			gGREY 0
+			gFILL 4,height%,1
+			gGREY 1
+			gFILL 4,height%,0			
+		ENDIF
+		
+		gGREY 0
+
+		gAT sx%, (top% + height%) - (qheight% / 2)
+		gPATT -1,4,qheight% / 2,0
+	ELSE
+		RETURN 0
+	ENDIF
+	
+	RETURN 1
+	
+ENDP
+
 PROC depthbox:(x%,y%,w%,h%,dist%,shade%)
 
 	gAT x%, y%
 	
-	IF shade% = 1
-		gGREY 1
-		gFILL 4,h%,0
-    ELSE
-		gGREY 1
-		gFILL w%,h%,1
+	gGREY 0
+
+	IF (dist% >= 48)
+		gFILL w%,h%,0
+		RETURN
 	ENDIF
 
-	IF dist% >= 48
-		gGREY 0
+	gPATT -1,w%,h%,3
+	
+	gGREY 1
+	
+	IF (shade% OR (dist% >= 32))
 		gFILL w%,h%,0
-	ELSEIF dist% >= 32
-		gGREY 1
-		gFILL w%,h%,0
-		gGREY 0
-		gPATT -1,w%,h%,3
 	ELSE
-		gGREY 0
-		gPATT -1,w%,h%,3
+		gFILL w%,h%,1
 	ENDIF
-		
+ENDP
+
+PROC brick:(sx%, top%, qheight%, wallx%,mode%)
+	
+	gGMODE mode%
+	gGREY 0
+	
+	gAT sx%, 80 - qheight%
+	gLINEBY 4,0
+	gAT sx%, 80
+	gLINEBY 4,0
+	gAT sx%, 80 + qheight%
+	gLINEBY 4,0
+
+	IF(wallx% = 4 OR wallx% = 12)
+		gAT sx%, top%
+		gLINEBY 0,qheight%
+		gAT sx%, 80
+		gLINEBY 0,qheight%
+	ENDIF
+	
+	gGMODE 0
 ENDP
 
 PROC mapcell$:(mx%,my%)
