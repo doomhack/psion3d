@@ -169,7 +169,7 @@ PROC draw2:
 	LOCAL i%,ra,dx,dy
 	LOCAL mapx%,mapy%,stepx%,stepy%
 	LOCAL sidedx,sidedy,deltax,deltay
-	LOCAL hit%,side%,dist,h%, solid%, hits%, hitcell$(1), wallx, rayhits%, sprhits%, marks%
+	LOCAL hit%, side%, dist, solid%, hits%, hitcell$(1), wallx, rayhits%, sprhits%, marks%
 	LOCAL wh%(3), wdist%(3), cell$(3,1), sides%(3), wallx%(3)
 
 	GLOBAL wdepth%(60), sprx%(8), sprh%(8), sdepth%(8), markx%(8), marky%(8)
@@ -214,7 +214,6 @@ PROC draw2:
 
 
 		solid% = 0
-		rayhits% = 0
 		hits% = 0
 	
 		WHILE solid% = 0
@@ -234,19 +233,8 @@ PROC draw2:
 			  
 				hitcell$ = mapcell$:(mapx%, mapy%)
 				hit% = iswall%:(hitcell$)
-			ENDWH
-			
-			IF(hit%)
-				hits% = hits% + 1
-				rayhits% = rayhits% + 1
-				solid% = issolid%:(hitcell$)
-
-				IF (rayhits% = 3)
-					solid% = 1
-				ENDIF
-			ELSE
-
-				IF(isspr%:(hitcell$))
+				
+				IF(hit% = 0 AND isspr%:(hitcell$))
 					mrkspr:(mapx%, mapy%)
 					marks%=marks%+1
 					markx%(marks%)=mapx%
@@ -255,9 +243,11 @@ PROC draw2:
 					IF(projspr%:(sprhits%,mapx%, mapy%))
 						sprhits% = sprhits% + 1
 					ENDIF
-				ENDIF				
-
-			ENDIF
+				ENDIF	
+			ENDWH
+			
+			hits% = hits% + 1
+			solid% = issolid%:(hitcell$) OR hits% = 3
 			
 			cell$(hits%) = hitcell$
 			sides%(hits%) = side%
@@ -271,12 +261,11 @@ PROC draw2:
 			ENDIF
 			
 			IF dist < 0.005
-				h% = 32000
+				wh%(hits%) = 32000
 			ELSE
-				h%=INT(120/dist)
+				wh%(hits%) = 120/dist
 			ENDIF
 				
-			wh%(hits%) = h%
 			wdist%(hits%) = (dist * 8)
 			wallx%(hits%) = ((wallx - INT(wallx)) * 16)
 		ENDWH
