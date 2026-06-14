@@ -108,28 +108,27 @@ PROC input%:
 
 	k%=KEY
 
-    IF k%=259
-	   angle=angle-0.1
-    ENDIF
-	
-    IF k%=258
-	   angle=angle+0.1
+	IF k%=259
+		angle=angle-0.1
 	ENDIF
-	
-	
+
+	IF k%=258
+		angle=angle+0.1
+	ENDIF
+
 	IF k% = 256 OR k% = 257
-	  dx = COS(angle)*0.2
-	  dy = SIN(angle)*0.2
+		dx = COS(angle)*0.2
+		dy = SIN(angle)*0.2
 
-	  IF k%=257
-		dx = -dx
-		dy = -dy
-	  ENDIF
+		IF k%=257
+			dx = -dx
+			dy = -dy
+		ENDIF
 
-	trymove:(dx, dy)
+		trymove:(dx, dy)
 
 	ENDIF
-	
+
 	RETURN k%
 ENDP
 
@@ -169,7 +168,7 @@ PROC draw2:
 	LOCAL i%,ra,dx,dy
 	LOCAL mapx%,mapy%,stepx%,stepy%
 	LOCAL sidedx,sidedy,deltax,deltay
-	LOCAL hit%, side%, dist, solid%, hits%, hitcell$(1), wallx, rayhits%, sprhits%, marks%
+	LOCAL hit%, side%, dist, solid%, hits%, hitcell$(1), wallx, sprhits%, marks%
 	LOCAL wh%(3), wdist%(3), cell$(3,1), sides%(3), wallx%(3)
 
 	GLOBAL wdepth%(60), sprx%(8), sprh%(8), sdepth%(8), markx%(8), marky%(8)
@@ -185,7 +184,7 @@ PROC draw2:
 
 		REM 60 degree FOV, 120 rays, 4 pixels each
 		ra=angle-0.5236+(i%*1.0472)/59.0
-		
+
 		dx=COS(ra)
 		dy=SIN(ra)
 
@@ -211,16 +210,15 @@ PROC draw2:
 			deltay=1/dy
 			sidedy=(mapy%+1-posy)*deltay
 		ENDIF
-
-
+		
 		solid% = 0
 		hits% = 0
 	
-		WHILE solid% = 0
+		DO
 		
 			hit%=0
 		
-			WHILE hit%=0
+			DO
 				IF sidedx<sidedy
 					sidedx=sidedx+deltax
 					mapx%=mapx%+stepx%
@@ -246,7 +244,7 @@ PROC draw2:
 						ENDIF
 					ENDIF
 				ENDIF	
-			ENDWH
+			UNTIL hit% <> 0
 			
 			hits% = hits% + 1
 			solid% = issolid%:(hitcell$) OR hits% = 3
@@ -270,7 +268,7 @@ PROC draw2:
 				
 			wdist%(hits%) = (dist * 8)
 			wallx%(hits%) = ((wallx - INT(wallx)) * 16)
-		ENDWH
+		UNTIL solid% <> 0
 	
 	
 		WHILE hits% > 0
@@ -285,7 +283,7 @@ PROC draw2:
 		i%=i%+1
 	
 	ENDWH
-	
+			
 	WHILE sprhits% > 0
 		drawspr:(sprx%(sprhits%), sprh%(sprhits%), sdepth%(sprhits%))
 		
@@ -302,7 +300,7 @@ ENDP
 
 PROC projspr%:(i% ,mx%, my%)
 
-	LOCAL rx,ry,depth,side,spanx%,height%
+	LOCAL rx,ry,depth,side,spanx%
 
 	rx=mx%-posx+0.5
 	ry=my%-posy+0.5
@@ -315,10 +313,9 @@ PROC projspr%:(i% ,mx%, my%)
 	side=-rx*SIN(angle)+ry*COS(angle)
 
 	spanx%=30+INT((side/depth)*52)
-	height%=INT(120/depth)
 
 	IF(spanx% >= 0 AND spanx% < 60)
-		sprh%(i% + 1) = height%
+		sprh%(i% + 1) = INT(120/depth)
 		sdepth%(i% + 1) = (depth * 8)
 		sprx%(i% + 1) = spanx%
 		
@@ -344,8 +341,8 @@ ENDP
 
 PROC drwwall%:(sx%, h2%, dist%, cx$, side%, wallx%)
 
-	LOCAL top%, height%, cell$(1), shade%, qheight%, doorgap%, dleft%, dright%, updz%, hheight%, bottom%
-	
+	LOCAL top%, height%, cell$(1), shade%, qheight%, updz%, hheight%, bottom%
+
 	hheight% = h2%/2
 	qheight% = h2% / 4
 	top% = 80 - hheight%
