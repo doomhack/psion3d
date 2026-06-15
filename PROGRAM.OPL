@@ -243,7 +243,7 @@ PROC draw2:
 							sprhits% = sprhits% + 1
 						ENDIF
 					ENDIF
-				ENDIF	
+				ENDIF
 			UNTIL hit% <> 0
 			
 			hits% = hits% + 1
