@@ -5,8 +5,8 @@
  01370H 02370H 01000H STACK              STACK              (none)
  02370H 03370H 01000H _MAGIC             MAGIC              DGROUP 
  03370H 03372H 00002H _INIT              DATA               DGROUP 
- 03372H 03C21H 008AFH _CONST             DATA               DGROUP 
- 03C30H 04C6AH 0103AH _DATA              DATA               DGROUP 
+ 03372H 03C29H 008B7H _CONST             DATA               DGROUP 
+ 03C30H 04C62H 01032H _DATA              DATA               DGROUP 
  04C60H 04C9FH 0003FH _BSS               BSS                DGROUP 
  04CA0H 04CA6H 00006H BSS_END            BSS                DGROUP 
 

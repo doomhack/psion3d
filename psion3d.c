@@ -170,8 +170,8 @@ static void createGameWindow()
 	W_WINDATA windata;
 	G_GC ggc;
 
-	bitmaps[BM_BLK] = gCreateBit(0, &gameWinRect.br);
-	bitmaps[BM_GRY] = gCreateBit(0, &gameWinRect.br);
+	bitmaps[BM_BLK] = gCreateBit(0, &gameBitmapRect.br);
+	bitmaps[BM_GRY] = gCreateBit(0, &gameBitmapRect.br);
 
 	gc[BM_BLK] = gCreateGC0(bitmaps[BM_BLK]);
 	gc[BM_GRY] = gCreateGC0(bitmaps[BM_GRY]);
