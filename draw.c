@@ -35,6 +35,23 @@ static const f16 rayAngleOffset[60] =
 	93, 97, 102, 106, 111, 115, 120, 124, 129, 134
 };
 
+static f16 rayDelta(f16 f_dir)
+{
+	u16 dir = f_dir < 0 ? -f_dir : f_dir;
+	f16 delta;
+
+	if(dir <= 2)
+		return FP_MAX;
+
+	/* Match 65536 / dir using a 16-bit dividend. */
+	delta = ((u16)0xffff) / dir;
+
+	if((dir & (dir - 1)) == 0)
+		delta++;
+
+	return delta;
+}
+
 static u16 projectSprite(u16 x, u16 y, spritehit_t* hit)
 {
     f16 f_rx = int2fp(x) - pos.x + flt2fp(0.5f);
@@ -394,41 +411,39 @@ void draw()
 		f16 f_dx = fpcos(f_ra);
 		f16 f_dy = fpsin(f_ra);
 
-		f_wallDepth[i] = int2fp(127);
+		f_wallDepth[i] = FP_MAX;
+
+		f_deltax = rayDelta(f_dx);
+		f_deltay = rayDelta(f_dy);
 
 		if(f_dx < 0)
 		{
 			stepx = -1;
-			f_deltax = fpdiv(int2fp(-1), f_dx);
 			f_sidedx = fpmul(pos.x - int2fp(mapx), f_deltax);
 		}
 		else
 		{
 			stepx = 1;
-			f_deltax = fpdiv(int2fp(1), f_dx);
 			f_sidedx = fpmul(int2fp(mapx + 1) - pos.x, f_deltax);
 		}
 
 		if(f_dy < 0)
 		{
 			stepy = -1;
-			f_deltay = fpdiv(int2fp(-1), f_dy);
 			f_sidedy = fpmul(pos.y - int2fp(mapy), f_deltay);
 		}
 		else
 		{
 			stepy = 1;
-			f_deltay = fpdiv(int2fp(1), f_dy);
 			f_sidedy = fpmul(int2fp(mapy + 1) - pos.y, f_deltay);
 		}
 		
-
 		solid = 0;
 		hits = 0;
 		
 		do
 		{
-			u16 hit = 0;
+			u16 hit;
 			s8 hitcell;
 			f16 f_dist;
 			f16 f_wallx;
