@@ -24,6 +24,17 @@ typedef struct markedsprite_t
 	u8 x, y;
 } markedsprite_t;
 
+/* 60 degree FOV, 60 rays, 4 pixels each */
+static const f16 rayAngleOffset[60] =
+{
+	-134, -130, -125, -121, -116, -112, -107, -103, -98, -94,
+	-89, -85, -80, -75, -71, -66, -62, -57, -53, -48,
+	-44, -39, -35, -30, -25, -21, -16, -12, -7, -3,
+	2, 6, 11, 15, 20, 24, 29, 34, 38, 43,
+	47, 52, 56, 61, 65, 70, 74, 79, 84, 88,
+	93, 97, 102, 106, 111, 115, 120, 124, 129, 134
+};
+
 static u16 projectSprite(u16 x, u16 y, spritehit_t* hit)
 {
     f16 f_rx = int2fp(x) - pos.x + flt2fp(0.5f);
@@ -378,10 +389,7 @@ void draw()
 		
 		u16 solid, hits;
 	
-		/* 60 degree FOV, 60 rays, 4 pixels each */
-		f16 f_ra = pos.angle
-			   - flt2fp(0.5236f)
-			   + fpdiv(fpmul(int2fp(i), flt2fp(1.0472f)), flt2fp(59.0f));
+		f16 f_ra = pos.angle + rayAngleOffset[i];
 
 		f16 f_dx = fpcos(f_ra);
 		f16 f_dy = fpsin(f_ra);
