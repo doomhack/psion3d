@@ -1,0 +1,8 @@
+#system epoc img
+#set epocinit=iplib
+#model small jpi
+#compile draw
+#compile game_map
+#compile fp_math
+#compile %main
+#link %main
