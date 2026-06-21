@@ -8,7 +8,7 @@
 
 extern s8 map[MAP_Y][MAP_X];
 
-static s8 mapCell(u16 x, u16 y)
+static s8 mapCell(const u16 x, const u16 y)
 {
 	if(x >= MAP_X || y >= MAP_Y )
 		return 'V';
@@ -16,7 +16,7 @@ static s8 mapCell(u16 x, u16 y)
 	return map[y][x];
 }
 
-static s8 fmapCell(f16 fx, f16 fy)
+static s8 fmapCell(const f16 fx, const f16 fy)
 {
 	u16 x = fp2int(fx);
 	u16 y = fp2int(fy);
@@ -24,17 +24,17 @@ static s8 fmapCell(f16 fx, f16 fy)
 	return mapCell(x, y);
 }
 
-static u16 isSprite(s8 cell)
+static u16 isSprite(const s8 cell)
 {
 	return cell == 'H';
 }
 
-static u16 isMarked(s8 cell)
+static u16 isMarked(const s8 cell)
 {
 	return cell < 0;
 }
 
-static u16 canWalk(s8 cell)
+static u16 canWalk(const s8 cell)
 {
 	switch(cell)
 	{
@@ -48,7 +48,7 @@ static u16 canWalk(s8 cell)
 	return isMarked(cell) || isSprite(cell);
 }
 
-static void updateCell(u16 x, u16 y, s8 cell)
+static void updateCell(const u16 x, const u16 y, const s8 cell)
 {
 	if(x >= MAP_X || y >= MAP_Y )
 		return;
@@ -56,7 +56,7 @@ static void updateCell(u16 x, u16 y, s8 cell)
 	map[y][x] = cell;
 }
 
-static void markSprite(u16 x, u16 y)
+static void markSprite(const u16 x, const u16 y)
 {
 	s8 c = mapCell(x, y);
 	
@@ -64,7 +64,7 @@ static void markSprite(u16 x, u16 y)
 		updateCell(x, y, -c);
 }
 
-static void unmarkSprite(u16 x, u16 y)
+static void unmarkSprite(const u16 x, const u16 y)
 {
 	s8 c = mapCell(x, y);
 	
@@ -72,7 +72,7 @@ static void unmarkSprite(u16 x, u16 y)
 		updateCell(x, y, -c);
 }
 
-static u16 isWall(s8 cell)
+static u16 isWall(const s8 cell)
 {
 	if(cell != '0' && !isSprite(cell) && !isMarked(cell))
 		return TRUE;
@@ -80,7 +80,7 @@ static u16 isWall(s8 cell)
 	return FALSE;
 }
 
-static u16 isSolid(s8 cell)
+static u16 isSolid(const s8 cell)
 {
 	switch(cell)
 	{

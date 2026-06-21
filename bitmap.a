@@ -1,0 +1,9 @@
+module bitmap
+
+segment _TEXT(CODE,48H)
+
+public _clrBmp:
+    mov ax,1
+    ret 0
+
+end

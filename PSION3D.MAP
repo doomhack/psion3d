@@ -1,14 +1,14 @@
 
  Start  Stop   Length Name               Class              Group
 
- 00000H 01380H 01380H _TEXT              CODE               (none)
- 01380H 02380H 01000H STACK              STACK              (none)
- 02380H 03380H 01000H _MAGIC             MAGIC              DGROUP 
- 03380H 03382H 00002H _INIT              DATA               DGROUP 
- 03382H 03C31H 008AFH _CONST             DATA               DGROUP 
- 03C40H 04C7AH 0103AH _DATA              DATA               DGROUP 
- 04C70H 04CAFH 0003FH _BSS               BSS                DGROUP 
- 04CB0H 04CB6H 00006H BSS_END            BSS                DGROUP 
+ 00000H 01370H 01370H _TEXT              CODE               (none)
+ 01370H 02370H 01000H STACK              STACK              (none)
+ 02370H 03370H 01000H _MAGIC             MAGIC              DGROUP 
+ 03370H 03372H 00002H _INIT              DATA               DGROUP 
+ 03372H 03C21H 008AFH _CONST             DATA               DGROUP 
+ 03C30H 04C6AH 0103AH _DATA              DATA               DGROUP 
+ 04C60H 04C9FH 0003FH _BSS               BSS                DGROUP 
+ 04CA0H 04CA6H 00006H BSS_END            BSS                DGROUP 
 
   Address         Publics by Value
 
@@ -23,111 +23,111 @@
  0000:004C       __InitSetup
  0000:0069       __InitLoop
  0000:00C3       _p_exit
- 0000:085C       _draw
- 0000:1093       _main
- 0000:10F5       _p_atob
- 0000:10FA       _p_atos
- 0000:1118       _p_date
- 0000:111E       _p_sleep
- 0000:1128       _p_slen
- 0000:112B       _wConnect
- 0000:1130       _wInvalidateWin
- 0000:1135       _wValidateWin
- 0000:113A       _wEndRedraw
- 0000:113F       _wCreateWindow
- 0000:1144       _wInitialiseWindowTree
- 0000:1149       _gCreateBit
- 0000:1152       _gDrawLine
- 0000:1157       _gDrawBox
- 0000:115C       _gClrRect
- 0000:1161       _gFillPattern
- 0000:1166       _gPrintText
- 0000:116B       _gCopyBit
- 0000:1170       _gCreateGC
- 0000:1175       _wGetEventSpecial
- 0000:117A       _wBeginRedrawWinGC0
- 0000:1181       _gCreateGC0
- 0000:1188       _gSetGC0
- 0000:118F       _wCompatibilityMode
- 0000:1197       __FatalErrorPos
- 0000:11A0       __FatalError
- 0000:11A4       _ExtCatTable
- 0000:11A4       _ClassTable
- 0000:11A6       N$StdRet
- 0000:11B0       N$SgnMol
- 0000:11B0       N$UnsMol
- 0000:120F       N$SgnDiv
- 0000:12C8       N$UnsMul
- 0000:130C       N$LngShl
- 0000:1317       N$LngShr
- 0000:1322       N$CnsStk
- 0000:1328       N$CnsPtr
- 0000:132E       N$CnsIdx
- 0000:1334       N$CnsOvr
- 0000:133A       N$CnsRng
- 0000:1340       N$CnsRet
- 0000:1346       N$CnsCase
- 0000:134C       N$CnsDiv
- 0000:1352       N$CnsPVC
- 0000:137C       __FloatInit
- 0000:137F       __FloatJmpRestore
- 0000:137F       __FloatFinish
- 0000:137F       __FloatJmpSave
- 0000:137F       __FloatMathExcepDos
- 0000:137F       __FloatInitInstance
- 0238:0000       _DatWordDead
- 0238:0002       _DatHandNext
- 0238:0004       _DatHandPrev
- 0238:0006       _DatCountrySeg
- 0238:0008       _DatClassHandle
- 0238:000A       _DatClassPtr
- 0238:000C       _DatEClassHandle
- 0238:000E       _DatEClassPtr
- 0238:0010       _DatEnterFramePtr
- 0238:0012       _w_ws
- 0238:0014       _w_am
- 0238:0016       _wClientData
- 0238:0018       _wserv_channel
- 0238:001A       _T
- 0238:001C       _r
- 0238:001E       _DatOsFramePtr
- 0238:0020       _DatATFlag
- 0238:0021       _DatHeapLocked
- 0238:0022       _DatProcessNamePtr
- 0238:0024       _DatCommandPtr
- 0238:0026       _DatTest
- 0238:0028       _DatApp1
- 0238:002A       _DatApp2
- 0238:002C       _DatApp3
- 0238:002E       _DatApp4
- 0238:0030       _DatApp5
- 0238:0032       _DatApp6
- 0238:0034       _DatApp7
- 0238:0036       _DatDialogPtr
- 0238:0038       _DatGate
- 0238:003A       _DatLocked
- 0238:003C       _DatStatusNamePtr
- 0238:003E       _DatUsedPathNamePtr
- 0238:1000       __init_begin
- 0238:1002       __const_start
- 0238:1002       __init_start
- 0238:1084       _sincos_tab
- 0238:18C0       __data_start
- 0238:18C0       CoreSig@CnsHandler
- 0238:18C2       @InitPointer
- 0238:18C4       @InitPriority
- 0238:18C5       _map
- 0238:28C5       _gc
- 0238:28C9       _pos
- 0238:28CF       _dbgval
- 0238:28F0       __bss_start
- 0238:28F0       __SH_sword
- 0238:28F2       @InitCount
- 0238:28F4       @InitEnd
- 0238:28F6       @InitDone
- 0238:28F8       @ExitCode
- 0238:28FA       @StackContextSP
- 0238:28FC       @StackContextBP
- 0238:2930       __bss_end
+ 0000:0859       _draw
+ 0000:1083       _main
+ 0000:10E5       _p_atob
+ 0000:10EA       _p_atos
+ 0000:1108       _p_date
+ 0000:110E       _p_sleep
+ 0000:1118       _p_slen
+ 0000:111B       _wConnect
+ 0000:1120       _wInvalidateWin
+ 0000:1125       _wValidateWin
+ 0000:112A       _wEndRedraw
+ 0000:112F       _wCreateWindow
+ 0000:1134       _wInitialiseWindowTree
+ 0000:1139       _gCreateBit
+ 0000:1142       _gDrawLine
+ 0000:1147       _gDrawBox
+ 0000:114C       _gClrRect
+ 0000:1151       _gFillPattern
+ 0000:1156       _gPrintText
+ 0000:115B       _gCopyBit
+ 0000:1160       _gCreateGC
+ 0000:1165       _wGetEventSpecial
+ 0000:116A       _wBeginRedrawWinGC0
+ 0000:1171       _gCreateGC0
+ 0000:1178       _gSetGC0
+ 0000:117F       _wCompatibilityMode
+ 0000:1187       __FatalErrorPos
+ 0000:1190       __FatalError
+ 0000:1194       _ExtCatTable
+ 0000:1194       _ClassTable
+ 0000:1196       N$StdRet
+ 0000:11A0       N$SgnMol
+ 0000:11A0       N$UnsMol
+ 0000:11FF       N$SgnDiv
+ 0000:12B8       N$UnsMul
+ 0000:12FC       N$LngShl
+ 0000:1307       N$LngShr
+ 0000:1312       N$CnsStk
+ 0000:1318       N$CnsPtr
+ 0000:131E       N$CnsIdx
+ 0000:1324       N$CnsOvr
+ 0000:132A       N$CnsRng
+ 0000:1330       N$CnsRet
+ 0000:1336       N$CnsCase
+ 0000:133C       N$CnsDiv
+ 0000:1342       N$CnsPVC
+ 0000:136C       __FloatInit
+ 0000:136F       __FloatJmpRestore
+ 0000:136F       __FloatFinish
+ 0000:136F       __FloatJmpSave
+ 0000:136F       __FloatMathExcepDos
+ 0000:136F       __FloatInitInstance
+ 0237:0000       _DatWordDead
+ 0237:0002       _DatHandNext
+ 0237:0004       _DatHandPrev
+ 0237:0006       _DatCountrySeg
+ 0237:0008       _DatClassHandle
+ 0237:000A       _DatClassPtr
+ 0237:000C       _DatEClassHandle
+ 0237:000E       _DatEClassPtr
+ 0237:0010       _DatEnterFramePtr
+ 0237:0012       _w_ws
+ 0237:0014       _w_am
+ 0237:0016       _wClientData
+ 0237:0018       _wserv_channel
+ 0237:001A       _T
+ 0237:001C       _r
+ 0237:001E       _DatOsFramePtr
+ 0237:0020       _DatATFlag
+ 0237:0021       _DatHeapLocked
+ 0237:0022       _DatProcessNamePtr
+ 0237:0024       _DatCommandPtr
+ 0237:0026       _DatTest
+ 0237:0028       _DatApp1
+ 0237:002A       _DatApp2
+ 0237:002C       _DatApp3
+ 0237:002E       _DatApp4
+ 0237:0030       _DatApp5
+ 0237:0032       _DatApp6
+ 0237:0034       _DatApp7
+ 0237:0036       _DatDialogPtr
+ 0237:0038       _DatGate
+ 0237:003A       _DatLocked
+ 0237:003C       _DatStatusNamePtr
+ 0237:003E       _DatUsedPathNamePtr
+ 0237:1000       __init_begin
+ 0237:1002       __const_start
+ 0237:1002       __init_start
+ 0237:1084       _sincos_tab
+ 0237:18C0       __data_start
+ 0237:18C0       CoreSig@CnsHandler
+ 0237:18C2       @InitPointer
+ 0237:18C4       @InitPriority
+ 0237:18C5       _map
+ 0237:28C5       _gc
+ 0237:28C9       _pos
+ 0237:28CF       _dbgval
+ 0237:28F0       __bss_start
+ 0237:28F0       __SH_sword
+ 0237:28F2       @InitCount
+ 0237:28F4       @InitEnd
+ 0237:28F6       @InitDone
+ 0237:28F8       @ExitCode
+ 0237:28FA       @StackContextSP
+ 0237:28FC       @StackContextBP
+ 0237:2930       __bss_end
 
 Program entry point at 0000:0000

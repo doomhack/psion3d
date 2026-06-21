@@ -26,14 +26,14 @@ typedef s16 f16;
 #define int2fp(x) ((f16)((x) << FP_BITS))
 
 
-static f16 fpmul(f16 a, f16 b)
+static f16 fpmul(const f16 a, const f16 b)
 {
 	s32 aa = a;
 	
 	return (aa * b) >> FP_BITS;
 }
 
-LOCAL_C f16 fpdiv(f16 a, f16 b)
+LOCAL_C f16 fpdiv(const f16 a, const f16 b)
 {
     s32 aa = a;
 

@@ -35,7 +35,7 @@ static const f16 rayAngleOffset[60] =
 	93, 97, 102, 106, 111, 115, 120, 124, 129, 134
 };
 
-static f16 rayDelta(f16 f_dir)
+static f16 rayDelta(const f16 f_dir)
 {
 	u16 dir = f_dir < 0 ? -f_dir : f_dir;
 	f16 delta;
@@ -52,7 +52,7 @@ static f16 rayDelta(f16 f_dir)
 	return delta;
 }
 
-static u16 projectSprite(u16 x, u16 y, spritehit_t* hit)
+static u16 projectSprite(const u16 x, const u16 y, spritehit_t* hit)
 {
     f16 f_rx = int2fp(x) - pos.x + flt2fp(0.5f);
     f16 f_ry = int2fp(y) - pos.y + flt2fp(0.5f);
@@ -88,7 +88,7 @@ static u16 projectSprite(u16 x, u16 y, spritehit_t* hit)
     return TRUE;
 }
 
-static void brickPattern(P_RECT* rect, wallhit_t* hit, u16 mode)
+static void brickPattern(P_RECT* rect, const wallhit_t* hit, const u16 mode)
 {
 	s16 qheight = (hit->wallHeight >> 2);
 	s16 top = rect->tl.y;
@@ -122,7 +122,7 @@ static void brickPattern(P_RECT* rect, wallhit_t* hit, u16 mode)
 	}
 }
 
-static void depthWall(P_RECT* rect, wallhit_t* hit)
+static void depthWall(P_RECT* rect, const wallhit_t* hit)
 {
 	s16 depth = fp2int(hit->f_wallDist);
 
@@ -148,7 +148,7 @@ static void depthWall(P_RECT* rect, wallhit_t* hit)
 	}
 }
 
-static u16 drawWallX(P_RECT* rect, wallhit_t* hit)
+static u16 drawWallX(P_RECT* rect, const wallhit_t* hit)
 {	
 	depthWall(rect, hit);
 
@@ -158,7 +158,7 @@ static u16 drawWallX(P_RECT* rect, wallhit_t* hit)
 	return TRUE;
 }
 
-static u16 drawWallA(P_RECT* rect, wallhit_t* hit)
+static u16 drawWallA(P_RECT* rect, const wallhit_t* hit)
 {
 	s16 wallx = hit->f_wallX; //FP 0..1 -> 0..255
 
@@ -175,7 +175,7 @@ static u16 drawWallA(P_RECT* rect, wallhit_t* hit)
 	return TRUE;
 }
 
-static u16 drawWallD(P_RECT* rect, wallhit_t* hit)
+static u16 drawWallD(P_RECT* rect, const wallhit_t* hit)
 {
 	s16 doorgap, dleft, dright;
 
@@ -238,7 +238,7 @@ static u16 drawWallD(P_RECT* rect, wallhit_t* hit)
 	return TRUE;
 }
 
-static u16 drawWallP(P_RECT* rect, wallhit_t* hit)
+static u16 drawWallP(P_RECT* rect, const wallhit_t* hit)
 {
 	gSetGC0(gc[BM_BLK]);
 	gClrRect(rect, G_TRMODE_SET);
@@ -249,7 +249,7 @@ static u16 drawWallP(P_RECT* rect, wallhit_t* hit)
 	return TRUE;
 }
 
-static u16 drawWallB(P_RECT* rect, wallhit_t* hit)
+static u16 drawWallB(P_RECT* rect, const wallhit_t* hit)
 {
 	s16 top = rect->tl.y;
 	s16 bottom = rect->br.y;
@@ -278,7 +278,7 @@ static u16 drawWallB(P_RECT* rect, wallhit_t* hit)
 	return FALSE;
 }
 
-static u16 drawWallW(P_RECT* rect, wallhit_t* hit)
+static u16 drawWallW(P_RECT* rect, const wallhit_t* hit)
 {
 	s16 top = rect->tl.y;
 	s16 bottom = rect->br.y;
@@ -306,7 +306,7 @@ static u16 drawWallW(P_RECT* rect, wallhit_t* hit)
 	return FALSE;
 }
 
-static u16 drawWallV(P_RECT* rect, wallhit_t* hit)
+static u16 drawWallV(P_RECT* rect, const wallhit_t* hit)
 {
 	rect->tl.y = 80;
 	rect->br.y = 81;
@@ -319,7 +319,7 @@ static u16 drawWallV(P_RECT* rect, wallhit_t* hit)
 
 static u16 drawWall(u16 x, wallhit_t* hit)
 {
-	u16 updateZ = TRUE;
+	u16 updateZ;
 	u16 height =  hit->wallHeight;
 	P_RECT rect;
 	
@@ -369,7 +369,7 @@ static u16 drawWall(u16 x, wallhit_t* hit)
 	return updateZ;
 }
 
-static void drawSprite(spritehit_t* spriteHit)
+static void drawSprite(const spritehit_t* spriteHit)
 {
 	P_RECT rect;
 
@@ -399,22 +399,22 @@ void draw()
 		s16 mapy = fp2int(pos.y);
 
 		s16 stepx, stepy;
-		f16 f_deltax, f_deltay;
 		f16 f_sidedx, f_sidedy;
 		
 		u16 side;
 		
 		u16 solid, hits;
 	
-		f16 f_ra = pos.angle + rayAngleOffset[i];
+		const f16 f_ra = pos.angle + rayAngleOffset[i];
 
-		f16 f_dx = fpcos(f_ra);
-		f16 f_dy = fpsin(f_ra);
+		const f16 f_dx = fpcos(f_ra);
+		const f16 f_dy = fpsin(f_ra);
+
+		const f16 f_deltax = rayDelta(f_dx);
+		const f16 f_deltay = rayDelta(f_dy);
 
 		f_wallDepth[i] = FP_MAX;
 
-		f_deltax = rayDelta(f_dx);
-		f_deltay = rayDelta(f_dy);
 
 		if(f_dx < 0)
 		{

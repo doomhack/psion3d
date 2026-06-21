@@ -13,17 +13,17 @@
 
 extern const f16 sincos_tab[TRIG_TABLE_LEN];
 
-static s16 trigidx(f16 rad)
+static s16 trigidx(const f16 rad)
 {
 	return (s16)(((s32)rad * TRIG_RAD_TO_INDEX) >> TRIG_RAD_TO_INDEX_SHIFT);
 }
 
-static f16 fpsin(f16 rad)
+static f16 fpsin(const f16 rad)
 {
 	return sincos_tab[trigidx(rad) & TRIG_TABLE_MASK];
 }
 
-static f16 fpcos(f16 rad)
+static f16 fpcos(const f16 rad)
 {
 	return sincos_tab[(trigidx(rad) + TRIG_COS_OFFSET) & TRIG_TABLE_MASK];
 }

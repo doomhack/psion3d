@@ -39,15 +39,12 @@ static void updateScreen()
 	gCopyBit(&gameWinRect.tl, bitmaps[BM_GRY], &gameWinRect, G_TRMODE_REPL);
 }
 
-static void tryMove(f16 dx, f16 dy)
+static void tryMove(const f16 dx, const f16 dy)
 {
-	f16 nx, ny;
-	s8 cell;
+	f16 nx = pos.x + dx;
+	f16 ny = pos.y;
 	
-	nx = pos.x + dx;
-	ny = pos.y;
-	
-	cell = fmapCell(nx, ny);
+	s8 cell = fmapCell(nx, ny);
 	
 	if(canWalk(cell))
 		pos.x = nx;
@@ -61,7 +58,7 @@ static void tryMove(f16 dx, f16 dy)
 		pos.y = ny;
 }
 
-static void handleKey(u16 key)
+static void handleKey(const u16 key)
 {
 	if(key == W_KEY_LEFT)
 	{
@@ -72,20 +69,16 @@ static void handleKey(u16 key)
 		pos.angle += flt2fp(0.1f);
 	}
 	else if(key == W_KEY_UP)
-	{
-		f16 dx, dy;
-		
-		dx = fpmul(fpcos(pos.angle), flt2fp(0.2f));
-		dy = fpmul(fpsin(pos.angle), flt2fp(0.2f));
+	{		
+		const f16 dx = fpmul(fpcos(pos.angle), flt2fp(0.2f));
+		const f16 dy = fpmul(fpsin(pos.angle), flt2fp(0.2f));
 		
 		tryMove(dx, dy);
 	}
 	else if(key == W_KEY_DOWN)
-	{
-		f16 dx, dy;
-		
-		dx = -fpmul(fpcos(pos.angle), flt2fp(0.2f));
-		dy = -fpmul(fpsin(pos.angle), flt2fp(0.2f));
+	{		
+		const f16 dx = -fpmul(fpcos(pos.angle), flt2fp(0.2f));
+		const f16 dy = -fpmul(fpsin(pos.angle), flt2fp(0.2f));
 		
 		tryMove(dx, dy);
 	}
@@ -101,7 +94,7 @@ static void mainLoop()
 	
 	u16 frames = 0, lastSecond = 0, t = 0;
 	TEXT buf[16];
-	
+
 	pos.x = flt2fp(27.5f);
 	pos.y = flt2fp(1.5f);
 	pos.angle = 0;
