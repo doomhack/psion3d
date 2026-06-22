@@ -15,7 +15,7 @@ const INT GAME_WIN = 2;
 
 UINT gc[2]  = {0};
 position_t pos = {0};
-
+HANDLE bmHandles[2] = {0};
 
 f16 dbgval = 0;
 
@@ -170,8 +170,15 @@ static void createGameWindow()
 	W_WINDATA windata;
 	G_GC ggc;
 
-	bitmaps[BM_BLK] = gCreateBit(0, &gameBitmapRect.br);
-	bitmaps[BM_GRY] = gCreateBit(0, &gameBitmapRect.br);
+	W_OPEN_BIT_SEG bmSeg;
+
+	bmSeg.size = gameBitmapRect.br;
+	bitmaps[BM_BLK] = gCreateBit(WS_BIT_SEG_ACCESS, &bmSeg);
+	bmHandles[BM_BLK] = p_sgopen( bmSeg.seg_name );
+
+	bitmaps[BM_GRY] = gCreateBit(WS_BIT_SEG_ACCESS, &bmSeg);
+	bmHandles[BM_GRY] = p_sgopen( bmSeg.seg_name );
+
 
 	gc[BM_BLK] = gCreateGC0(bitmaps[BM_BLK]);
 	gc[BM_GRY] = gCreateGC0(bitmaps[BM_GRY]);

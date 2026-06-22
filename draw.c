@@ -2,6 +2,7 @@
 #include <wlib.h>
 
 #include "psion3d.h"
+#include "bitmap.h"
 
 typedef struct wallhit_t
 {
@@ -390,6 +391,8 @@ void draw()
 	markedsprite_t markedSprites[8];
 	spritehit_t spriteHits[8];
 	f16 f_wallDepth[60];
+
+	bmClear(0);
 
 	for(i = 0; i < 60; i++)
 	{

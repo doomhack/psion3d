@@ -2,8 +2,14 @@ module bitmap
 
 segment _TEXT(CODE,48H)
 
-public _clrBmp:
-    mov ax,1
+public _bmClear:
+    push bp
+    mov  bp, sp
+    push di
+
+    pop  di
+    mov  sp, bp
+    pop  bp
     ret 0
 
 end
