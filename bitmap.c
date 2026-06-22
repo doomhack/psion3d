@@ -1,7 +1,8 @@
 #include "bitmap.h"
 
-u16 blackBm[BM_WORDS];
-u16 greyBm[BM_WORDS];
+u16 screenBm[BM_SCREEN_WORDS];
+u16* blackBm = &screenBm[0];
+u16* greyBm = &screenBm[BM_WORDS];
 
 #define BM_WIDTH 256
 #define BM_HEIGHT 160

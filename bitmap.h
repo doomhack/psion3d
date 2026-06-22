@@ -5,9 +5,12 @@
 
 #define BM_WORDS 2560
 #define BM_BYTES (BM_WORDS * 2)
+#define BM_SCREEN_WORDS (BM_WORDS * 2)
+#define BM_SCREEN_BYTES (BM_SCREEN_WORDS * 2)
 
-extern u16 blackBm[BM_WORDS];
-extern u16 greyBm[BM_WORDS];
+extern u16 screenBm[BM_SCREEN_WORDS];
+extern u16* blackBm;
+extern u16* greyBm;
 
 void bmClearScreen();
 void bmFillRect(s16 x, s16 y, s16 w, s16 h, u8* bm);

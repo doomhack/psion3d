@@ -6,7 +6,8 @@ static WSERV_SPEC wSpec;
 static UINT gameWindowId = 0;
 static UINT debugWindowId = 0;
 
-static UINT bitmaps[2] = {0};
+static UINT bitmap = 0;
+static HANDLE bmHandle = 0;
 
 static UINT wgc[2]  = {0};
 
@@ -15,7 +16,6 @@ const INT GAME_WIN = 2;
 
 
 position_t pos = {0};
-HANDLE bmHandles[2] = {0};
 
 f16 dbgval = 0;
 
@@ -23,14 +23,15 @@ f16 dbgval = 0;
 
 static void updateScreen()
 {
-	p_sgcopyto(bmHandles[BM_BLK], 0, &blackBm[0], BM_BYTES);
-	p_sgcopyto(bmHandles[BM_GRY], 0, &greyBm[0], BM_BYTES);
+	const P_RECT greyRect = {{0,160}, {240,320}};
+
+	p_sgcopyto(bmHandle, 0, &screenBm[0], BM_SCREEN_BYTES);
 
 	gSetGC0(wgc[BM_BLK]);
-	gCopyBit(&gameWinRect.tl, bitmaps[BM_BLK], &gameWinRect, G_TRMODE_REPL);
+	gCopyBit(&gameWinRect.tl, bitmap, &gameWinRect, G_TRMODE_REPL);
 
 	gSetGC0(wgc[BM_GRY]);
-	gCopyBit(&gameWinRect.tl, bitmaps[BM_GRY], &gameWinRect, G_TRMODE_REPL);
+	gCopyBit(&gameWinRect.tl, bitmap, &greyRect, G_TRMODE_REPL);
 
 	wFlush();
 }
@@ -169,11 +170,8 @@ static void createGameWindow()
 	W_OPEN_BIT_SEG bmSeg;
 
 	bmSeg.size = gameBitmapRect.br;
-	bitmaps[BM_BLK] = gCreateBit(WS_BIT_SEG_ACCESS, &bmSeg);
-	bmHandles[BM_BLK] = p_sgopen(bmSeg.seg_name);
-
-	bitmaps[BM_GRY] = gCreateBit(WS_BIT_SEG_ACCESS, &bmSeg);
-	bmHandles[BM_GRY] = p_sgopen(bmSeg.seg_name);
+	bitmap = gCreateBit(WS_BIT_SEG_ACCESS, &bmSeg);
+	bmHandle = p_sgopen(bmSeg.seg_name);
 
 	windata.flags = W_WIN_PRIORITY;
 	windata.extent.tl.x = 120;

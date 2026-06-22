@@ -12,9 +12,7 @@ static const u16 BM_BLK = 0;
 static const u16 BM_GRY = 1;
 
 static const P_RECT gameWinRect = {{0,0}, {240,160}};
-static const P_RECT gameBitmapRect = {{0,0}, {256,160}};
-
-extern HANDLE bmHandles[2];
+static const P_RECT gameBitmapRect = {{0,0}, {256,320}};
 
 
 typedef struct position_t

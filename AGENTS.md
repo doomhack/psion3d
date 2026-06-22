@@ -6,10 +6,11 @@ This is a Psion 3a/c/mx PLIB/WLIB C raycaster. Source is split by subsystem in t
 
 - `psion3d.c` owns startup, windows, bitmaps, input, player position, and the main loop.
 - `draw.c` owns ray casting, wall/sprite projection, and all wall drawing variants.
+- `bitmap.c` owns the local screen buffers and software bitmap fill/clear/line routines.
 - `game_map.c` stores the 64x64 map; `game_map.h` exposes inline/static helpers for cell tests.
 - `fp_math.c` stores the 1024-entry combined sine/cosine table; `fp_math.h` exposes lookup helpers.
 - `fp_types.h` defines `u8/s16/s32`, Q8 fixed-point `f16`, `fpmul`, and checked `fpdiv`.
-- `psion3d.h` shares renderer globals such as `gc`, `pos`, `dbgval`, and `gameWinRect`.
+- `psion3d.h` shares renderer globals such as `pos`, `dbgval`, `gameWinRect`, and `gameBitmapRect`.
 
 Generated outputs (`*.OBJ`, `*.MAP`, `PSION3D.EXE`, `PSION3D.IMG`) currently live beside source files.
 
@@ -32,7 +33,13 @@ Target hardware is a 27 MHz NEC V30MX-class Psion. Avoid runtime floating point.
 
 Trig input is Q8 radians. `fpsin`/`fpcos` convert to the 1024-entry `sincos_tab` using a multiply/shift and wrap with `TRIG_TABLE_MASK`. Keep `sincos_tab` formatted as 32 columns per row.
 
-Rendering uses two bitplanes (`BM_BLK`, `BM_GRY`). `gClrRect`/`gFillPattern` calls often rely on the active GC, so preserve `gSetGC0` ordering carefully.
+Rendering uses two logical bitplanes (`BM_BLK`, `BM_GRY`) stored in one local 256x320 1bpp buffer. The top 256x160 half is black pixels and the bottom 256x160 half is grey pixels. `blackBm` and `greyBm` are pointers into `screenBm`; keep them as plane pointers, not separate allocations, unless intentionally changing the copy path.
+
+Bitmap rows are 32 bytes wide (`256 / 8`) so row addressing is `y << 5` for bytes and `y << 4` for words. Pixels are low-bit-first inside each byte: pixel `x` uses mask `1 << (x & 7)`. Preserve this bit order; high-bit-first masks cause column pairs to appear swapped and create jagged wall/floor edges.
+
+The app copies the whole combined buffer to the segment-backed WLIB bitmap with one `p_sgcopyto()`, then blits the top half to the black window plane and the bottom half to the grey window plane. Avoid reintroducing per-primitive WLIB drawing in hot paths unless it is a deliberate compatibility fallback.
+
+Avoid direct application-level manipulation of `DS`/`ES`, `cli`/`sti`, write-protection ports, or OS handle-table segment pokes. Experiments with `rep stosw` and direct segment writes crashed in the emulator. Prefer plain C writes to local buffers plus `p_sgcopyto()`.
 
 The DDA ray loop in `draw.c` handles exact grid-corner crossings specially to prevent one-column wall gaps. Be cautious when changing `f_sidedx/f_sidedy`, `side`, or `mapx/mapy` stepping.
 
