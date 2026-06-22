@@ -95,21 +95,23 @@ static u16 projectSprite(const u16 x, const u16 y, spritehit_t* hit, const f16 f
 
 static void brickPattern(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit, const u16 mode)
 {
+	//Draw a brick pattern on a wall.
+
 	s16 qheight = (hit->wallHeight >> 2);
 
 	s16 wallx = hit->f_wallX; //FP -> 0..255
 
 	if(mode == MODE_FILL)
 	{
-		bmFillRect(x, 80, w, 1, blackBm);
-		bmFillRect(x, 80 - qheight, w, 1, blackBm);
-		bmFillRect(x, 80 + qheight, w, 1, blackBm);
+		bmFillRect4(x, 80, 1, blackBm);
+		bmFillRect4(x, 80 - qheight, 1, blackBm);
+		bmFillRect4(x, 80 + qheight, 1, blackBm);
 	}
 	else if(mode == MODE_CLEAR)
 	{
-		bmClearRect(x, 80, w, 1, blackBm);
-		bmClearRect(x, 80 - qheight, w, 1, blackBm);
-		bmClearRect(x, 80 + qheight, w, 1, blackBm);
+		bmClearRect4(x, 80, 1, blackBm);
+		bmClearRect4(x, 80 - qheight, 1, blackBm);
+		bmClearRect4(x, 80 + qheight, 1, blackBm);
 	}
 
 	if((wallx >= 64 && wallx < 72) || (wallx >= 192 && wallx < 200))
@@ -129,29 +131,33 @@ static void brickPattern(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit, const
 
 static void depthWall(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
+	//Draw a wall which is darker further away and contrast north/south from east/west walls.
+
 	s16 depth = fp2int(hit->f_wallDist);
 
 	if(depth >= 6)
 	{
-		bmFillRect(x, y, w, h, blackBm);
+		bmFillRect4(x, y, h, blackBm);
 		return;
 	}
 
-	bmFillPattern(x, y, w, h, blackBm);
+	bmFillPattern4(x, y, h, blackBm);
 	
 
 	if(depth >= 4 || hit->side)
 	{
-		bmFillRect(x, y, w, h, greyBm);
+		bmFillRect4(x, y, h, greyBm);
 	}
 	else
 	{
-		bmClearRect(x, y, w, h, greyBm);
+		bmClearRect4(x, y, h, greyBm);
 	}
 }
 
 static u16 drawWallX(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
-{	
+{
+	//Brick wall. Distance depth effect.
+	
 	depthWall(x, y, w, h, hit);
 
 	if(fp2int(hit->f_wallDist) < 6)
@@ -162,6 +168,8 @@ static u16 drawWallX(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 
 static u16 drawWallA(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
+	//Archway. Distance depth effect.
+
 	s16 wallx = hit->f_wallX; //FP 0..1 -> 0..255
 
 	if(wallx > 24 && wallx < 232)
@@ -178,6 +186,9 @@ static u16 drawWallA(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 
 static u16 drawWallD(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
+	//Unlocked Door which opens when near.
+	//Horizontal opening pair of doors.
+
 	s16 doorgap, dleft, dright;
 
 	s16 dist = hit->f_wallDist >> 4;
@@ -195,28 +206,28 @@ static u16 drawWallD(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 	{
 		//Black edge of door.
 
-		bmFillRect(x, y, w, h, blackBm);
+		bmFillRect4(x, y, h, blackBm);
 	}
 	else if(wallx < dleft || wallx > dright)
 	{
 		if((wallx < (dleft - 2) && wallx >= (dleft - 5)) || (wallx > (dright + 2) && wallx <= (dright + 5)))
 		{
 			//Grey door face.
-			bmFillRect(x, y, w, h, greyBm);
+			bmFillRect4(x, y, h, greyBm);
 
 			//Clear black behind
-			bmClearRect(x, y, w, (h >> 2), blackBm); //Top qtr.
-			bmClearRect(x, y + (h >> 1), w, (h >> 1), blackBm); //Bottom half.
+			bmClearRect4(x, y, (h >> 2), blackBm); //Top qtr.
+			bmClearRect4(x, y + (h >> 1), (h >> 1), blackBm); //Bottom half.
 		}
 		else
 		{
-			bmClearRect(x, y, w, h, blackBm);
-			bmFillRect(x, y, w, h, greyBm);
+			bmClearRect4(x, y, h, blackBm);
+			bmFillRect4(x, y, h, greyBm);
 		}
 
 
 		//Kickplate.
-		bmFillPattern(x, y + h - (h >> 3), w, h >> 3, blackBm);
+		bmFillPattern4(x, y + h - (h >> 3), h >> 3, blackBm);
 	}
 	else
 	{
@@ -228,7 +239,9 @@ static u16 drawWallD(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 
 static u16 drawWallP(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
-	bmFillRect(x, y, w, h, blackBm);
+	//Black wall with brick effect.
+
+	bmFillRect4(x, y, h, blackBm);
 
 	if(fp2int(hit->f_wallDist) < 6)
 		brickPattern(x, y, w, h, hit, MODE_CLEAR);
@@ -238,6 +251,8 @@ static u16 drawWallP(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 
 static u16 drawWallB(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
+	//Opening with bars.
+
 	s16 top = y;
 	s16 bottom = y + h;
 	s16 capHeight = hit->wallHeight >> 3;
@@ -247,7 +262,7 @@ static u16 drawWallB(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 
 	if((hit->f_wallX >> 3) & 1)
 	{
-		bmFillRect(x, y + (h >> 3), w, h - (h >> 2), blackBm);
+		bmFillRect4(x, y + (h >> 3), h - (h >> 2), blackBm);
 
 		return TRUE;
 	}
@@ -257,11 +272,13 @@ static u16 drawWallB(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 
 static u16 drawWallW(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
+	//Window opening with grey glass effect.
+
 	s16 top = y;
 	s16 bottom = y + h;
 	s16 capHeight = hit->wallHeight >> 2;
 
-	bmFillRect(x, y + (h >> 2), w, h - (h >> 1), greyBm);
+	bmFillRect4(x, y + (h >> 2), h - (h >> 1), greyBm);
 	
 	depthWall(x, top, w, capHeight, hit);
 	depthWall(x, bottom - capHeight, w, capHeight, hit);
@@ -271,7 +288,9 @@ static u16 drawWallW(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 
 static u16 drawWallV(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
-	bmFillRect(x, 80, w, 1, blackBm);
+	//The Void. Horizon line.
+
+	bmFillRect4(x, 80, 1, blackBm);
 
 	return FALSE;
 }
@@ -290,7 +309,7 @@ static u16 drawWall(u16 x, wallhit_t* hit)
 		case 'W':
 			hit->side = 0;
 			break;
-		case 'S':
+		case 'S': 	//Secret wall. Can walk through. North-south shaing flipped and inset slightly.
 			y += 2;
 			h -= 4;
 			hit->cell = 'X';
@@ -523,4 +542,8 @@ void draw()
 		
 		unmarkSprite(markedSprites[spritesMarked].x, markedSprites[spritesMarked].y);
 	}
+
+	//Add rect around screen.
+	bmDrawRect(0, 0, 240, 160, blackBm);
+
 }

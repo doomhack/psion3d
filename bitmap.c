@@ -1,9 +1,6 @@
 #include "bitmap.h"
 
 u16 screenBm[BM_SCREEN_WORDS];
-//u16* blackBm = &screenBm[0];
-//u16* greyBm = &screenBm[BM_WORDS];
-
 u8* blackBm = (u8*)&screenBm[0];
 u8* greyBm = (u8*)&screenBm[BM_WORDS];
 
@@ -125,44 +122,28 @@ static void patternSpan(s16 x, s16 y, s16 w, u8* bm)
 
 void bmClearScreen()
 {
-	u16 i = 0;
-	u16* blackBMW = (u16*)blackBm;
-	u16* greyBMW = (u16*)greyBm;
+	u16 i = BM_SCREEN_WORDS >> 4;
+	u16* bm = screenBm;
 
 	do
 	{
-		blackBMW[i] = 0;
-		greyBMW[i] = 0;
-		i++;
-
-		blackBMW[i] = 0;
-		greyBMW[i] = 0;
-		i++;
-
-		blackBMW[i] = 0;
-		greyBMW[i] = 0;
-		i++;
-
-		blackBMW[i] = 0;
-		greyBMW[i] = 0;
-		i++;
-
-		blackBMW[i] = 0;
-		greyBMW[i] = 0;
-		i++;
-
-		blackBMW[i] = 0;
-		greyBMW[i] = 0;
-		i++;
-
-		blackBMW[i] = 0;
-		greyBMW[i] = 0;
-		i++;
-
-		blackBMW[i] = 0;
-		greyBMW[i] = 0;
-		i++;
-	} while(i < BM_WORDS);
+		*bm++ = 0;
+		*bm++ = 0;
+		*bm++ = 0;
+		*bm++ = 0;
+		*bm++ = 0;
+		*bm++ = 0;
+		*bm++ = 0;
+		*bm++ = 0;
+		*bm++ = 0;
+		*bm++ = 0;
+		*bm++ = 0;
+		*bm++ = 0;
+		*bm++ = 0;
+		*bm++ = 0;
+		*bm++ = 0;
+		*bm++ = 0;
+	} while(--i);
 }
 
 void bmFillRect(s16 x, s16 y, s16 w, s16 h, u8* bm)
@@ -174,6 +155,36 @@ void bmFillRect(s16 x, s16 y, s16 w, s16 h, u8* bm)
 
 	for(yy = y; yy < y + h; yy++)
 		fillSpan(x, yy, w, bm, 0xff);
+}
+
+void bmFillRect4(s16 x, s16 y, s16 h, u8* bm)
+{
+	u8* row;
+	u8 mask;
+
+	if(h <= 0 || x < 0 || x > BM_WIDTH - 4)
+		return;
+
+	if(y < 0)
+	{
+		h += y;
+		y = 0;
+	}
+
+	if(y + h > BM_HEIGHT)
+		h = BM_HEIGHT - y;
+
+	if(h <= 0)
+		return;
+
+	row = bm + (y << 5) + (x >> 3);
+	mask = (x & 4) ? 0xf0 : 0x0f;
+
+	do
+	{
+		*row |= mask;
+		row += BM_ROW_BYTES;
+	} while(--h);
 }
 
 void bmDrawRect(s16 x, s16 y, s16 w, s16 h, u8* bm)
@@ -216,6 +227,36 @@ void bmClearRect(s16 x, s16 y, s16 w, s16 h, u8* bm)
 		fillSpan(x, yy, w, bm, 0);
 }
 
+void bmClearRect4(s16 x, s16 y, s16 h, u8* bm)
+{
+	u8* row;
+	u8 mask;
+
+	if(h <= 0 || x < 0 || x > BM_WIDTH - 4)
+		return;
+
+	if(y < 0)
+	{
+		h += y;
+		y = 0;
+	}
+
+	if(y + h > BM_HEIGHT)
+		h = BM_HEIGHT - y;
+
+	if(h <= 0)
+		return;
+
+	row = bm + (y << 5) + (x >> 3);
+	mask = (x & 4) ? 0x0f : 0xf0;
+
+	do
+	{
+		*row &= mask;
+		row += BM_ROW_BYTES;
+	} while(--h);
+}
+
 void bmFillPattern(s16 x, s16 y, s16 w, s16 h, u8* bm)
 {
 	s16 yy;
@@ -225,6 +266,41 @@ void bmFillPattern(s16 x, s16 y, s16 w, s16 h, u8* bm)
 
 	for(yy = y; yy < y + h; yy++)
 		patternSpan(x, yy, w, bm);
+}
+
+void bmFillPattern4(s16 x, s16 y, s16 h, u8* bm)
+{
+	u8* row;
+	u8 mask;
+	u8 keepMask;
+	u8 pat;
+
+	if(h <= 0 || x < 0 || x > BM_WIDTH - 4)
+		return;
+
+	if(y < 0)
+	{
+		h += y;
+		y = 0;
+	}
+
+	if(y + h > BM_HEIGHT)
+		h = BM_HEIGHT - y;
+
+	if(h <= 0)
+		return;
+
+	row = bm + (y << 5) + (x >> 3);
+	mask = (x & 4) ? 0xf0 : 0x0f;
+	keepMask = ~mask;
+	pat = (y & 1) ? (0x55 & mask) : (0xaa & mask);
+
+	do
+	{
+		*row = (*row & keepMask) | pat;
+		pat ^= mask;
+		row += BM_ROW_BYTES;
+	} while(--h);
 }
 
 void bmDrawLine(s16 start_x, s16 start_y, s16 end_x, s16 end_y, u8* bm)

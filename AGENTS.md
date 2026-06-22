@@ -37,6 +37,8 @@ Rendering uses two logical bitplanes (`BM_BLK`, `BM_GRY`) stored in one local 25
 
 Bitmap rows are 32 bytes wide (`256 / 8`) so row addressing is `y << 5` for bytes and `y << 4` for words. Pixels are low-bit-first inside each byte: pixel `x` uses mask `1 << (x & 7)`. Preserve this bit order; high-bit-first masks cause column pairs to appear swapped and create jagged wall/floor edges.
 
+The raycaster renders wall columns as 4-pixel-wide spans with `x` aligned to a nibble boundary. Use the fixed-width helpers (`bmFillRect4`, `bmClearRect4`, `bmFillPattern4`) for those hot wall-column fills/clears/patterns. Keep the general `bmFillRect`, `bmClearRect`, and `bmFillPattern` for variable-width sprites, UI, and 1-pixel brick/detail marks.
+
 The app copies the whole combined buffer to the segment-backed WLIB bitmap with one `p_sgcopyto()`, then blits the top half to the black window plane and the bottom half to the grey window plane. Avoid reintroducing per-primitive WLIB drawing in hot paths unless it is a deliberate compatibility fallback.
 
 Avoid direct application-level manipulation of `DS`/`ES`, `cli`/`sti`, write-protection ports, or OS handle-table segment pokes. Experiments with `rep stosw` and direct segment writes crashed in the emulator. Prefer plain C writes to local buffers plus `p_sgcopyto()`.
