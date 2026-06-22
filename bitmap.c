@@ -1,8 +1,11 @@
 #include "bitmap.h"
 
 u16 screenBm[BM_SCREEN_WORDS];
-u16* blackBm = &screenBm[0];
-u16* greyBm = &screenBm[BM_WORDS];
+//u16* blackBm = &screenBm[0];
+//u16* greyBm = &screenBm[BM_WORDS];
+
+u8* blackBm = (u8*)&screenBm[0];
+u8* greyBm = (u8*)&screenBm[BM_WORDS];
 
 #define BM_WIDTH 256
 #define BM_HEIGHT 160
@@ -123,39 +126,41 @@ static void patternSpan(s16 x, s16 y, s16 w, u8* bm)
 void bmClearScreen()
 {
 	u16 i = 0;
+	u16* blackBMW = (u16*)blackBm;
+	u16* greyBMW = (u16*)greyBm;
 
 	do
 	{
-		blackBm[i] = 0;
-		greyBm[i] = 0;
+		blackBMW[i] = 0;
+		greyBMW[i] = 0;
 		i++;
 
-		blackBm[i] = 0;
-		greyBm[i] = 0;
+		blackBMW[i] = 0;
+		greyBMW[i] = 0;
 		i++;
 
-		blackBm[i] = 0;
-		greyBm[i] = 0;
+		blackBMW[i] = 0;
+		greyBMW[i] = 0;
 		i++;
 
-		blackBm[i] = 0;
-		greyBm[i] = 0;
+		blackBMW[i] = 0;
+		greyBMW[i] = 0;
 		i++;
 
-		blackBm[i] = 0;
-		greyBm[i] = 0;
+		blackBMW[i] = 0;
+		greyBMW[i] = 0;
 		i++;
 
-		blackBm[i] = 0;
-		greyBm[i] = 0;
+		blackBMW[i] = 0;
+		greyBMW[i] = 0;
 		i++;
 
-		blackBm[i] = 0;
-		greyBm[i] = 0;
+		blackBMW[i] = 0;
+		greyBMW[i] = 0;
 		i++;
 
-		blackBm[i] = 0;
-		greyBm[i] = 0;
+		blackBMW[i] = 0;
+		greyBMW[i] = 0;
 		i++;
 	} while(i < BM_WORDS);
 }
@@ -169,6 +174,35 @@ void bmFillRect(s16 x, s16 y, s16 w, s16 h, u8* bm)
 
 	for(yy = y; yy < y + h; yy++)
 		fillSpan(x, yy, w, bm, 0xff);
+}
+
+void bmDrawRect(s16 x, s16 y, s16 w, s16 h, u8* bm)
+{
+	s16 yy;
+	s16 right;
+	s16 bottom;
+
+	if(!clipRect(&x, &y, &w, &h))
+		return;
+
+	right = x + w - 1;
+	bottom = y + h - 1;
+
+	fillSpan(x, y, w, bm, 0xff);
+
+	if(bottom != y)
+		fillSpan(x, bottom, w, bm, 0xff);
+
+	if(h <= 2)
+		return;
+
+	for(yy = y + 1; yy < bottom; yy++)
+	{
+		setPixel(x, yy, bm);
+
+		if(right != x)
+			setPixel(right, yy, bm);
+	}
 }
 
 void bmClearRect(s16 x, s16 y, s16 w, s16 h, u8* bm)

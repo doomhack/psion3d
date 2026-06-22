@@ -25,6 +25,10 @@ typedef struct markedsprite_t
 	u8 x, y;
 } markedsprite_t;
 
+#define MODE_FILL 0
+#define MODE_CLEAR 1
+#define MODE_INVERT 2
+
 /* 60 degree FOV, 60 rays, 4 pixels each */
 static const f16 rayAngleOffset[60] =
 {
@@ -53,74 +57,79 @@ static f16 rayDelta(const f16 f_dir)
 	return delta;
 }
 
-static u16 projectSprite(const u16 x, const u16 y, spritehit_t* hit)
+static u16 projectSprite(const u16 x, const u16 y, spritehit_t* hit, const f16 f_viewCos, const f16 f_viewSin)
 {
-    f16 f_rx = int2fp(x) - pos.x + flt2fp(0.5f);
-    f16 f_ry = int2fp(y) - pos.y + flt2fp(0.5f);
+	f16 f_rx = int2fp(x) - pos.x + flt2fp(0.5f);
+	f16 f_ry = int2fp(y) - pos.y + flt2fp(0.5f);
 
-    f16 f_depth =
-        fpmul(f_rx, fpcos(pos.angle)) +
-        fpmul(f_ry, fpsin(pos.angle));
+	f16 f_depth =
+		fpmul(f_rx, f_viewCos) +
+		fpmul(f_ry, f_viewSin);
 
-    f16 f_side;
-    s16 spanx;
+	f16 f_side;
+	s16 spanx;
 
-    if(f_depth <= 0)
-        return FALSE;
+	if(f_depth <= 0)
+		return FALSE;
 
-    f_side =
-        -fpmul(f_rx, fpsin(pos.angle)) +
-         fpmul(f_ry, fpcos(pos.angle));
+	f_side =
+		-fpmul(f_rx, f_viewSin) +
+		 fpmul(f_ry, f_viewCos);
 
-    spanx = 30 + fp2int(
-        fpmul(
-            fpdiv(f_side, f_depth),
-            int2fp(52)
-        )
-    );
+	spanx = 30 + fp2int(
+		fpmul(
+			fpdiv(f_side, f_depth),
+			int2fp(52)
+		)
+	);
 
-    if(spanx < 0 || spanx >= 60)
-        return FALSE;
+	if(spanx < 0 || spanx >= 60)
+		return FALSE;
 
 	hit->spriteHeight = (s16)(((s32)120 << FP_BITS) / f_depth);
-    hit->f_spriteDist = f_depth;
-    hit->spanX = spanx;
+	hit->f_spriteDist = f_depth;
+	hit->spanX = spanx;
 
-    return TRUE;
+	return TRUE;
 }
 
-static void brickPattern(P_RECT* rect, const wallhit_t* hit, const u16 mode)
+static void brickPattern(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit, const u16 mode)
 {
 	s16 qheight = (hit->wallHeight >> 2);
-	s16 top = rect->tl.y;
 
 	s16 wallx = hit->f_wallX; //FP -> 0..255
 
-	s16 x = rect->tl.x;
-	s16 y = rect->tl.y;
-	s16 w = rect->br.x - rect->tl.x;
-	s16 h = rect->br.y - rect->tl.y;
-
-	bmFillRect(x, 80, w, 1, blackBm);
-
-	bmFillRect(x, 80 - qheight, w, 1, blackBm);
-
-	bmFillRect(x, 80 + qheight, w, 1, blackBm);
+	if(mode == MODE_FILL)
+	{
+		bmFillRect(x, 80, w, 1, blackBm);
+		bmFillRect(x, 80 - qheight, w, 1, blackBm);
+		bmFillRect(x, 80 + qheight, w, 1, blackBm);
+	}
+	else if(mode == MODE_CLEAR)
+	{
+		bmClearRect(x, 80, w, 1, blackBm);
+		bmClearRect(x, 80 - qheight, w, 1, blackBm);
+		bmClearRect(x, 80 + qheight, w, 1, blackBm);
+	}
 
 	if((wallx >= 64 && wallx < 72) || (wallx >= 192 && wallx < 200))
 	{
-		bmFillRect(x, y, 1, qheight, blackBm);
-		bmFillRect(x, 80, 1, qheight, blackBm);
+		if(mode == MODE_FILL)
+		{
+			bmFillRect(x, y, 1, qheight, blackBm);
+			bmFillRect(x, 80, 1, qheight, blackBm);
+		}
+		else if(mode == MODE_CLEAR)
+		{
+			bmClearRect(x, y, 1, qheight, blackBm);
+			bmClearRect(x, 80, 1, qheight, blackBm);
+		}
 	}
 }
 
-static void depthWall(P_RECT* rect, const wallhit_t* hit)
+static void depthWall(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
 	s16 depth = fp2int(hit->f_wallDist);
-	s16 x = rect->tl.x;
-	s16 y = rect->tl.y;
-	s16 w = rect->br.x - rect->tl.x;
-	s16 h = rect->br.y - rect->tl.y;
 
 	if(depth >= 6)
 	{
@@ -141,40 +150,34 @@ static void depthWall(P_RECT* rect, const wallhit_t* hit)
 	}
 }
 
-static u16 drawWallX(P_RECT* rect, const wallhit_t* hit)
+static u16 drawWallX(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {	
-	depthWall(rect, hit);
+	depthWall(x, y, w, h, hit);
 
 	if(fp2int(hit->f_wallDist) < 6)
-		brickPattern(rect, hit, G_TRMODE_SET);
+		brickPattern(x, y, w, h, hit, MODE_FILL);
 
 	return TRUE;
 }
 
-static u16 drawWallA(P_RECT* rect, const wallhit_t* hit)
+static u16 drawWallA(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
 	s16 wallx = hit->f_wallX; //FP 0..1 -> 0..255
 
 	if(wallx > 24 && wallx < 232)
 	{
-		rect->br.y = rect->tl.y + (hit->wallHeight >> 2);
-		depthWall(rect, hit);
+		depthWall(x, y, w, hit->wallHeight >> 2, hit);
 
 		return FALSE;
 	}
 	
-	depthWall(rect, hit);
+	depthWall(x, y, w, h, hit);
 
 	return TRUE;
 }
 
-static u16 drawWallD(P_RECT* rect, const wallhit_t* hit)
+static u16 drawWallD(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
-	s16 x = rect->tl.x;
-	s16 y = rect->tl.y;
-	s16 w = rect->br.x - rect->tl.x;
-	s16 h = rect->br.y - rect->tl.y;
-
 	s16 doorgap, dleft, dright;
 
 	s16 dist = hit->f_wallDist >> 4;
@@ -223,38 +226,24 @@ static u16 drawWallD(P_RECT* rect, const wallhit_t* hit)
 	return TRUE;
 }
 
-static u16 drawWallP(P_RECT* rect, const wallhit_t* hit)
+static u16 drawWallP(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
-	s16 x = rect->tl.x;
-	s16 y = rect->tl.y;
-	s16 w = rect->br.x - rect->tl.x;
-	s16 h = rect->br.y - rect->tl.y;
-
 	bmFillRect(x, y, w, h, blackBm);
 
 	if(fp2int(hit->f_wallDist) < 6)
-		brickPattern(rect, hit, G_TRMODE_CLR);
+		brickPattern(x, y, w, h, hit, MODE_CLEAR);
 
 	return TRUE;
 }
 
-static u16 drawWallB(P_RECT* rect, const wallhit_t* hit)
+static u16 drawWallB(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
-	s16 top = rect->tl.y;
-	s16 bottom = rect->br.y;
+	s16 top = y;
+	s16 bottom = y + h;
+	s16 capHeight = hit->wallHeight >> 3;
 
-	s16 x = rect->tl.x;
-	s16 y = rect->tl.y;
-	s16 w = rect->br.x - rect->tl.x;
-	s16 h = rect->br.y - rect->tl.y;
-
-	rect->br.y = top + (hit->wallHeight >> 3);
-
-	depthWall(rect, hit);
-
-	rect->br.y = bottom;
-	rect->tl.y = bottom - (hit->wallHeight >> 3);
-	depthWall(rect, hit);
+	depthWall(x, top, w, capHeight, hit);
+	depthWall(x, bottom - capHeight, w, capHeight, hit);
 
 	if((hit->f_wallX >> 3) & 1)
 	{
@@ -266,49 +255,35 @@ static u16 drawWallB(P_RECT* rect, const wallhit_t* hit)
 	return FALSE;
 }
 
-static u16 drawWallW(P_RECT* rect, const wallhit_t* hit)
+static u16 drawWallW(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
-	s16 top = rect->tl.y;
-	s16 bottom = rect->br.y;
-
-	s16 x = rect->tl.x;
-	s16 y = rect->tl.y;
-	s16 w = rect->br.x - rect->tl.x;
-	s16 h = rect->br.y - rect->tl.y;
+	s16 top = y;
+	s16 bottom = y + h;
+	s16 capHeight = hit->wallHeight >> 2;
 
 	bmFillRect(x, y + (h >> 2), w, h - (h >> 1), greyBm);
 	
-	rect->tl.y = top;
-	rect->br.y = top + (hit->wallHeight >> 2);
-	depthWall(rect, hit);
-
-	rect->tl.y = bottom - (hit->wallHeight >> 2);
-	rect->br.y = bottom;
-	
-	depthWall(rect, hit);
+	depthWall(x, top, w, capHeight, hit);
+	depthWall(x, bottom - capHeight, w, capHeight, hit);
 		
 	return FALSE;
 }
 
-static u16 drawWallV(P_RECT* rect, const wallhit_t* hit)
+static u16 drawWallV(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
-	s16 w = rect->br.x - rect->tl.x;
-
-	bmFillRect(rect->tl.x, 80, w, 1, blackBm);
+	bmFillRect(x, 80, w, 1, blackBm);
 
 	return FALSE;
 }
 
 static u16 drawWall(u16 x, wallhit_t* hit)
 {
-	u16 updateZ;
-	u16 height =  hit->wallHeight;
-	P_RECT rect;
+	u16 updateZ = TRUE;
+	s16 y;
+	s16 w = 4;
+	s16 h = hit->wallHeight;
 	
-	rect.tl.x = x;
-	rect.tl.y = 80 - (height >> 1);
-	rect.br.x = x + 4;
-	rect.br.y = 80 + (height >> 1);
+	y = 80 - (h >> 1);
 	
 	switch(hit->cell)
 	{
@@ -316,8 +291,8 @@ static u16 drawWall(u16 x, wallhit_t* hit)
 			hit->side = 0;
 			break;
 		case 'S':
-			rect.tl.y += 2;
-			rect.br.y -= 2;
+			y += 2;
+			h -= 4;
 			hit->cell = 'X';
 			hit->side = 1 - hit->side;
 			break;
@@ -326,25 +301,25 @@ static u16 drawWall(u16 x, wallhit_t* hit)
 	switch(hit->cell)
 	{
 		case 'X':
-			updateZ = drawWallX(&rect, hit);
+			updateZ = drawWallX(x, y, w, h, hit);
 			break;
 		case 'A':
-			updateZ = drawWallA(&rect, hit);
+			updateZ = drawWallA(x, y, w, h, hit);
 			break;
 		case 'D':
-			updateZ = drawWallD(&rect, hit);
+			updateZ = drawWallD(x, y, w, h, hit);
 			break;
 		case 'P':
-			updateZ = drawWallP(&rect, hit);
+			updateZ = drawWallP(x, y, w, h, hit);
 			break;
 		case 'B':
-			updateZ = drawWallB(&rect, hit);
+			updateZ = drawWallB(x, y, w, h, hit);
 			break;
 		case 'W':
-			updateZ = drawWallW(&rect, hit);
+			updateZ = drawWallW(x, y, w, h, hit);
 			break;
 		case 'V':
-			updateZ = drawWallV(&rect, hit);
+			updateZ = drawWallV(x, y, w, h, hit);
 			break;
 	}
 
@@ -369,6 +344,8 @@ void draw()
 	markedsprite_t markedSprites[8];
 	spritehit_t spriteHits[8];
 	f16 f_wallDepth[60];
+	const f16 f_viewCos = fpcos(pos.angle);
+	const f16 f_viewSin = fpsin(pos.angle);
 
 	for(i = 0; i < 60; i++)
 	{
@@ -492,7 +469,7 @@ void draw()
 						markedSprites[spritesMarked].y = mapy;
 						spritesMarked++;
 						
-						if(projectSprite(mapx, mapy, &spriteHits[spritesHit]))
+						if(projectSprite(mapx, mapy, &spriteHits[spritesHit], f_viewCos, f_viewSin))
 							spritesHit++;
 					}
 				}
