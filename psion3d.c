@@ -14,7 +14,6 @@ const INT DEBUG_WIN = 1;
 const INT GAME_WIN = 2;
 
 
-UINT gc[2]  = {0};
 position_t pos = {0};
 HANDLE bmHandles[2] = {0};
 
@@ -24,8 +23,6 @@ f16 dbgval = 0;
 
 static void updateScreen()
 {
-	wFlush();
-
 	p_sgcopyto(bmHandles[BM_BLK], 0, &blackBm[0], BM_BYTES);
 	p_sgcopyto(bmHandles[BM_GRY], 0, &greyBm[0], BM_BYTES);
 
@@ -34,6 +31,8 @@ static void updateScreen()
 
 	gSetGC0(wgc[BM_GRY]);
 	gCopyBit(&gameWinRect.tl, bitmaps[BM_GRY], &gameWinRect, G_TRMODE_REPL);
+
+	wFlush();
 }
 
 static void tryMove(const f16 dx, const f16 dy)
@@ -175,10 +174,6 @@ static void createGameWindow()
 
 	bitmaps[BM_GRY] = gCreateBit(WS_BIT_SEG_ACCESS, &bmSeg);
 	bmHandles[BM_GRY] = p_sgopen(bmSeg.seg_name);
-
-
-	gc[BM_BLK] = gCreateGC0(bitmaps[BM_BLK]);
-	gc[BM_GRY] = gCreateGC0(bitmaps[BM_GRY]);
 
 	windata.flags = W_WIN_PRIORITY;
 	windata.extent.tl.x = 120;

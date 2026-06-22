@@ -14,8 +14,6 @@ static const u16 BM_GRY = 1;
 static const P_RECT gameWinRect = {{0,0}, {240,160}};
 static const P_RECT gameBitmapRect = {{0,0}, {256,160}};
 
-extern UINT gc[2];
-
 extern HANDLE bmHandles[2];
 
 

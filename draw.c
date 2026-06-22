@@ -353,15 +353,12 @@ static u16 drawWall(u16 x, wallhit_t* hit)
 
 static void drawSprite(const spritehit_t* spriteHit)
 {
-	P_RECT rect;
+	s16 x = ((spriteHit->spanX << 2) + 2) - (spriteHit->spriteHeight >> 2);
+	s16 y = 80 + (spriteHit->spriteHeight >> 2);
+	s16 w = (spriteHit->spriteHeight >> 1);
+	s16 h = (spriteHit->spriteHeight >> 2);
 
-	rect.tl.x = ((spriteHit->spanX * 4) + 2) - (spriteHit->spriteHeight >> 2);
-	rect.tl.y = 80 + (spriteHit->spriteHeight >> 2);
-	rect.br.x = rect.tl.x + (spriteHit->spriteHeight >> 1);
-	rect.br.y = rect.tl.y + (spriteHit->spriteHeight >> 2);
-
-	gSetGC0(gc[BM_BLK]);
-	gClrRect(&rect, G_TRMODE_SET);
+	bmFillRect(x, y, w, h, blackBm);
 }
 
 void draw()
@@ -549,7 +546,4 @@ void draw()
 		
 		unmarkSprite(markedSprites[spritesMarked].x, markedSprites[spritesMarked].y);
 	}
-
-	gSetGC0(gc[BM_BLK]);
-	gDrawBox(&gameWinRect);
 }
