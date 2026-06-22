@@ -1,5 +1,6 @@
 #include "psion3d.h"
 #include "draw.h"
+#include "bitmap.h"
 
 static WSERV_SPEC wSpec;
 static UINT gameWindowId = 0;
@@ -21,17 +22,13 @@ f16 dbgval = 0;
 
 //
 
-static void clearScreen()
-{
-	gSetGC0(gc[BM_BLK]);
-	gClrRect(&gameWinRect,G_TRMODE_CLR);
-	
-	gSetGC0(gc[BM_GRY]);
-	gClrRect(&gameWinRect,G_TRMODE_CLR);
-}
-
 static void updateScreen()
 {
+	wFlush();
+
+	p_sgcopyto(bmHandles[BM_BLK], 0, &blackBm[0], BM_BYTES);
+	p_sgcopyto(bmHandles[BM_GRY], 0, &greyBm[0], BM_BYTES);
+
 	gSetGC0(wgc[BM_BLK]);
 	gCopyBit(&gameWinRect.tl, bitmaps[BM_BLK], &gameWinRect, G_TRMODE_REPL);
 
@@ -107,7 +104,7 @@ static void mainLoop()
 
 		while(event.type == E_FILE_PENDING)
 		{
-			clearScreen();
+			bmClearScreen();
 			draw();
 			updateScreen();
 			
@@ -174,10 +171,10 @@ static void createGameWindow()
 
 	bmSeg.size = gameBitmapRect.br;
 	bitmaps[BM_BLK] = gCreateBit(WS_BIT_SEG_ACCESS, &bmSeg);
-	bmHandles[BM_BLK] = p_sgopen( bmSeg.seg_name );
+	bmHandles[BM_BLK] = p_sgopen(bmSeg.seg_name);
 
 	bitmaps[BM_GRY] = gCreateBit(WS_BIT_SEG_ACCESS, &bmSeg);
-	bmHandles[BM_GRY] = p_sgopen( bmSeg.seg_name );
+	bmHandles[BM_GRY] = p_sgopen(bmSeg.seg_name);
 
 
 	gc[BM_BLK] = gCreateGC0(bitmaps[BM_BLK]);

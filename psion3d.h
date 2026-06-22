@@ -16,6 +16,9 @@ static const P_RECT gameBitmapRect = {{0,0}, {256,160}};
 
 extern UINT gc[2];
 
+extern HANDLE bmHandles[2];
+
+
 typedef struct position_t
 {
 	f16 x, y;

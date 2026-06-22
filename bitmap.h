@@ -1,8 +1,18 @@
 #ifndef BITMAP_H
 #define BITMAP_H
 
-#include <plib.h>
+#include "fp_types.h"
 
-void bmClear(HANDLE bitmap);
+#define BM_WORDS 2560
+#define BM_BYTES (BM_WORDS * 2)
+
+extern u16 blackBm[BM_WORDS];
+extern u16 greyBm[BM_WORDS];
+
+void bmClearScreen();
+void bmFillRect(s16 x, s16 y, s16 w, s16 h, u8* bm);
+void bmClearRect(s16 x, s16 y, s16 w, s16 h, u8* bm);
+void bmFillPattern(s16 x, s16 y, s16 w, s16 h, u8* bm);
+void bmDrawLine(s16 start_x, s16 start_y, s16 end_x, s16 end_y, u8* bm);
 
 #endif

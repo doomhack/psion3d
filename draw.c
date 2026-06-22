@@ -96,56 +96,48 @@ static void brickPattern(P_RECT* rect, const wallhit_t* hit, const u16 mode)
 
 	s16 wallx = hit->f_wallX; //FP -> 0..255
 
-	gSetGC0(gc[BM_BLK]);
+	s16 x = rect->tl.x;
+	s16 y = rect->tl.y;
+	s16 w = rect->br.x - rect->tl.x;
+	s16 h = rect->br.y - rect->tl.y;
 
-	rect->tl.y = 80;
-	rect->br.y = 81;
-	gClrRect(rect, mode);
+	bmFillRect(x, 80, w, 1, blackBm);
 
-	rect->tl.y -= qheight;
-	rect->br.y -= qheight;
-	gClrRect(rect, mode);
+	bmFillRect(x, 80 - qheight, w, 1, blackBm);
 
-	rect->tl.y += (qheight << 1);
-	rect->br.y += (qheight << 1);
-	gClrRect(rect, mode);	
+	bmFillRect(x, 80 + qheight, w, 1, blackBm);
 
 	if((wallx >= 64 && wallx < 72) || (wallx >= 192 && wallx < 200))
-	{		
-		rect->tl.y = top;
-		rect->br.y = top + qheight;
-		rect->br.x = rect->tl.x + 1;
-		gClrRect(rect, mode);
-
-		rect->tl.y = 80;
-		rect->br.y = 80 + qheight;
-		gClrRect(rect, mode);
+	{
+		bmFillRect(x, y, 1, qheight, blackBm);
+		bmFillRect(x, 80, 1, qheight, blackBm);
 	}
 }
 
 static void depthWall(P_RECT* rect, const wallhit_t* hit)
 {
 	s16 depth = fp2int(hit->f_wallDist);
-
-	gSetGC0(gc[BM_BLK]);
+	s16 x = rect->tl.x;
+	s16 y = rect->tl.y;
+	s16 w = rect->br.x - rect->tl.x;
+	s16 h = rect->br.y - rect->tl.y;
 
 	if(depth >= 6)
 	{
-		gClrRect(rect, G_TRMODE_SET);
+		bmFillRect(x, y, w, h, blackBm);
 		return;
 	}
 
-	gFillPattern(rect, WS_BITMAP_GREY, G_TRMODE_REPL);
+	bmFillPattern(x, y, w, h, blackBm);
 	
-	gSetGC0(gc[BM_GRY]);
 
 	if(depth >= 4 || hit->side)
 	{
-		gClrRect(rect, G_TRMODE_SET);
+		bmFillRect(x, y, w, h, greyBm);
 	}
 	else
 	{
-		gClrRect(rect, G_TRMODE_CLR);
+		bmClearRect(x, y, w, h, greyBm);
 	}
 }
 
@@ -178,6 +170,11 @@ static u16 drawWallA(P_RECT* rect, const wallhit_t* hit)
 
 static u16 drawWallD(P_RECT* rect, const wallhit_t* hit)
 {
+	s16 x = rect->tl.x;
+	s16 y = rect->tl.y;
+	s16 w = rect->br.x - rect->tl.x;
+	s16 h = rect->br.y - rect->tl.y;
+
 	s16 doorgap, dleft, dright;
 
 	s16 dist = hit->f_wallDist >> 4;
@@ -194,42 +191,29 @@ static u16 drawWallD(P_RECT* rect, const wallhit_t* hit)
 	if(wallx == dleft || wallx == dright)
 	{
 		//Black edge of door.
-		gSetGC0(gc[BM_BLK]);
-		gClrRect(rect, G_TRMODE_SET);
+
+		bmFillRect(x, y, w, h, blackBm);
 	}
 	else if(wallx < dleft || wallx > dright)
 	{
-		s16 height = (rect->br.y - rect->tl.y);
-
 		if((wallx < (dleft - 2) && wallx >= (dleft - 5)) || (wallx > (dright + 2) && wallx <= (dright + 5)))
 		{
 			//Grey door face.
-			gSetGC0(gc[BM_GRY]);
-			gClrRect(rect, G_TRMODE_SET);
+			bmFillRect(x, y, w, h, greyBm);
 
 			//Clear black behind
-			gSetGC0(gc[BM_BLK]);
-			
-			rect->br.y = rect->tl.y + (height >> 2);
-			gClrRect(rect, G_TRMODE_CLR);
-
-			rect->br.y = rect->tl.y + height;
-			rect->tl.y += (height >> 1);
-			gClrRect(rect, G_TRMODE_CLR);
+			bmClearRect(x, y, w, (h >> 2), blackBm); //Top qtr.
+			bmClearRect(x, y + (h >> 1), w, (h >> 1), blackBm); //Bottom half.
 		}
 		else
 		{
-			gSetGC0(gc[BM_BLK]);
-			gClrRect(rect, G_TRMODE_CLR);
-			
-			gSetGC0(gc[BM_GRY]);
-			gClrRect(rect, G_TRMODE_SET);
+			bmClearRect(x, y, w, h, blackBm);
+			bmFillRect(x, y, w, h, greyBm);
 		}
 
-		gSetGC0(gc[BM_BLK]);
-		rect->tl.y = rect->br.y - (height >> 3);
 
-		gFillPattern(rect, WS_BITMAP_GREY, G_TRMODE_REPL);
+		//Kickplate.
+		bmFillPattern(x, y + h - (h >> 3), w, h >> 3, blackBm);
 	}
 	else
 	{
@@ -241,8 +225,12 @@ static u16 drawWallD(P_RECT* rect, const wallhit_t* hit)
 
 static u16 drawWallP(P_RECT* rect, const wallhit_t* hit)
 {
-	gSetGC0(gc[BM_BLK]);
-	gClrRect(rect, G_TRMODE_SET);
+	s16 x = rect->tl.x;
+	s16 y = rect->tl.y;
+	s16 w = rect->br.x - rect->tl.x;
+	s16 h = rect->br.y - rect->tl.y;
+
+	bmFillRect(x, y, w, h, blackBm);
 
 	if(fp2int(hit->f_wallDist) < 6)
 		brickPattern(rect, hit, G_TRMODE_CLR);
@@ -255,7 +243,10 @@ static u16 drawWallB(P_RECT* rect, const wallhit_t* hit)
 	s16 top = rect->tl.y;
 	s16 bottom = rect->br.y;
 
-	gSetGC0(gc[BM_BLK]);
+	s16 x = rect->tl.x;
+	s16 y = rect->tl.y;
+	s16 w = rect->br.x - rect->tl.x;
+	s16 h = rect->br.y - rect->tl.y;
 
 	rect->br.y = top + (hit->wallHeight >> 3);
 
@@ -267,11 +258,7 @@ static u16 drawWallB(P_RECT* rect, const wallhit_t* hit)
 
 	if((hit->f_wallX >> 3) & 1)
 	{
-		rect->tl.y = top + (hit->wallHeight >> 3);
-		rect->br.y = bottom - (hit->wallHeight >> 3);
-
-		gSetGC0(gc[BM_BLK]);
-		gClrRect(rect, G_TRMODE_SET);
+		bmFillRect(x, y + (h >> 3), w, h - (h >> 2), blackBm);
 
 		return TRUE;
 	}
@@ -284,16 +271,12 @@ static u16 drawWallW(P_RECT* rect, const wallhit_t* hit)
 	s16 top = rect->tl.y;
 	s16 bottom = rect->br.y;
 
+	s16 x = rect->tl.x;
+	s16 y = rect->tl.y;
+	s16 w = rect->br.x - rect->tl.x;
+	s16 h = rect->br.y - rect->tl.y;
 
-	rect->tl.y += (hit->wallHeight >> 2);
-	rect->br.y -= (hit->wallHeight >> 2);
-
-	gSetGC0(gc[BM_GRY]);
-	gClrRect(rect, G_TRMODE_SET);
-
-	gSetGC0(gc[BM_BLK]);
-	gDrawLine(rect->tl.x, rect->tl.y, rect->tl.x + 4, rect->tl.y);
-	gDrawLine(rect->tl.x, rect->br.y, rect->tl.x + 4, rect->br.y);
+	bmFillRect(x, y + (h >> 2), w, h - (h >> 1), greyBm);
 	
 	rect->tl.y = top;
 	rect->br.y = top + (hit->wallHeight >> 2);
@@ -309,11 +292,9 @@ static u16 drawWallW(P_RECT* rect, const wallhit_t* hit)
 
 static u16 drawWallV(P_RECT* rect, const wallhit_t* hit)
 {
-	rect->tl.y = 80;
-	rect->br.y = 81;
+	s16 w = rect->br.x - rect->tl.x;
 
-	gSetGC0(gc[BM_BLK]);
-	gClrRect(rect, G_TRMODE_SET);
+	bmFillRect(rect->tl.x, 80, w, 1, blackBm);
 
 	return FALSE;
 }
@@ -391,8 +372,6 @@ void draw()
 	markedsprite_t markedSprites[8];
 	spritehit_t spriteHits[8];
 	f16 f_wallDepth[60];
-
-	bmClear(0);
 
 	for(i = 0; i < 60; i++)
 	{
