@@ -3,6 +3,7 @@
 
 #include "psion3d.h"
 #include "bitmap.h"
+#include "sprite.h"
 
 typedef struct wallhit_t
 {
@@ -12,13 +13,6 @@ typedef struct wallhit_t
 	s8 cell;
 	u8 side;
 } wallhit_t;
-
-typedef struct spritehit_t
-{
-	s16 spriteHeight;
-	f16 f_spriteDist;
-	u16 spanX;
-} spritehit_t;
 
 typedef struct markedsprite_t
 {
@@ -55,42 +49,6 @@ static f16 rayDelta(const f16 f_dir)
 		delta++;
 
 	return delta;
-}
-
-static u16 projectSprite(const u16 x, const u16 y, spritehit_t* hit, const f16 f_viewCos, const f16 f_viewSin)
-{
-	f16 f_rx = int2fp(x) - pos.x + flt2fp(0.5f);
-	f16 f_ry = int2fp(y) - pos.y + flt2fp(0.5f);
-
-	f16 f_depth =
-		fpmul(f_rx, f_viewCos) +
-		fpmul(f_ry, f_viewSin);
-
-	f16 f_side;
-	s16 spanx;
-
-	if(f_depth <= 0)
-		return FALSE;
-
-	f_side =
-		-fpmul(f_rx, f_viewSin) +
-		 fpmul(f_ry, f_viewCos);
-
-	spanx = 30 + fp2int(
-		fpmul(
-			fpdiv(f_side, f_depth),
-			int2fp(52)
-		)
-	);
-
-	if(spanx < 0 || spanx >= 60)
-		return FALSE;
-
-	hit->spriteHeight = (s16)(((s32)120 << FP_BITS) / f_depth);
-	hit->f_spriteDist = f_depth;
-	hit->spanX = spanx;
-
-	return TRUE;
 }
 
 static void brickPattern(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit, const u16 mode)
@@ -343,16 +301,6 @@ static u16 drawWall(u16 x, wallhit_t* hit)
 	}
 
 	return updateZ;
-}
-
-static void drawSprite(const spritehit_t* spriteHit)
-{
-	s16 x = ((spriteHit->spanX << 2) + 2) - (spriteHit->spriteHeight >> 2);
-	s16 y = 80 + (spriteHit->spriteHeight >> 2);
-	s16 w = (spriteHit->spriteHeight >> 1);
-	s16 h = (spriteHit->spriteHeight >> 2);
-
-	bmFillRect(x, y, w, h, blackBm);
 }
 
 void draw()
