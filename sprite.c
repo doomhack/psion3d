@@ -9,6 +9,7 @@
 #define SPRITE_SIZE 64
 #define SPRITE_COL_BYTES 16
 #define SPRITE_BYTES (SPRITE_SIZE * SPRITE_COL_BYTES)
+#define SPRITE_SCALE_BITS 8
 
 #define SPR_TRANSPARENT 0
 #define SPR_GREY 1
@@ -19,6 +20,7 @@
 
 #define SCREEN_WIDTH 240
 #define SCREEN_HEIGHT 160
+#define SCREEN_ROW_BYTES 32
 
 #define HP_T 0x00
 #define HP_G 0x55
@@ -115,7 +117,7 @@
 	HP_S, HP_S, HP_S, HP_S, HP_S, HP_S, HP_S, HP_S, \
 	HP_S, HP_S, HP_S, HP_S, HP_S, HP_S, HP_S, HP_S
 
-static u8 healthPackSprite[SPRITE_BYTES] =
+static const u8 healthPackSprite[SPRITE_BYTES] =
 {
 	HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY,
 	HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY,
@@ -135,7 +137,7 @@ static u8 healthPackSprite[SPRITE_BYTES] =
 	HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY
 };
 
-static u8 impSprite[SPRITE_BYTES] =
+static const u8 impSprite[SPRITE_BYTES] =
 {
 	IMP_COL4(IMP_COL_EMPTY),
 	IMP_COL4(IMP_COL_HORN),
@@ -155,7 +157,7 @@ static u8 impSprite[SPRITE_BYTES] =
 	IMP_COL4(IMP_COL_EMPTY)
 };
 
-static u8 testPatternSprite[SPRITE_BYTES] =
+static const u8 testPatternSprite[SPRITE_BYTES] =
 {
 	TEST_COL_TRANSPARENT, TEST_COL_BLACK, TEST_COL_GREY, TEST_COL_SHADE,
 	TEST_COL_TRANSPARENT, TEST_COL_BLACK, TEST_COL_GREY, TEST_COL_SHADE,
@@ -175,7 +177,7 @@ static u8 testPatternSprite[SPRITE_BYTES] =
 	TEST_COL_TRANSPARENT, TEST_COL_BLACK, TEST_COL_GREY, TEST_COL_SHADE
 };
 
-static u8 gunner[SPRITE_BYTES] =
+static const u8 gunner[SPRITE_BYTES] =
 {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -243,35 +245,6 @@ static u8 gunner[SPRITE_BYTES] =
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
-static u8 spritePixel(const u8* sprite, const u16 x, const u16 y)
-{
-	u8 packed = sprite[(x << 4) + (y >> 2)];
-
-	return (packed >> ((y & 3) << 1)) & 3;
-}
-
-static void drawSpritePixel(const s16 x, const s16 y, const u8 pix)
-{
-	u16 offset = (y << 5) + (x >> 3);
-	u8 mask = 1 << (x & 7);
-	u8 keepMask = ~mask;
-
-	switch(pix)
-	{
-		case SPR_GREY:
-			blackBm[offset] &= keepMask;
-			greyBm[offset] |= mask;
-			break;
-		case SPR_BLACK:
-			blackBm[offset] |= mask;
-			greyBm[offset] &= keepMask;
-			break;
-		case SPR_SHADE:
-			greyBm[offset] |= mask;
-			break;
-	}
-}
-
 u16 projectSprite(const u16 x, const u16 y, spritehit_t* hit, const f16 f_viewCos, const f16 f_viewSin)
 {
 	f16 f_rx = int2fp(x) - pos.x + flt2fp(0.5f);
@@ -321,6 +294,9 @@ void drawSprite(const spritehit_t* spriteHit)
 	s16 bottom;
 	s16 yStart;
 	s16 yEnd;
+	s16 sourceXStep;
+	s16 sourceYStep;
+	s16 sourceXAcc;
 
 	if(height <= 0)
 		return;
@@ -358,32 +334,54 @@ void drawSprite(const spritehit_t* spriteHit)
 	if(yStart >= yEnd)
 		return;
 
+	sourceXStep = (s16)(((s32)SPRITE_SIZE << SPRITE_SCALE_BITS) / width);
+	sourceYStep = (s16)(((s32)SPRITE_SIZE << SPRITE_SCALE_BITS) / height);
+	sourceXAcc = (s16)((s32)(xStart - left) * sourceXStep);
+
 	for(x = xStart; x < xEnd; x++)
 	{
-		s16 sourceX = (s16)(((s32)(x - left) * SPRITE_SIZE) / width);
+		u16 sourceX = sourceXAcc >> SPRITE_SCALE_BITS;
+		const u8* sourceCol;
+		u16 offset;
+		u8 mask;
+		u8 keepMask;
+		s16 sourceYAcc;
 		s16 y;
 
-		if(sourceX < 0)
-			sourceX = 0;
-
-		if(sourceX >= SPRITE_SIZE)
-			sourceX = SPRITE_SIZE - 1;
+		sourceCol = gunner + (sourceX << 4);
+		offset = (yStart << 5) + (x >> 3);
+		mask = 1 << (x & 7);
+		keepMask = ~mask;
+		sourceYAcc = (s16)((s32)(yStart - top) * sourceYStep);
 
 		for(y = yStart; y < yEnd; y++)
 		{
-			s16 sourceY = (s16)(((s32)(y - top) * SPRITE_SIZE) / height);
+			u16 sourceY = sourceYAcc >> SPRITE_SCALE_BITS;
+			u8 packed;
 			u8 pix;
 
-			if(sourceY < 0)
-				sourceY = 0;
+			packed = sourceCol[sourceY >> 2];
+			pix = (packed >> ((sourceY & 3) << 1)) & 3;
 
-			if(sourceY >= SPRITE_SIZE)
-				sourceY = SPRITE_SIZE - 1;
+			switch(pix)
+			{
+				case SPR_GREY:
+					blackBm[offset] &= keepMask;
+					greyBm[offset] |= mask;
+					break;
+				case SPR_BLACK:
+					blackBm[offset] |= mask;
+					greyBm[offset] &= keepMask;
+					break;
+				case SPR_SHADE:
+					greyBm[offset] |= mask;
+					break;
+			}
 
-			pix = spritePixel(gunner, sourceX, sourceY);
-
-			if(pix != SPR_TRANSPARENT)
-				drawSpritePixel(x, y, pix);
+			sourceYAcc += sourceYStep;
+			offset += SCREEN_ROW_BYTES;
 		}
+
+		sourceXAcc += sourceXStep;
 	}
 }

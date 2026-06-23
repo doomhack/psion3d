@@ -1,19 +1,68 @@
-param(
-	[Parameter(Mandatory=$true, Position=0)]
-	[string]$InputPath,
-
-	[Parameter(Position=1)]
-	[string]$Name = "spriteData",
-
-	[string]$OutputPath = "",
-
-	[bool]$WhiteTransparent = $true
-)
-
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = "Stop"
 
 Add-Type -AssemblyName System.Drawing
+
+$InputPath = ""
+$Name = "spriteData"
+$OutputPath = ""
+$Raw = $false
+$WhiteTransparent = $true
+
+for($argIndex = 0; $argIndex -lt $args.Count; $argIndex++)
+{
+	$arg = $args[$argIndex]
+
+	if($arg -eq "/f" -or $arg -eq "-Raw")
+	{
+		$Raw = $true
+		continue
+	}
+
+	if($arg -eq "-OutputPath")
+	{
+		$argIndex++
+
+		if($argIndex -ge $args.Count)
+		{
+			throw "-OutputPath requires a path."
+		}
+
+		$OutputPath = $args[$argIndex]
+		continue
+	}
+
+	if($arg -eq "-WhiteTransparent")
+	{
+		$argIndex++
+
+		if($argIndex -ge $args.Count)
+		{
+			throw "-WhiteTransparent requires true or false."
+		}
+
+		$WhiteTransparent = [System.Convert]::ToBoolean($args[$argIndex])
+		continue
+	}
+
+	if($InputPath -eq "")
+	{
+		$InputPath = $arg
+	}
+	elseif($Name -eq "spriteData")
+	{
+		$Name = $arg
+	}
+	else
+	{
+		throw "Unexpected argument: $arg"
+	}
+}
+
+if($InputPath -eq "")
+{
+	throw "Usage: convert_sprite.bat [/f] input.png [arrayName] [-OutputPath path] [-WhiteTransparent true|false]"
+}
 
 function Get-Sprite-PixelValue($color)
 {
@@ -60,7 +109,7 @@ try
 		throw "Input image must be exactly 64x64 pixels. Got $($bitmap.Width)x$($bitmap.Height)."
 	}
 
-	$bytes = New-Object System.Collections.Generic.List[string]
+	$bytes = New-Object System.Collections.Generic.List[byte]
 
 	for($x = 0; $x -lt 64; $x++)
 	{
@@ -74,8 +123,40 @@ try
 				$packed = $packed -bor ($pixel -shl ($bit * 2))
 			}
 
-			$bytes.Add((Format-HexByte $packed))
+			$bytes.Add([byte]$packed)
 		}
+	}
+
+	$rawBytes = $bytes.ToArray()
+
+	if($Raw)
+	{
+		if($OutputPath -ne "")
+		{
+			if([System.IO.Path]::IsPathRooted($OutputPath))
+			{
+				$fullOutputPath = [System.IO.Path]::GetFullPath($OutputPath)
+			}
+			else
+			{
+				$fullOutputPath = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $OutputPath))
+			}
+
+			$outputDir = Split-Path -Parent $fullOutputPath
+
+			if($outputDir -ne "" -and !(Test-Path -LiteralPath $outputDir))
+			{
+				New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+			}
+
+			[System.IO.File]::WriteAllBytes($fullOutputPath, $rawBytes)
+			return
+		}
+
+		$stdout = [Console]::OpenStandardOutput()
+		$stdout.Write($rawBytes, 0, $rawBytes.Length)
+		$stdout.Flush()
+		return
 	}
 
 	$lines = New-Object System.Collections.Generic.List[string]
@@ -84,7 +165,7 @@ try
 
 	for($i = 0; $i -lt $bytes.Count; $i += 16)
 	{
-		$slice = $bytes.GetRange($i, 16)
+		$slice = $bytes.GetRange($i, 16) | ForEach-Object { Format-HexByte $_ }
 		$suffix = if($i + 16 -lt $bytes.Count) { "," } else { "" }
 		$lines.Add("`t" + ($slice -join ", ") + $suffix)
 	}
