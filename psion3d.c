@@ -209,6 +209,8 @@ void main()
 	wInitialiseWindowTree(debugWindowId);
 	
 	createGameWindow();
+
+	loadMap(1);
 	
 	mainLoop();
 }

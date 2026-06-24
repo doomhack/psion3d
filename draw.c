@@ -437,7 +437,10 @@ void draw()
 						spritesMarked++;
 						
 						if(projectSprite(mapx, mapy, &spriteHits[spritesHit], f_viewCos, f_viewSin))
+						{
+							spriteHits[spritesHit].spriteId = mapSpriteId(hitcell);
 							spritesHit++;
+						}
 					}
 				}
 			} while(hit == 0);

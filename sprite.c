@@ -9,7 +9,14 @@
 #define SPRITE_SIZE 64
 #define SPRITE_COL_BYTES 16
 #define SPRITE_BYTES (SPRITE_SIZE * SPRITE_COL_BYTES)
+#define SPRITE_MAX_FRAMES 8
+#define SPRITE_SEG_BYTES (SPRITE_BYTES * SPRITE_MAX_FRAMES)
+#define SPRITE_SEG_PARAS (SPRITE_SEG_BYTES / 16)
 #define SPRITE_SCALE_BITS 8
+#define SPRITE_MAX_SPRITES 32
+#define SPRITE_NUM_MASK 0x1f
+#define SPRITE_FRAME_MASK 0x07
+#define SPRITE_CACHE_FRAMES 8
 
 #define SPR_TRANSPARENT 0
 #define SPR_GREY 1
@@ -22,84 +29,25 @@
 #define SCREEN_HEIGHT 160
 #define SCREEN_ROW_BYTES 32
 
+#define SPRITE_FILE_NAME_LEN 32
+#define SPRITE_SEG_NAME_LEN 16
+
+typedef struct sprite_cache_entry_t
+{
+	u8 spriteId;
+	u8 valid;
+} sprite_cache_entry_t;
+
+static u8 spriteLoadBuffer[SPRITE_BYTES];
+static HANDLE spriteSegs[SPRITE_MAX_SPRITES];
+static u8 spriteCache[SPRITE_CACHE_FRAMES * SPRITE_BYTES];
+static sprite_cache_entry_t spriteCacheEntries[SPRITE_CACHE_FRAMES];
+static u16 spriteCacheRand = 0xace1;
+
 #define HP_T 0x00
 #define HP_G 0x55
 #define HP_B 0xaa
 #define HP_S 0xff
-
-#define HP_COL_EMPTY \
-	HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, \
-	HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T
-
-#define HP_COL_EDGE \
-	HP_T, HP_T, HP_T, HP_B, HP_B, HP_B, HP_B, HP_B, \
-	HP_B, HP_B, HP_B, HP_B, HP_B, HP_T, HP_T, HP_T
-
-#define HP_COL_FILL \
-	HP_T, HP_T, HP_T, HP_B, HP_G, HP_G, HP_G, HP_G, \
-	HP_G, HP_G, HP_G, HP_G, HP_B, HP_T, HP_T, HP_T
-
-#define HP_COL_SHADE \
-	HP_T, HP_T, HP_T, HP_B, HP_S, HP_S, HP_S, HP_S, \
-	HP_S, HP_S, HP_S, HP_S, HP_B, HP_T, HP_T, HP_T
-
-#define HP_COL_CROSS_H \
-	HP_T, HP_T, HP_T, HP_B, HP_G, HP_G, HP_G, HP_B, \
-	HP_B, HP_G, HP_G, HP_G, HP_B, HP_T, HP_T, HP_T
-
-#define HP_COL_CROSS_V \
-	HP_T, HP_T, HP_T, HP_B, HP_G, HP_B, HP_B, HP_B, \
-	HP_B, HP_B, HP_B, HP_G, HP_B, HP_T, HP_T, HP_T
-
-#define IMP_COL_EMPTY \
-	HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, \
-	HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T
-
-#define IMP_COL_HORN \
-	HP_T, HP_B, HP_B, HP_T, HP_T, HP_T, HP_T, HP_T, \
-	HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T
-
-#define IMP_COL_HEAD_EDGE \
-	HP_T, HP_T, HP_B, HP_B, HP_B, HP_B, HP_G, HP_G, \
-	HP_G, HP_B, HP_G, HP_G, HP_G, HP_B, HP_T, HP_T
-
-#define IMP_COL_FACE \
-	HP_T, HP_T, HP_B, HP_G, HP_G, HP_B, HP_G, HP_B, \
-	HP_G, HP_G, HP_G, HP_G, HP_B, HP_G, HP_T, HP_T
-
-#define IMP_COL_FACE_DARK \
-	HP_T, HP_T, HP_B, HP_G, HP_B, HP_B, HP_G, HP_B, \
-	HP_G, HP_G, HP_G, HP_B, HP_B, HP_G, HP_T, HP_T
-
-#define IMP_COL_SHOULDER \
-	HP_T, HP_T, HP_T, HP_T, HP_B, HP_B, HP_S, HP_S, \
-	HP_S, HP_G, HP_G, HP_G, HP_B, HP_B, HP_T, HP_T
-
-#define IMP_COL_TORSO_EDGE \
-	HP_T, HP_T, HP_T, HP_T, HP_T, HP_B, HP_B, HP_S, \
-	HP_S, HP_S, HP_G, HP_G, HP_B, HP_B, HP_B, HP_T
-
-#define IMP_COL_TORSO \
-	HP_T, HP_T, HP_T, HP_T, HP_T, HP_B, HP_S, HP_G, \
-	HP_G, HP_G, HP_G, HP_G, HP_G, HP_B, HP_B, HP_T
-
-#define IMP_COL_CHEST \
-	HP_T, HP_T, HP_T, HP_T, HP_T, HP_B, HP_G, HP_B, \
-	HP_G, HP_B, HP_G, HP_G, HP_G, HP_B, HP_B, HP_T
-
-#define IMP_COL_ARM \
-	HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_B, HP_B, \
-	HP_S, HP_S, HP_S, HP_B, HP_B, HP_T, HP_T, HP_T
-
-#define IMP_COL_CLAW \
-	HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_B, \
-	HP_B, HP_S, HP_S, HP_B, HP_T, HP_T, HP_T, HP_T
-
-#define IMP_COL_LEG \
-	HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, \
-	HP_T, HP_T, HP_T, HP_B, HP_B, HP_B, HP_B, HP_B
-
-#define IMP_COL4(c) c, c, c, c
 
 #define TEST_COL_TRANSPARENT \
 	HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, HP_T, \
@@ -116,46 +64,6 @@
 #define TEST_COL_SHADE \
 	HP_S, HP_S, HP_S, HP_S, HP_S, HP_S, HP_S, HP_S, \
 	HP_S, HP_S, HP_S, HP_S, HP_S, HP_S, HP_S, HP_S
-
-static const u8 healthPackSprite[SPRITE_BYTES] =
-{
-	HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY,
-	HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY,
-	HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY,
-	HP_COL_EDGE, HP_COL_EDGE, HP_COL_EDGE, HP_COL_EDGE,
-	HP_COL_FILL, HP_COL_FILL, HP_COL_FILL, HP_COL_FILL,
-	HP_COL_CROSS_H, HP_COL_CROSS_H, HP_COL_CROSS_H, HP_COL_CROSS_H,
-	HP_COL_CROSS_H, HP_COL_CROSS_H, HP_COL_CROSS_H, HP_COL_CROSS_H,
-	HP_COL_CROSS_V, HP_COL_CROSS_V, HP_COL_CROSS_V, HP_COL_CROSS_V,
-	HP_COL_CROSS_V, HP_COL_CROSS_V, HP_COL_CROSS_V, HP_COL_CROSS_V,
-	HP_COL_CROSS_H, HP_COL_CROSS_H, HP_COL_CROSS_H, HP_COL_CROSS_H,
-	HP_COL_CROSS_H, HP_COL_CROSS_H, HP_COL_CROSS_H, HP_COL_CROSS_H,
-	HP_COL_SHADE, HP_COL_SHADE, HP_COL_SHADE, HP_COL_SHADE,
-	HP_COL_EDGE, HP_COL_EDGE, HP_COL_EDGE, HP_COL_EDGE,
-	HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY,
-	HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY,
-	HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY, HP_COL_EMPTY
-};
-
-static const u8 impSprite[SPRITE_BYTES] =
-{
-	IMP_COL4(IMP_COL_EMPTY),
-	IMP_COL4(IMP_COL_HORN),
-	IMP_COL4(IMP_COL_CLAW),
-	IMP_COL4(IMP_COL_ARM),
-	IMP_COL4(IMP_COL_SHOULDER),
-	IMP_COL4(IMP_COL_HEAD_EDGE),
-	IMP_COL4(IMP_COL_FACE_DARK),
-	IMP_COL4(IMP_COL_CHEST),
-	IMP_COL4(IMP_COL_CHEST),
-	IMP_COL4(IMP_COL_FACE_DARK),
-	IMP_COL4(IMP_COL_HEAD_EDGE),
-	IMP_COL4(IMP_COL_SHOULDER),
-	IMP_COL4(IMP_COL_ARM),
-	IMP_COL4(IMP_COL_LEG),
-	IMP_COL4(IMP_COL_HORN),
-	IMP_COL4(IMP_COL_EMPTY)
-};
 
 static const u8 testPatternSprite[SPRITE_BYTES] =
 {
@@ -245,6 +153,124 @@ static const u8 gunner[SPRITE_BYTES] =
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
+static u8 randomCacheSlot()
+{
+	spriteCacheRand = (u16)(spriteCacheRand * 17 + 43);
+
+	return (u8)((spriteCacheRand >> 8) & (SPRITE_CACHE_FRAMES - 1));
+}
+
+static u8 chooseCacheSlot()
+{
+	u8 slot;
+
+	for(slot = 0; slot < SPRITE_CACHE_FRAMES; slot++)
+	{
+		if(!spriteCacheEntries[slot].valid)
+			return slot;
+	}
+
+	return randomCacheSlot();
+}
+
+static u8* cacheFramePtr(const u8 slot)
+{
+	return &spriteCache[((u16)slot) * SPRITE_BYTES];
+}
+
+static void invalidateSpriteCache(const u8 spriteNum)
+{
+	u8 slot;
+
+	for(slot = 0; slot < SPRITE_CACHE_FRAMES; slot++)
+	{
+		if(spriteCacheEntries[slot].valid &&
+			((spriteCacheEntries[slot].spriteId >> 3) & SPRITE_NUM_MASK) == spriteNum)
+			spriteCacheEntries[slot].valid = FALSE;
+	}
+}
+
+static const u8* getSpriteFrame(const u8 spriteId)
+{
+	u8 slot;
+	u8 spriteNum = (spriteId >> 3) & SPRITE_NUM_MASK;
+	u8 frameNum = spriteId & SPRITE_FRAME_MASK;
+	HANDLE segHandle = spriteSegs[spriteNum];
+
+	if(segHandle <= 0)
+		return &testPatternSprite[0];
+
+	for(slot = 0; slot < SPRITE_CACHE_FRAMES; slot++)
+	{
+		if(spriteCacheEntries[slot].valid && spriteCacheEntries[slot].spriteId == spriteId)
+			return cacheFramePtr(slot);
+	}
+
+	slot = chooseCacheSlot();
+	p_sgcopyfr(segHandle, ((u32)frameNum) * SPRITE_BYTES, cacheFramePtr(slot), SPRITE_BYTES);
+
+	spriteCacheEntries[slot].spriteId = spriteId;
+	spriteCacheEntries[slot].valid = TRUE;
+
+	return cacheFramePtr(slot);
+}
+
+HANDLE loadSprite(TEXT* baseName, u8 id)
+{
+	TEXT fileName[SPRITE_FILE_NAME_LEN];
+	TEXT segName[SPRITE_SEG_NAME_LEN];
+	VOID* fileHandle;
+	HANDLE segHandle;
+	u16 frame;
+	u8 spriteNum = id & SPRITE_NUM_MASK;
+
+	p_atos(&fileName[0], "%s%d.spr", baseName, spriteNum);
+	p_atos(&segName[0], "SPR%d", spriteNum);
+
+	segHandle = p_sgcreate(&segName[0], SPRITE_SEG_PARAS, E_SEGMENT_HIGH);
+
+	if(segHandle <= 0)
+		return 0;
+
+	if(p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
+	{
+		p_sgclose(segHandle);
+		return 0;
+	}
+
+	for(frame = 0; frame < SPRITE_MAX_FRAMES; frame++)
+	{
+		INT bytesRead;
+
+		bytesRead = p_read(fileHandle, &spriteLoadBuffer[0], SPRITE_BYTES);
+
+		if(bytesRead == 0)
+			break;
+
+		if(bytesRead != SPRITE_BYTES)
+		{
+			p_close(fileHandle);
+			p_sgclose(segHandle);
+			return 0;
+		}
+
+		p_sgcopyto(segHandle, ((u32)frame) * SPRITE_BYTES, &spriteLoadBuffer[0], SPRITE_BYTES);
+	}
+
+	p_close(fileHandle);
+
+	if(frame == 0)
+	{
+		p_sgclose(segHandle);
+		return 0;
+	}
+
+	invalidateSpriteCache(spriteNum);
+	spriteSegs[spriteNum] = segHandle;
+
+	return segHandle;
+}
+
 u16 projectSprite(const u16 x, const u16 y, spritehit_t* hit, const f16 f_viewCos, const f16 f_viewSin)
 {
 	f16 f_rx = int2fp(x) - pos.x + flt2fp(0.5f);
@@ -297,6 +323,7 @@ void drawSprite(const spritehit_t* spriteHit)
 	s16 sourceXStep;
 	s16 sourceYStep;
 	s16 sourceXAcc;
+	const u8* spriteData;
 
 	if(height <= 0)
 		return;
@@ -337,6 +364,7 @@ void drawSprite(const spritehit_t* spriteHit)
 	sourceXStep = (s16)(((s32)SPRITE_SIZE << SPRITE_SCALE_BITS) / width);
 	sourceYStep = (s16)(((s32)SPRITE_SIZE << SPRITE_SCALE_BITS) / height);
 	sourceXAcc = (s16)((s32)(xStart - left) * sourceXStep);
+	spriteData = getSpriteFrame(spriteHit->spriteId);
 
 	for(x = xStart; x < xEnd; x++)
 	{
@@ -348,7 +376,7 @@ void drawSprite(const spritehit_t* spriteHit)
 		s16 sourceYAcc;
 		s16 y;
 
-		sourceCol = gunner + (sourceX << 4);
+		sourceCol = spriteData + (sourceX << 4);
 		offset = (yStart << 5) + (x >> 3);
 		mask = 1 << (x & 7);
 		keepMask = ~mask;
