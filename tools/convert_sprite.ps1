@@ -85,9 +85,14 @@ function Get-Sprite-PixelValue($color)
 		return 3
 	}
 
-	if($WhiteTransparent -and $color.R -ge 240 -and $color.G -ge 240 -and $color.B -ge 240)
+	if($color.R -ge 240 -and $color.G -ge 240 -and $color.B -ge 240)
 	{
-		return 0
+		if($WhiteTransparent)
+		{
+			return 0
+		}
+
+		return 3
 	}
 
 	if($color.R -le 32 -and $color.G -le 32 -and $color.B -le 32)

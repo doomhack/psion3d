@@ -23,7 +23,7 @@
 #define SPR_TRANSPARENT 0
 #define SPR_GREY 1
 #define SPR_BLACK 2
-#define SPR_SHADE 3
+#define SPR_WHITE 3
 
 #define SPRITE_NEAR_DEPTH ((f16)32)
 #define SPRITE_FAR_DEPTH ((f16)3072)
@@ -305,8 +305,9 @@ void drawSprite(const spritehit_t* spriteHit)
 					blackBm[offset] |= mask;
 					greyBm[offset] &= keepMask;
 					break;
-				case SPR_SHADE:
-					greyBm[offset] |= mask;
+				case SPR_WHITE:
+					blackBm[offset] &= keepMask;
+					greyBm[offset] &= keepMask;
 					break;
 			}
 

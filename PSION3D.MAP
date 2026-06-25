@@ -1,7 +1,7 @@
 
  Start  Stop   Length Name               Class              Group
 
- 00000H 01D0AH 01D0AH _TEXT              CODE               (none)
+ 00000H 01D10H 01D10H _TEXT              CODE               (none)
  01D10H 02D10H 01000H STACK              STACK              (none)
  02D10H 03D10H 01000H _MAGIC             MAGIC              DGROUP 
  03D10H 03D12H 00002H _INIT              DATA               DGROUP 
@@ -34,66 +34,66 @@
  0000:11E7       _loadSprite
  0000:12CD       _projectSprite
  0000:138C       _drawSprite
- 0000:1544       _setDbgInt
- 0000:1559       _drawDbgText
- 0000:1576       _loadMapData
- 0000:1585       _loadMap
- 0000:19DB       _main
- 0000:1A42       _p_atob
- 0000:1A47       _p_atos
- 0000:1A65       _p_close
- 0000:1A6D       _p_date
- 0000:1A73       _p_open
- 0000:1A81       _p_read
- 0000:1A89       _p_sgclose
- 0000:1A93       _p_sgcopyfr
- 0000:1A9D       _p_sgcopyto
- 0000:1AA7       _p_sgcreate
- 0000:1AAF       _p_sgopen
- 0000:1AB7       _p_sleep
- 0000:1AC1       _p_slen
- 0000:1AC4       _wConnect
- 0000:1AC9       _wInvalidateWin
- 0000:1ACE       _wValidateWin
- 0000:1AD3       _wEndRedraw
- 0000:1AD8       _wCreateWindow
- 0000:1ADD       _wInitialiseWindowTree
- 0000:1AE2       _gCreateBit
- 0000:1AEB       _gPrintText
- 0000:1AF0       _gCopyBit
- 0000:1AF5       _gCreateGC
- 0000:1AFA       _wGetEventSpecial
- 0000:1AFF       _wFlush
- 0000:1B04       _wBeginRedrawWinGC0
- 0000:1B0B       _gCreateGC0
- 0000:1B12       _gSetGC0
- 0000:1B19       _wCompatibilityMode
- 0000:1B21       __FatalErrorPos
- 0000:1B2A       __FatalError
- 0000:1B2E       _ExtCatTable
- 0000:1B2E       _ClassTable
- 0000:1B30       N$StdRet
- 0000:1B3A       N$SgnMol
- 0000:1B3A       N$UnsMol
- 0000:1B99       N$SgnDiv
- 0000:1C52       N$UnsMul
- 0000:1C96       N$LngShl
- 0000:1CA1       N$LngShr
- 0000:1CAC       N$CnsStk
- 0000:1CB2       N$CnsPtr
- 0000:1CB8       N$CnsIdx
- 0000:1CBE       N$CnsOvr
- 0000:1CC4       N$CnsRng
- 0000:1CCA       N$CnsRet
- 0000:1CD0       N$CnsCase
- 0000:1CD6       N$CnsDiv
- 0000:1CDC       N$CnsPVC
- 0000:1D06       __FloatInit
- 0000:1D09       __FloatJmpRestore
- 0000:1D09       __FloatFinish
- 0000:1D09       __FloatJmpSave
- 0000:1D09       __FloatMathExcepDos
- 0000:1D09       __FloatInitInstance
+ 0000:154A       _setDbgInt
+ 0000:155F       _drawDbgText
+ 0000:157C       _loadMapData
+ 0000:158B       _loadMap
+ 0000:19E1       _main
+ 0000:1A48       _p_atob
+ 0000:1A4D       _p_atos
+ 0000:1A6B       _p_close
+ 0000:1A73       _p_date
+ 0000:1A79       _p_open
+ 0000:1A87       _p_read
+ 0000:1A8F       _p_sgclose
+ 0000:1A99       _p_sgcopyfr
+ 0000:1AA3       _p_sgcopyto
+ 0000:1AAD       _p_sgcreate
+ 0000:1AB5       _p_sgopen
+ 0000:1ABD       _p_sleep
+ 0000:1AC7       _p_slen
+ 0000:1ACA       _wConnect
+ 0000:1ACF       _wInvalidateWin
+ 0000:1AD4       _wValidateWin
+ 0000:1AD9       _wEndRedraw
+ 0000:1ADE       _wCreateWindow
+ 0000:1AE3       _wInitialiseWindowTree
+ 0000:1AE8       _gCreateBit
+ 0000:1AF1       _gPrintText
+ 0000:1AF6       _gCopyBit
+ 0000:1AFB       _gCreateGC
+ 0000:1B00       _wGetEventSpecial
+ 0000:1B05       _wFlush
+ 0000:1B0A       _wBeginRedrawWinGC0
+ 0000:1B11       _gCreateGC0
+ 0000:1B18       _gSetGC0
+ 0000:1B1F       _wCompatibilityMode
+ 0000:1B27       __FatalErrorPos
+ 0000:1B30       __FatalError
+ 0000:1B34       _ExtCatTable
+ 0000:1B34       _ClassTable
+ 0000:1B36       N$StdRet
+ 0000:1B40       N$SgnMol
+ 0000:1B40       N$UnsMol
+ 0000:1B9F       N$SgnDiv
+ 0000:1C58       N$UnsMul
+ 0000:1C9C       N$LngShl
+ 0000:1CA7       N$LngShr
+ 0000:1CB2       N$CnsStk
+ 0000:1CB8       N$CnsPtr
+ 0000:1CBE       N$CnsIdx
+ 0000:1CC4       N$CnsOvr
+ 0000:1CCA       N$CnsRng
+ 0000:1CD0       N$CnsRet
+ 0000:1CD6       N$CnsCase
+ 0000:1CDC       N$CnsDiv
+ 0000:1CE2       N$CnsPVC
+ 0000:1D0C       __FloatInit
+ 0000:1D0F       __FloatJmpRestore
+ 0000:1D0F       __FloatFinish
+ 0000:1D0F       __FloatJmpSave
+ 0000:1D0F       __FloatMathExcepDos
+ 0000:1D0F       __FloatInitInstance
  02D1:0000       _DatWordDead
  02D1:0002       _DatHandNext
  02D1:0004       _DatHandPrev
