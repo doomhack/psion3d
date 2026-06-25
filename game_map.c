@@ -10,7 +10,7 @@ s8 map[MAP_Y][MAP_X];
 void loadMapData(const u8 mapId)
 {
 	if(mapId == 1)
-		loadSprite("h", 0);
+		loadSprite("sci", 0);
 }
 
 u16 loadMap(const u8 mapId)

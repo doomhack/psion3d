@@ -42,3 +42,8 @@ void setDbgString(TEXT *dbg)
 
 	dbgTxt[i] = '\0';
 }
+
+void drawDbgText(INT x, INT y)
+{
+	gPrintText(x, y, &dbgTxt[0], p_slen(&dbgTxt[0]));
+}

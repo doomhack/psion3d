@@ -36,6 +36,9 @@
 #define SPRITE_FILE_NAME_LEN 32
 #define SPRITE_SEG_NAME_LEN 16
 
+#include "tst_spr.h"
+
+
 typedef struct sprite_cache_entry_t
 {
 	u8 spriteId;
@@ -47,8 +50,6 @@ static HANDLE spriteSegs[SPRITE_MAX_SPRITES];
 static u8 spriteCache[SPRITE_CACHE_FRAMES * SPRITE_BYTES];
 static sprite_cache_entry_t spriteCacheEntries[SPRITE_CACHE_FRAMES];
 static u16 spriteCacheRand = 0xace1;
-
-#include "sprite_test_pattern.h"
 
 static u8 randomCacheSlot()
 {

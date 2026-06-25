@@ -6,5 +6,6 @@
 void setDbgInt(s32 dbg);
 void setDbgFp(f16 dbg);
 void setDbgString(TEXT *dbg);
+void drawDbgText(INT x, INT y);
 
 #endif
