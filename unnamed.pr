@@ -4,6 +4,7 @@
 #compile bitmap
 #compile draw
 #compile sprite
+#compile debug
 #compile game_map
 #compile fp_math
 #compile %main

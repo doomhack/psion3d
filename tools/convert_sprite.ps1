@@ -49,6 +49,10 @@ for($argIndex = 0; $argIndex -lt $args.Count; $argIndex++)
 	{
 		$InputPath = $arg
 	}
+	elseif($Raw -and $OutputPath -eq "")
+	{
+		$OutputPath = $arg
+	}
 	elseif($Name -eq "spriteData")
 	{
 		$Name = $arg
@@ -61,7 +65,7 @@ for($argIndex = 0; $argIndex -lt $args.Count; $argIndex++)
 
 if($InputPath -eq "")
 {
-	throw "Usage: convert_sprite.bat [/f] input.png [arrayName] [-OutputPath path] [-WhiteTransparent true|false]"
+	throw "Usage: convert_sprite.bat [/f] input.png [output.spr|arrayName] [-OutputPath path] [-WhiteTransparent true|false]"
 }
 
 function Get-Sprite-PixelValue($color)

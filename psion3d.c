@@ -1,6 +1,7 @@
 #include "psion3d.h"
 #include "draw.h"
 #include "bitmap.h"
+#include "debug.h"
 
 static WSERV_SPEC wSpec;
 static UINT gameWindowId = 0;
@@ -16,10 +17,6 @@ const INT GAME_WIN = 2;
 
 
 position_t pos = {0};
-
-f16 dbgval = 0;
-
-//
 
 static void updateScreen()
 {
@@ -90,7 +87,7 @@ static void mainLoop()
 	WS_EV event;
 	
 	u16 frames = 0, lastSecond = 0, t = 0;
-	TEXT buf[16];
+	TEXT buf[32];
 
 	pos.x = flt2fp(27.5f);
 	pos.y = flt2fp(1.5f);
@@ -129,20 +126,15 @@ static void mainLoop()
 				wBeginRedrawWinGC0(debugWindowId);
 
 				p_atos(&buf[0], "%d fps", frames);
-				gPrintText(20, 20, &buf[0], p_slen(&buf[0]));
+				gPrintText(5, 20, &buf[0], p_slen(&buf[0]));
 				
-				
-				p_atos(&buf[0], "X: %d", pos.x);
-				gPrintText(20, 40, &buf[0], p_slen(&buf[0]));
-
-				p_atos(&buf[0], "Y: %d", pos.y);
-				gPrintText(20, 60, &buf[0], p_slen(&buf[0]));
+				p_atos(&buf[0], "Pos: %d,%d", pos.x, pos.y);
+				gPrintText(5, 40, &buf[0], p_slen(&buf[0]));
 				
 				p_atos(&buf[0], "Angle: %d", pos.angle);
-				gPrintText(20, 80, &buf[0], p_slen(&buf[0]));
+				gPrintText(5, 80, &buf[0], p_slen(&buf[0]));
 
-				p_atos(&buf[0], "Dbg: %d", dbgval);
-				gPrintText(20, 100, &buf[0], p_slen(&buf[0]));
+				drawDbgText(5, 100);
 
 				wEndRedraw();
 

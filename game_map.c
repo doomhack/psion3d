@@ -1,17 +1,16 @@
 #include "fp_types.h"
 #include "game_map.h"
 #include "sprite.h"
+#include "debug.h"
 
-#define MAP_FILE_NAME_LEN 16
+#define MAP_FILE_NAME_LEN 32
 
 s8 map[MAP_Y][MAP_X];
-
-static s8 loadMapBuf[MAP_Y][MAP_X];
 
 void loadMapData(const u8 mapId)
 {
 	if(mapId == 1)
-		loadSprite("health.", 0);
+		loadSprite("h", 0);
 }
 
 u16 loadMap(const u8 mapId)
@@ -23,7 +22,7 @@ u16 loadMap(const u8 mapId)
 	INT bytesRead;
 	s8 c;
 
-	p_atos(&fileName[0], "map%d.map", mapId);
+	p_atos(&fileName[0], "LOC::M:\\IMG\\map%d.map", mapId);
 
 	if(p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
 		return FALSE;
@@ -32,7 +31,7 @@ u16 loadMap(const u8 mapId)
 	{
 		bytesRead = p_read(fileHandle, &c, 1);
 
-		if(bytesRead == 0)
+		if(bytesRead == E_FILE_EOF)
 			break;
 
 		if(bytesRead != 1)
@@ -50,7 +49,7 @@ u16 loadMap(const u8 mapId)
 			return FALSE;
 		}
 
-		loadMapBuf[y][x] = c;
+		map[y][x] = c;
 		x++;
 
 		if(x >= MAP_X)
@@ -63,13 +62,10 @@ u16 loadMap(const u8 mapId)
 	p_close(fileHandle);
 
 	if(y != MAP_Y || x != 0)
-		return FALSE;
-
-	for(y = 0; y < MAP_Y; y++)
 	{
-		for(x = 0; x < MAP_X; x++)
-			map[y][x] = loadMapBuf[y][x];
+		return FALSE;
 	}
+
 
 	loadMapData(mapId);
 
