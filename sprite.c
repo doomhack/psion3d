@@ -265,8 +265,8 @@ void drawSprite(const spritehit_t* spriteHit)
 	if(yStart >= yEnd)
 		return;
 
-	sourceXStep = (s16)(((s32)SPRITE_SIZE << SPRITE_SCALE_BITS) / width);
-	sourceYStep = (s16)(((s32)SPRITE_SIZE << SPRITE_SCALE_BITS) / height);
+	sourceXStep = (s16)((SPRITE_SIZE << SPRITE_SCALE_BITS) / width);
+	sourceYStep = (s16)((SPRITE_SIZE << SPRITE_SCALE_BITS) / height);
 	sourceXAcc = (s16)((s32)(xStart - left) * sourceXStep);
 	spriteData = getSpriteFrame(spriteHit->spriteId);
 
