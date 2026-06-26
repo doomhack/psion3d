@@ -12,8 +12,7 @@
 #define SPRITE_COL_BYTES 16
 #define SPRITE_BYTES (SPRITE_SIZE * SPRITE_COL_BYTES)
 #define SPRITE_MAX_FRAMES 8
-#define SPRITE_SEG_BYTES (SPRITE_BYTES * SPRITE_MAX_FRAMES)
-#define SPRITE_SEG_PARAS (SPRITE_SEG_BYTES / 16)
+#define SPRITE_FRAME_PARAS (SPRITE_BYTES / 16)
 #define SPRITE_SCALE_BITS 8
 #define SPRITE_MAX_SPRITES 32
 #define SPRITE_NUM_MASK 0x1f
@@ -128,14 +127,8 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 	VOID* fileHandle;
 	HANDLE segHandle;
 	u16 frame;
+	u16 frameCount;
 	u8 spriteNum = id & SPRITE_NUM_MASK;
-
-	p_atos(&segName[0], "SPR%d", spriteNum);
-
-	segHandle = p_sgcreate(&segName[0], SPRITE_SEG_PARAS, E_SEGMENT_HIGH);
-
-	if(segHandle <= 0)
-		return 0;
 
 	for(frame = 0; frame < SPRITE_MAX_FRAMES; frame++)
 	{
@@ -147,10 +140,7 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 		if(p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
 		{
 			if(frame == 0)
-			{
-				p_sgclose(segHandle);
 				return 0;
-			}
 
 			break;
 		}
@@ -160,7 +150,6 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 		if(bytesRead != SPRITE_BYTES)
 		{
 			p_close(fileHandle);
-			p_sgclose(segHandle);
 			return 0;
 		}
 
@@ -169,23 +158,51 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 		if(bytesRead != E_FILE_EOF)
 		{
 			p_close(fileHandle);
-			p_sgclose(segHandle);
 			return 0;
 		}
 
 		p_close(fileHandle);
+	}
+
+	if(frame == 0)
+		return 0;
+
+	frameCount = frame;
+
+	p_atos(&segName[0], "SPR%d", spriteNum);
+
+	segHandle = p_sgcreate(&segName[0], frameCount * SPRITE_FRAME_PARAS, E_SEGMENT_HIGH);
+
+	if(segHandle <= 0)
+		return 0;
+
+	for(frame = 0; frame < frameCount; frame++)
+	{
+		INT bytesRead;
+
+		p_atos(&fileName[0], "LOC::M:\\IMG\\%s%d.spr", baseName, frame);
+
+		if(p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
+		{
+			p_sgclose(segHandle);
+			return 0;
+		}
+
+		bytesRead = p_read(fileHandle, &spriteLoadBuffer[0], SPRITE_BYTES);
+
+		p_close(fileHandle);
+
+		if(bytesRead != SPRITE_BYTES)
+		{
+			p_sgclose(segHandle);
+			return 0;
+		}
 
 		p_sgcopyto(segHandle, ((u32)frame) * SPRITE_BYTES, &spriteLoadBuffer[0], SPRITE_BYTES);
 	}
 
-	if(frame == 0)
-	{
-		p_sgclose(segHandle);
-		return 0;
-	}
-
 	invalidateSpriteCache(spriteNum);
-	spriteFrameCounts[spriteNum] = (u8)frame;
+	spriteFrameCounts[spriteNum] = (u8)frameCount;
 	spriteSegs[spriteNum] = segHandle;
 
 	return segHandle;
