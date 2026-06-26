@@ -47,6 +47,7 @@ typedef struct sprite_cache_entry_t
 
 static u8 spriteLoadBuffer[SPRITE_BYTES];
 static HANDLE spriteSegs[SPRITE_MAX_SPRITES];
+static u8 spriteFrameCounts[SPRITE_MAX_SPRITES];
 static u8 spriteCache[SPRITE_CACHE_FRAMES * SPRITE_BYTES];
 static sprite_cache_entry_t spriteCacheEntries[SPRITE_CACHE_FRAMES];
 static u16 spriteCacheRand = 0xace1;
@@ -93,21 +94,28 @@ static const u8* getSpriteFrame(const u8 spriteId)
 	u8 slot;
 	u8 spriteNum = (spriteId >> 3) & SPRITE_NUM_MASK;
 	u8 frameNum = spriteId & SPRITE_FRAME_MASK;
+	u8 frameCount = spriteFrameCounts[spriteNum];
+	u8 cacheSpriteId;
 	HANDLE segHandle = spriteSegs[spriteNum];
 
-	if(segHandle <= 0)
+	if(segHandle <= 0 || frameCount == 0)
 		return &testPatternSprite[0];
+
+	while(frameNum >= frameCount)
+		frameNum -= frameCount;
+
+	cacheSpriteId = (spriteNum << 3) | frameNum;
 
 	for(slot = 0; slot < SPRITE_CACHE_FRAMES; slot++)
 	{
-		if(spriteCacheEntries[slot].valid && spriteCacheEntries[slot].spriteId == spriteId)
+		if(spriteCacheEntries[slot].valid && spriteCacheEntries[slot].spriteId == cacheSpriteId)
 			return cacheFramePtr(slot);
 	}
 
 	slot = chooseCacheSlot();
 	p_sgcopyfr(segHandle, ((u32)frameNum) * SPRITE_BYTES, cacheFramePtr(slot), SPRITE_BYTES);
 
-	spriteCacheEntries[slot].spriteId = spriteId;
+	spriteCacheEntries[slot].spriteId = cacheSpriteId;
 	spriteCacheEntries[slot].valid = TRUE;
 
 	return cacheFramePtr(slot);
@@ -122,7 +130,6 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 	u16 frame;
 	u8 spriteNum = id & SPRITE_NUM_MASK;
 
-	p_atos(&fileName[0], "LOC::M:\\IMG\\%s%d.spr", baseName, spriteNum);
 	p_atos(&segName[0], "SPR%d", spriteNum);
 
 	segHandle = p_sgcreate(&segName[0], SPRITE_SEG_PARAS, E_SEGMENT_HIGH);
@@ -130,21 +137,25 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 	if(segHandle <= 0)
 		return 0;
 
-
-	if(p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
-	{
-		p_sgclose(segHandle);
-		return 0;
-	}
-
 	for(frame = 0; frame < SPRITE_MAX_FRAMES; frame++)
 	{
 		INT bytesRead;
+		s8 extra;
+
+		p_atos(&fileName[0], "LOC::M:\\IMG\\%s%d.spr", baseName, frame);
+
+		if(p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
+		{
+			if(frame == 0)
+			{
+				p_sgclose(segHandle);
+				return 0;
+			}
+
+			break;
+		}
 
 		bytesRead = p_read(fileHandle, &spriteLoadBuffer[0], SPRITE_BYTES);
-
-		if(bytesRead == E_FILE_EOF)
-			break;
 
 		if(bytesRead != SPRITE_BYTES)
 		{
@@ -153,10 +164,19 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 			return 0;
 		}
 
+		bytesRead = p_read(fileHandle, &extra, 1);
+
+		if(bytesRead != E_FILE_EOF)
+		{
+			p_close(fileHandle);
+			p_sgclose(segHandle);
+			return 0;
+		}
+
+		p_close(fileHandle);
+
 		p_sgcopyto(segHandle, ((u32)frame) * SPRITE_BYTES, &spriteLoadBuffer[0], SPRITE_BYTES);
 	}
-
-	p_close(fileHandle);
 
 	if(frame == 0)
 	{
@@ -165,6 +185,7 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 	}
 
 	invalidateSpriteCache(spriteNum);
+	spriteFrameCounts[spriteNum] = (u8)frame;
 	spriteSegs[spriteNum] = segHandle;
 
 	return segHandle;
