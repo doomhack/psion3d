@@ -8,6 +8,9 @@
 
 extern s8 map[MAP_Y][MAP_X];
 
+void loadMapData(const u8 mapId);
+u16 loadMap(const u8 mapId);
+
 static s8 mapCell(const u16 x, const u16 y)
 {
 	if(x >= MAP_X || y >= MAP_Y )
@@ -27,6 +30,13 @@ static s8 fmapCell(const f16 fx, const f16 fy)
 static u16 isSprite(const s8 cell)
 {
 	return cell == 'H';
+}
+
+static u8 mapSpriteId(const s8 cell)
+{
+	(void)cell;
+
+	return 0;
 }
 
 static u16 isMarked(const s8 cell)

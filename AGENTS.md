@@ -8,9 +8,11 @@ This is a Psion 3a/c/mx PLIB/WLIB C raycaster. Source is split by subsystem in t
 - `draw.c` owns ray casting, wall/sprite projection, and all wall drawing variants.
 - `bitmap.c` owns the local screen buffers and software bitmap fill/clear/line routines.
 - `game_map.c` stores the 64x64 map; `game_map.h` exposes inline/static helpers for cell tests.
+- `sprite.c` owns sprite loading, caching, projection, and drawing. `sprite_test_pattern.h` contains the private fallback sprite pattern included by `sprite.c`.
+- `debug.c` owns debug text state and helpers (`setDbgInt`, `setDbgString`, `setDbgFp`, `drawDbgText`); include `debug.h` where callers need to set or draw debug text.
 - `fp_math.c` stores the 1024-entry combined sine/cosine table; `fp_math.h` exposes lookup helpers.
 - `fp_types.h` defines `u8/s16/s32`, Q8 fixed-point `f16`, `fpmul`, and checked `fpdiv`.
-- `psion3d.h` shares renderer globals such as `pos`, `dbgval`, `gameWinRect`, and `gameBitmapRect`.
+- `psion3d.h` shares renderer globals such as `pos`, `gameWinRect`, and `gameBitmapRect`.
 
 Generated outputs (`*.OBJ`, `*.MAP`, `PSION3D.EXE`, `PSION3D.IMG`) currently live beside source files.
 
@@ -20,6 +22,10 @@ Generated outputs (`*.OBJ`, `*.MAP`, `PSION3D.EXE`, `PSION3D.IMG`) currently liv
 - `.\make.bat <name>`: uses `<name>.pr` if present, otherwise `unnamed.pr`.
 
 The build requires the Psion/SIBO SDK tools (`checkvid`, `tsc`) on `PATH`. `unnamed.pr` lists modules with `#compile`; when adding a `.c` file, add it there and update link settings if the linker reports unresolved symbols.
+
+Sprite assets are converted with `tools\convert_sprite.bat`. For raw `.spr` files, avoid PowerShell redirection because `> file.spr` can encode native stdout as UTF-16 and produce a 2054-byte file. Use `.\tools\convert_sprite.bat /f tools\health.png health.0.spr` or `-OutputPath`; a single 64x64 sprite frame should be exactly 1024 bytes. Runtime sprites are stored as one frame per file named `baseName0.spr` through `baseName7.spr`; `loadSprite("sci", 0)` loads `sci0.spr`, then optional subsequent frames until the first missing file. Sprite segments are sized to the number of loaded frames, not the 8-frame maximum.
+
+Sprite pixels are packed 2bpp with values `0=transparent`, `1=grey`, `2=black`, and `3=white`. The converter defaults to treating near-white as transparent; pass `-WhiteTransparent false` when white sprite pixels should render as white.
 
 There is no automated test suite. Verify by building, running the resulting `PSION3D.EXE` or `PSION3D.IMG` in the target emulator/device, and checking rendering, movement, sprite occlusion, and map boundary behavior.
 
@@ -44,6 +50,8 @@ The app copies the whole combined buffer to the segment-backed WLIB bitmap with 
 Avoid direct application-level manipulation of `DS`/`ES`, `cli`/`sti`, write-protection ports, or OS handle-table segment pokes. Experiments with `rep stosw` and direct segment writes crashed in the emulator. Prefer plain C writes to local buffers plus `p_sgcopyto()`.
 
 The DDA ray loop in `draw.c` handles exact grid-corner crossings specially to prevent one-column wall gaps. Be cautious when changing `f_sidedx/f_sidedy`, `side`, or `mapx/mapy` stepping.
+
+Map and sprite files are opened from full Psion paths under `LOC::M:\IMG\` (for example `LOC::M:\IMG\map1.map` and `LOC::M:\IMG\h0.spr`). `p_read()` reports EOF with `E_FILE_EOF`, not `0`; treat `E_FILE_EOF` as the normal loop terminator and any other unexpected byte count as an error. Map loading writes directly into `map[MAP_Y][MAP_X]`; do not reintroduce a second 64x64 load buffer.
 
 ## Commit & PR Guidelines
 
