@@ -5,8 +5,8 @@
  01DB0H 02DB0H 01000H STACK              STACK              (none)
  02DB0H 03DB0H 01000H _MAGIC             MAGIC              DGROUP 
  03DB0H 03DB2H 00002H _INIT              DATA               DGROUP 
- 03DB2H 04AB1H 00CFFH _CONST             DATA               DGROUP 
- 04AC0H 04B12H 00052H _DATA              DATA               DGROUP 
+ 03DB2H 04ABDH 00D0BH _CONST             DATA               DGROUP 
+ 04AC0H 04B06H 00046H _DATA              DATA               DGROUP 
  04B10H 0A7E7H 05CD7H _BSS               BSS                DGROUP 
  0A7E0H 0A7E6H 00006H BSS_END            BSS                DGROUP 
 
@@ -130,7 +130,7 @@
  02DB:1000       __init_begin
  02DB:1002       __const_start
  02DB:1002       __init_start
- 02DB:14D5       _sincos_tab
+ 02DB:14E1       _sincos_tab
  02DB:1D10       __data_start
  02DB:1D10       CoreSig@CnsHandler
  02DB:1D12       @InitPointer

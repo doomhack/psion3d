@@ -3,7 +3,7 @@
 #include "sprite.h"
 #include "debug.h"
 
-#define MAP_FILE_NAME_LEN 32
+#define MAP_FILE_NAME_LEN 64
 
 s8 map[MAP_Y][MAP_X];
 
@@ -24,7 +24,7 @@ u16 loadMap(const u8 mapId)
 	INT bytesRead;
 	s8 c;
 
-	p_atos(&fileName[0], "LOC::M:\\IMG\\map%d.map", mapId);
+	p_atos(&fileName[0], "LOC::M:\\IMG\\MAP\\map%d.map", mapId);
 
 	if(p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
 		return FALSE;

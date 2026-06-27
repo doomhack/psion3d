@@ -32,7 +32,7 @@
 #define SCREEN_HEIGHT 160
 #define SCREEN_ROW_BYTES 32
 
-#define SPRITE_FILE_NAME_LEN 32
+#define SPRITE_FILE_NAME_LEN 64
 #define SPRITE_SEG_NAME_LEN 16
 
 #include "tst_spr.h"
@@ -135,7 +135,7 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 		INT bytesRead;
 		s8 extra;
 
-		p_atos(&fileName[0], "LOC::M:\\IMG\\%s%d.spr", baseName, frame);
+		p_atos(&fileName[0], "LOC::M:\\IMG\\SPR\\%s%d.spr", baseName, frame);
 
 		if(p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
 		{
@@ -180,7 +180,7 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 	{
 		INT bytesRead;
 
-		p_atos(&fileName[0], "LOC::M:\\IMG\\%s%d.spr", baseName, frame);
+		p_atos(&fileName[0], "LOC::M:\\IMG\\SPR\\%s%d.spr", baseName, frame);
 
 		if(p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
 		{
