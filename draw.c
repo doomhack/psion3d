@@ -4,13 +4,14 @@
 #include "psion3d.h"
 #include "bitmap.h"
 #include "sprite.h"
+#include "game_map.h"
 
 typedef struct wallhit_t
 {
 	s16 wallHeight;
 	f16 f_wallDist;
 	f16 f_wallX;
-	s8 cell;
+	u16 cell;
 	u8 side;
 } wallhit_t;
 
@@ -259,43 +260,45 @@ static u16 drawWall(u16 x, wallhit_t* hit)
 	s16 y;
 	s16 w = 4;
 	s16 h = hit->wallHeight;
-	
+	u16 wall_type = GET_CELL_TYPE_ID(hit->cell);
+
 	y = 80 - (h >> 1);
 	
-	switch(hit->cell)
+
+	switch(wall_type)
 	{
-		case 'W':
+		case WALL_TYPE_WINDOW:
 			hit->side = 0;
 			break;
-		case 'S': 	//Secret wall. Can walk through. North-south shaing flipped and inset slightly.
+		case WALL_TYPE_SECRET: 	//Secret wall. Can walk through. North-south shaing flipped and inset slightly.
 			y += 2;
 			h -= 4;
-			hit->cell = 'X';
 			hit->side = 1 - hit->side;
 			break;
 	}
 
-	switch(hit->cell)
+	switch(wall_type)
 	{
-		case 'X':
+		case WALL_TYPE_BRICK:
+		case WALL_TYPE_SECRET:
 			updateZ = drawWallX(x, y, w, h, hit);
 			break;
-		case 'A':
+		case WALL_TYPE_ARCH:
 			updateZ = drawWallA(x, y, w, h, hit);
 			break;
-		case 'D':
+		case WALL_TYPE_UNLOCKED_DOOR:
 			updateZ = drawWallD(x, y, w, h, hit);
 			break;
-		case 'P':
+		case WALL_TYPE_DARK:
 			updateZ = drawWallP(x, y, w, h, hit);
 			break;
-		case 'B':
+		case WALL_TYPE_BARS:
 			updateZ = drawWallB(x, y, w, h, hit);
 			break;
-		case 'W':
+		case WALL_TYPE_WINDOW:
 			updateZ = drawWallW(x, y, w, h, hit);
 			break;
-		case 'V':
+		case WALL_TYPE_VOID:
 			updateZ = drawWallV(x, y, w, h, hit);
 			break;
 	}
@@ -367,7 +370,7 @@ void draw()
 		do
 		{
 			u16 hit;
-			s8 hitcell;
+			u16 hitcell;
 			f16 f_dist;
 			f16 f_wallx;
 			
@@ -395,8 +398,8 @@ void draw()
 				{
 					s16 xmap = mapx + stepx;
 					s16 ymap = mapy + stepy;
-					s8 xcell = mapCell(xmap, mapy);
-					s8 ycell = mapCell(mapx, ymap);
+					u16 xcell = mapCell(xmap, mapy);
+					u16 ycell = mapCell(mapx, ymap);
 
 					if(isWall(xcell))
 					{
@@ -429,7 +432,7 @@ void draw()
 				
 				if(hit == 0)
 				{
-					if(isSprite(hitcell))
+					if(isSprite(hitcell) && !isMarked(hitcell))
 					{
 						markSprite(mapx, mapy);
 						markedSprites[spritesMarked].x = mapx;
@@ -438,7 +441,8 @@ void draw()
 						
 						if(projectSprite(mapx, mapy, &spriteHits[spritesHit], f_viewCos, f_viewSin))
 						{
-							spriteHits[spritesHit].spriteId = mapSpriteId(hitcell);
+							//TODO: Impliment sprite selection here. For now 0..3 are populated
+							spriteHits[spritesHit].spriteId = GET_CELL_TYPE_ID(hitcell) << 3;
 							spritesHit++;
 						}
 					}
