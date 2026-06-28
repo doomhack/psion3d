@@ -5,6 +5,7 @@
 #include "bitmap.h"
 #include "sprite.h"
 #include "game_map.h"
+#include "enemy.h"
 
 typedef struct wallhit_t
 {
@@ -439,11 +440,24 @@ void draw()
 						markedSprites[spritesMarked].y = mapy;
 						spritesMarked++;
 						
-						if(projectSprite(mapx, mapy, &spriteHits[spritesHit], f_viewCos, f_viewSin))
+						if(isEnemy(hitcell))
 						{
-							//TODO: Impliment sprite selection here. For now 0..3 are populated
-							spriteHits[spritesHit].spriteId = GET_CELL_TYPE_ID(hitcell) << 3;
-							spritesHit++;
+							enemy_t* enemy = getEnemy(GET_CELL_ID(hitcell));
+
+							if(enemy && projectSprite(enemy->x, enemy->y, &spriteHits[spritesHit], f_viewCos, f_viewSin))
+							{
+								spriteHits[spritesHit].spriteId = ((enemy->spriteId << 3) | enemy->spriteFrame);
+								spritesHit++;
+							}
+						}
+						else
+						{
+							if(projectSprite(int2fp(mapx) + flt2fp(0.5f), int2fp(mapy) + flt2fp(0.5f), &spriteHits[spritesHit], f_viewCos, f_viewSin))
+							{
+								//TODO: Impliment sprite selection here. For now 0..3 are populated
+								spriteHits[spritesHit].spriteId = 0;
+								spritesHit++;
+							}
 						}
 					}
 				}

@@ -28,6 +28,8 @@
 #define SET_CELL_TYPE_ID(x) ((u16)((x) << MAP_BLOCK_TYPE_SHIFT))
 #define GET_CELL_TYPE_ID(x) (((x) & MAP_BLOCK_TYPE_MASK) >> MAP_BLOCK_TYPE_SHIFT)
 
+#define GET_CELL_ID(x) ((x & MAP_BLOCK_ID_MASK))
+
 #define WALL_TYPE_BRICK 0
 #define WALL_TYPE_DARK 1
 #define WALL_TYPE_WINDOW 2
@@ -37,10 +39,7 @@
 #define WALL_TYPE_BARS 6
 #define WALL_TYPE_VOID 7
 
-#define ENEMY_TYPE_CIV 0
-#define ENEMY_TYPE_MER 1
-#define ENEMY_TYPE_SGR 2
-#define ENEMY_TYPE_HVY 3
+
 
 extern u16 map[MAP_Y][MAP_X];
 

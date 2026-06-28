@@ -2,6 +2,7 @@
 #include "game_map.h"
 #include "sprite.h"
 #include "debug.h"
+#include "enemy.h"
 
 #define MAP_FILE_NAME_LEN 64
 
@@ -15,7 +16,7 @@ void loadMapData(const u8 mapId)
 	loadSprite("hvy", 3);
 }
 
-u16 getCellEncoding(s8 cell)
+u16 getCellEncoding(u16 x, u16 y, s8 cell)
 {
 	switch (cell)
 	{
@@ -47,18 +48,11 @@ u16 getCellEncoding(s8 cell)
 		case 'V': //The void
 			return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_VOID));
 
-		//Enemy
-		case 'C': //Civilian
-			return (MAP_MASK_SPRITE | MAP_MASK_ENEMY | MAP_MASK_WALK | SET_CELL_TYPE_ID(ENEMY_TYPE_CIV));
-
-		case 'E': //Mercenary
-			return (MAP_MASK_SPRITE | MAP_MASK_ENEMY | MAP_MASK_WALK | SET_CELL_TYPE_ID(ENEMY_TYPE_MER));
-
-		case 'F': //Soldier
-			return (MAP_MASK_SPRITE | MAP_MASK_ENEMY | MAP_MASK_WALK | SET_CELL_TYPE_ID(ENEMY_TYPE_SGR));
-
-		case 'G': //Heavy
-			return (MAP_MASK_SPRITE | MAP_MASK_ENEMY | MAP_MASK_WALK | SET_CELL_TYPE_ID(ENEMY_TYPE_HVY));
+		case 'C':
+		case 'E':
+		case 'F':
+		case 'G':
+			return getEnemyCell(x, y, cell);
 	}
 
 	//Unknown type. Return void.
@@ -73,6 +67,8 @@ u16 loadMap(const u8 mapId)
 	u16 y = 0;
 	INT bytesRead;
 	s8 c;
+
+	resetEnemy();
 
 	p_atos(&fileName[0], "LOC::M:\\IMG\\MAP\\map%d.map", mapId);
 
@@ -101,7 +97,7 @@ u16 loadMap(const u8 mapId)
 			return FALSE;
 		}
 
-		map[y][x] = getCellEncoding(c);
+		map[y][x] = getCellEncoding(x, y, c);
 		x++;
 
 		if(x >= MAP_X)

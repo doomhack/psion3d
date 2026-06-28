@@ -208,10 +208,10 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 	return segHandle;
 }
 
-u16 projectSprite(const u16 x, const u16 y, spritehit_t* hit, const f16 f_viewCos, const f16 f_viewSin)
+u16 projectSprite(const f16 x, const f16 y, spritehit_t* hit, const f16 f_viewCos, const f16 f_viewSin)
 {
-	f16 f_rx = int2fp(x) - pos.x + flt2fp(0.5f);
-	f16 f_ry = int2fp(y) - pos.y + flt2fp(0.5f);
+	f16 f_rx = x - pos.x;
+	f16 f_ry = y - pos.y;
 
 	f16 f_depth =
 		fpmul(f_rx, f_viewCos) +

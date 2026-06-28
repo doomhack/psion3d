@@ -2,6 +2,7 @@
 #set epocinit=iplib
 #model small jpi
 #compile bitmap
+#compile enemy
 #compile draw
 #compile sprite
 #compile debug
