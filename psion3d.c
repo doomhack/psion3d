@@ -38,7 +38,7 @@ static void tryMove(const f16 dx, const f16 dy)
 	f16 nx = pos.x + dx;
 	f16 ny = pos.y;
 	
-	s8 cell = fmapCell(nx, ny);
+	u16 cell = fmapCell(nx, ny);
 	
 	if(canWalk(cell))
 		pos.x = nx;

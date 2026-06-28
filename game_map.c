@@ -5,7 +5,7 @@
 
 #define MAP_FILE_NAME_LEN 64
 
-s8 map[MAP_Y][MAP_X];
+u16 map[MAP_Y][MAP_X];
 
 void loadMapData(const u8 mapId)
 {
@@ -13,6 +13,56 @@ void loadMapData(const u8 mapId)
 	loadSprite("mer", 1);
 	loadSprite("sgr", 2);
 	loadSprite("hvy", 3);
+}
+
+u16 getCellEncoding(s8 cell)
+{
+	switch (cell)
+	{
+		case '0': //Open space
+			return (MAP_MASK_WALK);
+
+		//Walls
+		case 'X': //Brick wall
+			return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_BRICK));
+
+		case 'P': //Dark brick wall
+			return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_DARK));
+
+		case 'W': //Window
+			return (MAP_MASK_WALL | SET_CELL_TYPE_ID(WALL_TYPE_WINDOW));
+
+		case 'A': //Archway
+			return (MAP_MASK_WALL | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_ARCH));
+
+		case 'D': //Unlocked Door
+			return (MAP_MASK_WALL | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_UNLOCKED_DOOR));
+
+		case 'S': //Secret wall
+			return (MAP_MASK_WALL | MAP_MASK_SOLID | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_SECRET));
+
+		case 'B': //Iron Bars
+			return (MAP_MASK_WALL | SET_CELL_TYPE_ID(WALL_TYPE_BARS));
+
+		case 'V': //The void
+			return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_VOID));
+
+		//Enemy
+		case 'C': //Civilian
+			return (MAP_MASK_SPRITE | MAP_MASK_ENEMY | MAP_MASK_WALK | SET_CELL_TYPE_ID(ENEMY_TYPE_CIV));
+
+		case 'E': //Mercenary
+			return (MAP_MASK_SPRITE | MAP_MASK_ENEMY | MAP_MASK_WALK | SET_CELL_TYPE_ID(ENEMY_TYPE_MER));
+
+		case 'F': //Soldier
+			return (MAP_MASK_SPRITE | MAP_MASK_ENEMY | MAP_MASK_WALK | SET_CELL_TYPE_ID(ENEMY_TYPE_SGR));
+
+		case 'G': //Heavy
+			return (MAP_MASK_SPRITE | MAP_MASK_ENEMY | MAP_MASK_WALK | SET_CELL_TYPE_ID(ENEMY_TYPE_HVY));
+	}
+
+	//Unknown type. Return void.
+	return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(7));
 }
 
 u16 loadMap(const u8 mapId)
@@ -51,7 +101,7 @@ u16 loadMap(const u8 mapId)
 			return FALSE;
 		}
 
-		map[y][x] = c;
+		map[y][x] = getCellEncoding(c);
 		x++;
 
 		if(x >= MAP_X)
