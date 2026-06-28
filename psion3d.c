@@ -2,6 +2,7 @@
 #include "draw.h"
 #include "bitmap.h"
 #include "debug.h"
+#include "enemy.h"
 
 static WSERV_SPEC wSpec;
 static UINT gameWindowId = 0;
@@ -101,6 +102,7 @@ static void mainLoop()
 
 		while(event.type == E_FILE_PENDING)
 		{
+			runAI();
 			bmClearScreen();
 			draw();
 			updateScreen();
