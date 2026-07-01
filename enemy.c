@@ -16,7 +16,7 @@
 #define ENEMY_ATTACK_MIN_DIST METERS_TO_MAP_CELLS(ENEMY_ATTACK_MIN_DIST_METERS)
 
 #define ENEMY_MOVE_SPEED_MPS flt2fp(4.5f)
-#define ENEMY_MOVE_DELAY fpMetersPerSecondToCellDelay(ENEMY_MOVE_SPEED_MPS)
+#define ENEMY_MOVE_TICKS fpMetersPerSecondToCellTicks(ENEMY_MOVE_SPEED_MPS)
 #define ENEMY_ATTACK_DELAY SECONDS_TO_TICKS(1)
 #define ENEMY_IDLE_DELAY SECONDS_TO_TICKS(1)
 #define ENEMY_SURPRISED_DELAY fpSecondsToTicks(flt2fp(0.5f))
@@ -61,6 +61,71 @@ static u16 enemyAttackDistance(const enemy_t* enemy)
     }
 
     return ENEMY_ATTACK_DIST_MER;
+}
+
+static void enemySetWalkFrame(enemy_t* enemy)
+{
+    f16 f_dx = enemy->moveTargetX - enemy->x;
+    f16 f_dy = enemy->moveTargetY - enemy->y;
+    f16 f_side =
+        -fpmul(f_dx, fpsin(pos.angle)) +
+         fpmul(f_dy, fpcos(pos.angle));
+
+    if(f_side > 0)
+        enemy->spriteFrame = (enemy->stateCounter & 1) ? ENEMY_FRAME_WALK_R1 : ENEMY_FRAME_WALK_R2;
+    else
+        enemy->spriteFrame = (enemy->stateCounter & 1) ? ENEMY_FRAME_WALK_L1 : ENEMY_FRAME_WALK_L2;
+}
+
+static void enemyMoveTick(enemy_t* enemy)
+{
+    if(enemy->x == enemy->moveTargetX && enemy->y == enemy->moveTargetY)
+        return;
+
+    enemySetWalkFrame(enemy);
+
+    if(enemy->stateCounter == 0)
+    {
+        enemy->x = enemy->moveTargetX;
+        enemy->y = enemy->moveTargetY;
+        return;
+    }
+
+    enemy->x += fpdiv(enemy->moveTargetX - enemy->x, int2fp(enemy->stateCounter));
+    enemy->y += fpdiv(enemy->moveTargetY - enemy->y, int2fp(enemy->stateCounter));
+}
+
+static u16 enemyCounterTick(enemy_t* enemy)
+{
+    if(enemy->stateCounter == 0)
+        return FALSE;
+
+    enemyMoveTick(enemy);
+    enemy->stateCounter--;
+
+    return TRUE;
+}
+
+static void enemySetMoveCounter(enemy_t* enemy, const u8 ticks)
+{
+    enemy->stateCounter = ticks;
+
+    if(enemy->x != enemy->moveTargetX || enemy->y != enemy->moveTargetY)
+        enemySetWalkFrame(enemy);
+    else
+        enemy->spriteFrame = ENEMY_FRAME_IDLE;
+}
+
+static void enemySetMoveTarget(enemy_t* enemy, const s16 x, const s16 y)
+{
+    enemy->moveTargetX = int2fp(x) + flt2fp(0.5f);
+    enemy->moveTargetY = int2fp(y) + flt2fp(0.5f);
+}
+
+static void enemyFinishMove(enemy_t* enemy)
+{
+    enemy->x = enemy->moveTargetX;
+    enemy->y = enemy->moveTargetY;
 }
 
 static u8 enemyRandomBit()
@@ -129,8 +194,7 @@ static u16 enemyTryMoveTo(const u16 id, enemy_t* enemy, const s16 newX, const s1
     updateCell(oldX, oldY, MAP_MASK_WALK);
     updateCell(newX, newY, cell & ~MAP_MASK_MARKED);
 
-    enemy->x = int2fp(newX) + flt2fp(0.5f);
-    enemy->y = int2fp(newY) + flt2fp(0.5f);
+    enemySetMoveTarget(enemy, newX, newY);
 
     return TRUE;
 }
@@ -279,6 +343,8 @@ u16 getEnemyCell(u16 x, u16 y, s8 cell)
     //Start at centre of cell.
     enemyList[enemyId].x = int2fp(x) + flt2fp(0.5f);
     enemyList[enemyId].y = int2fp(y) + flt2fp(0.5f);
+    enemyList[enemyId].moveTargetX = enemyList[enemyId].x;
+    enemyList[enemyId].moveTargetY = enemyList[enemyId].y;
 
     switch(enemyType)
     {
@@ -333,8 +399,10 @@ void runAI()
 
         if(dist > ENEMY_LEASH_DIST)
         {
+            enemyFinishMove(enemy);
             enemy->state = ENEMY_STATE_IDLE;
             enemy->spriteFrame = ENEMY_FRAME_IDLE;
+            enemy->stateCounter = 0;
             continue;
         }
 
@@ -348,11 +416,8 @@ void runAI()
             case ENEMY_STATE_IDLE:
                 enemy->spriteFrame = ENEMY_FRAME_IDLE;
 
-                if(enemy->stateCounter > 0)
-                {
-                    enemy->stateCounter--;
+                if(enemyCounterTick(enemy))
                     break;
-                }
 
                 if(!canSee)
                 {
@@ -373,11 +438,8 @@ void runAI()
                 break;
 
             case ENEMY_STATE_SEARCHING:
-                if(enemy->stateCounter > 0)
-                {
-                    enemy->stateCounter--;
+                if(enemyCounterTick(enemy))
                     break;
-                }
 
                 if(canSee)
                 {
@@ -397,34 +459,27 @@ void runAI()
                 }
 
                 enemyStepToward(id, enemy, enemy->targetX, enemy->targetY);
-                enemy->spriteFrame = ENEMY_FRAME_WALK_R1;
-                enemy->stateCounter = ENEMY_MOVE_DELAY;
+                enemySetMoveCounter(enemy, ENEMY_MOVE_TICKS);
                 break;
 
             case ENEMY_STATE_SURPRISED:
                 enemy->spriteFrame = ENEMY_FRAME_IDLE;
 
-                if(enemy->stateCounter > 0)
-                {
-                    enemy->stateCounter--;
+                if(enemyCounterTick(enemy))
                     break;
-                }
 
                 enemy->state = ENEMY_STATE_CHASING;
                 enemy->stateCounter = 0;
                 break;
 
             case ENEMY_STATE_CHASING:
-                if(enemy->stateCounter > 0)
-                {
-                    enemy->stateCounter--;
+                if(enemyCounterTick(enemy))
                     break;
-                }
 
                 if(!canSee)
                 {
                     enemy->state = ENEMY_STATE_SEARCHING;
-                    enemy->stateCounter = ENEMY_MOVE_DELAY;
+                    enemy->stateCounter = ENEMY_MOVE_TICKS;
                     break;
                 }
 
@@ -442,9 +497,8 @@ void runAI()
                     if(dist < ENEMY_ATTACK_MIN_DIST)
                     {
                         enemyStepAwayFrom(id, enemy, enemy->targetX, enemy->targetY);
-                        enemy->spriteFrame = ENEMY_FRAME_WALK_R1;
                         enemy->state = ENEMY_STATE_CHASING;
-                        enemy->stateCounter = ENEMY_MOVE_DELAY;
+                        enemySetMoveCounter(enemy, ENEMY_MOVE_TICKS);
                         break;
                     }
 
@@ -455,23 +509,19 @@ void runAI()
                 }
 
                 enemyStepToward(id, enemy, enemy->targetX, enemy->targetY);
-                enemy->spriteFrame = ENEMY_FRAME_WALK_R1;
-                enemy->stateCounter = ENEMY_MOVE_DELAY;
+                enemySetMoveCounter(enemy, ENEMY_MOVE_TICKS);
                 break;
 
             case ENEMY_STATE_AIMING:
                 enemy->spriteFrame = ENEMY_FRAME_AIM;
 
-                if(enemy->stateCounter > 0)
-                {
-                    enemy->stateCounter--;
+                if(enemyCounterTick(enemy))
                     break;
-                }
 
                 if(!canSee)
                 {
                     enemy->state = ENEMY_STATE_SEARCHING;
-                    enemy->stateCounter = ENEMY_MOVE_DELAY;
+                    enemy->stateCounter = ENEMY_MOVE_TICKS;
                     break;
                 }
 
@@ -480,27 +530,19 @@ void runAI()
                 break;
 
             case ENEMY_STATE_EVADING:
-                enemy->spriteFrame = ENEMY_FRAME_WALK_R1;
-
-                if(enemy->stateCounter > 0)
-                {
-                    enemy->stateCounter--;
+                if(enemyCounterTick(enemy))
                     break;
-                }
 
                 enemyStepSideways(id, enemy, (u8)fp2int(pos.x), (u8)fp2int(pos.y));
                 enemy->state = ENEMY_STATE_CHASING;
-                enemy->stateCounter = 0;
+                enemySetMoveCounter(enemy, ENEMY_MOVE_TICKS);
                 break;
 
             case ENEMY_STATE_HURT:
                 enemy->spriteFrame = ENEMY_FRAME_HURT;
 
-                if(enemy->stateCounter > 0)
-                {
-                    enemy->stateCounter--;
+                if(enemyCounterTick(enemy))
                     break;
-                }
 
                 if(enemyRandomBit())
                 {
@@ -516,11 +558,8 @@ void runAI()
             case ENEMY_STATE_ATTACKING:
                 enemy->spriteFrame = ENEMY_FRAME_SHOOT;
 
-                if(enemy->stateCounter > 0)
-                {
-                    enemy->stateCounter--;
+                if(enemyCounterTick(enemy))
                     break;
-                }
 
                 if(enemyRandomBit())
                 {

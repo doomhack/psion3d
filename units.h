@@ -26,7 +26,7 @@ static u16 fpSecondsToTicks(const f16 f_seconds)
 	return (u16)fp2int(f_ticks + flt2fp(0.5f));
 }
 
-static u8 fpMetersPerSecondToCellDelay(const f16 f_mps)
+static u8 fpMetersPerSecondToCellTicks(const f16 f_mps)
 {
 	u16 ticks;
 	f16 f_cellSeconds;
@@ -37,13 +37,13 @@ static u8 fpMetersPerSecondToCellDelay(const f16 f_mps)
 	f_cellSeconds = fpdiv(int2fp(MAP_CELL_METERS), f_mps);
 	ticks = fpSecondsToTicks(f_cellSeconds);
 
-	if(ticks <= 1)
-		return 0;
+	if(ticks == 0)
+		return 1;
 
-	if(ticks > 256)
+	if(ticks > 255)
 		return 255;
 
-	return (u8)(ticks - 1);
+	return (u8)ticks;
 }
 
 #endif
