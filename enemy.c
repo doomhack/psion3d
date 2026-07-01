@@ -1,18 +1,27 @@
 #include "enemy.h"
 #include "game_map.h"
 #include "psion3d.h"
+#include "units.h"
 
-#define ENEMY_LEASH_DIST 14
-#define ENEMY_ATTACK_DIST_MER 2
-#define ENEMY_ATTACK_DIST_SGR 3
-#define ENEMY_ATTACK_DIST_HVY 4
-#define ENEMY_ATTACK_MIN_DIST 2
-#define ENEMY_MOVE_DELAY 8
-#define ENEMY_ATTACK_DELAY 20
-#define ENEMY_IDLE_DELAY 20
-#define ENEMY_SURPRISED_DELAY 10
-#define ENEMY_AIM_DELAY 10
-#define ENEMY_EVADE_DELAY 8
+#define ENEMY_LEASH_DIST_METERS 28
+#define ENEMY_ATTACK_DIST_MER_METERS 4
+#define ENEMY_ATTACK_DIST_SGR_METERS 6
+#define ENEMY_ATTACK_DIST_HVY_METERS 8
+#define ENEMY_ATTACK_MIN_DIST_METERS 4
+
+#define ENEMY_LEASH_DIST METERS_TO_MAP_CELLS(ENEMY_LEASH_DIST_METERS)
+#define ENEMY_ATTACK_DIST_MER METERS_TO_MAP_CELLS(ENEMY_ATTACK_DIST_MER_METERS)
+#define ENEMY_ATTACK_DIST_SGR METERS_TO_MAP_CELLS(ENEMY_ATTACK_DIST_SGR_METERS)
+#define ENEMY_ATTACK_DIST_HVY METERS_TO_MAP_CELLS(ENEMY_ATTACK_DIST_HVY_METERS)
+#define ENEMY_ATTACK_MIN_DIST METERS_TO_MAP_CELLS(ENEMY_ATTACK_MIN_DIST_METERS)
+
+#define ENEMY_MOVE_SPEED_MPS flt2fp(4.5f)
+#define ENEMY_MOVE_DELAY fpMetersPerSecondToCellDelay(ENEMY_MOVE_SPEED_MPS)
+#define ENEMY_ATTACK_DELAY SECONDS_TO_TICKS(1)
+#define ENEMY_IDLE_DELAY SECONDS_TO_TICKS(1)
+#define ENEMY_SURPRISED_DELAY fpSecondsToTicks(flt2fp(0.5f))
+#define ENEMY_AIM_DELAY fpSecondsToTicks(flt2fp(0.5f))
+#define ENEMY_EVADE_DELAY fpSecondsToTicks(flt2fp(0.4f))
 
 enemy_t enemyList[MAX_ENEMIES];
 
@@ -265,7 +274,7 @@ u16 getEnemyCell(u16 x, u16 y, s8 cell)
     enemyList[enemyId].state = ENEMY_STATE_IDLE;
     enemyList[enemyId].spriteFrame = ENEMY_FRAME_IDLE;
 
-    enemyList[enemyId].stateCounter = 100;
+    enemyList[enemyId].stateCounter = SECONDS_TO_TICKS(5);
 
     //Start at centre of cell.
     enemyList[enemyId].x = int2fp(x) + flt2fp(0.5f);

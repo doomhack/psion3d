@@ -3,6 +3,7 @@
 #include "bitmap.h"
 #include "debug.h"
 #include "enemy.h"
+#include "units.h"
 
 static WSERV_SPEC wSpec;
 static UINT gameWindowId = 0;
@@ -118,7 +119,7 @@ static void mainLoop()
 				lastSecond = t;
 			}
 			
-			p_sleep(0);
+			p_sleept(SYSTEM_TICKS_PER_SECOND / TICKS_PER_SECOND);
 		}
 		
 		if (event.type == WM_REDRAW)

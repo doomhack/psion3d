@@ -1,0 +1,49 @@
+#ifndef UNITS_H
+#define UNITS_H
+
+#include "fp_types.h"
+
+#define SYSTEM_TICKS_PER_SECOND 20
+#define TICKS_PER_SECOND 20
+
+#define MAP_CELL_METERS 2
+#define MAP_UNITS_TO_METERS (int2fp(MAP_CELL_METERS))
+#define METERS_TO_MAP_UNITS (flt2fp(0.5f))
+
+#define FP_MAP_TO_METERS(x) fpmul((x), MAP_UNITS_TO_METERS)
+#define FP_METERS_TO_MAP(x) fpmul((x), METERS_TO_MAP_UNITS)
+
+#define METERS_TO_MAP_CELLS(x) ((x) / MAP_CELL_METERS)
+#define SECONDS_TO_TICKS(x) ((x) * TICKS_PER_SECOND)
+
+static u16 fpSecondsToTicks(const f16 f_seconds)
+{
+	f16 f_ticks = fpmul(f_seconds, int2fp(TICKS_PER_SECOND));
+
+	if(f_ticks <= 0)
+		return 0;
+
+	return (u16)fp2int(f_ticks + flt2fp(0.5f));
+}
+
+static u8 fpMetersPerSecondToCellDelay(const f16 f_mps)
+{
+	u16 ticks;
+	f16 f_cellSeconds;
+
+	if(f_mps <= 0)
+		return 0;
+
+	f_cellSeconds = fpdiv(int2fp(MAP_CELL_METERS), f_mps);
+	ticks = fpSecondsToTicks(f_cellSeconds);
+
+	if(ticks <= 1)
+		return 0;
+
+	if(ticks > 256)
+		return 255;
+
+	return (u8)(ticks - 1);
+}
+
+#endif

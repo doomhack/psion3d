@@ -1,5 +1,5 @@
-#ifndef EMEMY_H
-#define EMEMY_H
+#ifndef ENEMY_H
+#define ENEMY_H
 
 #include "fp_types.h"
 
@@ -58,7 +58,7 @@ typedef struct enemy_t
     u8 spriteId; //Slot of sprite.
     u8 spriteFrame; //Current frame of sprite to draw.
     u8 health; //Heath of enemy.
-    u8 stateCounter; //Decriments per frame, Once reaches 0, choose new state and set new stateCounter.
+    u8 stateCounter; //Decrements per AI tick. Once 0, choose new state and set new stateCounter.
 } enemy_t;
 
 extern enemy_t enemyList[MAX_ENEMIES];
