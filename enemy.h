@@ -53,6 +53,7 @@ typedef struct enemy_t
 {
     f16 x, y; //Position X, Y
     f16 moveTargetX, moveTargetY; //Visual movement target.
+    u8 cellX, cellY; //Current map cell containing the visual position.
     u8 targetX, targetY; //If searching, destination cell.
     u8 type; //Enemy type. ENEMY_TYPE_CIV, ENEMY_TYPE_MER etc
     u8 state; //ENEMY_STATE_IDLE, ENEMY_STATE_SEARCHING etc. State of enemy.

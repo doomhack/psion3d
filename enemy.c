@@ -63,6 +63,26 @@ static u16 enemyAttackDistance(const enemy_t* enemy)
     return ENEMY_ATTACK_DIST_MER;
 }
 
+static void enemyUpdateMapCell(const u16 id, enemy_t* enemy)
+{
+    u8 newX = (u8)fp2int(enemy->x);
+    u8 newY = (u8)fp2int(enemy->y);
+    u16 oldCell;
+
+    if(newX == enemy->cellX && newY == enemy->cellY)
+        return;
+
+    oldCell = mapCell(enemy->cellX, enemy->cellY);
+
+    if(isEnemy(oldCell) && GET_CELL_ID(oldCell) == id)
+        updateCell(enemy->cellX, enemy->cellY, MAP_MASK_WALK);
+
+    updateCell(newX, newY, enemyCellValue(id, enemy));
+
+    enemy->cellX = newX;
+    enemy->cellY = newY;
+}
+
 static void enemySetWalkFrame(enemy_t* enemy)
 {
     f16 f_dx = enemy->moveTargetX - enemy->x;
@@ -77,7 +97,7 @@ static void enemySetWalkFrame(enemy_t* enemy)
         enemy->spriteFrame = (enemy->stateCounter & 1) ? ENEMY_FRAME_WALK_L1 : ENEMY_FRAME_WALK_L2;
 }
 
-static void enemyMoveTick(enemy_t* enemy)
+static void enemyMoveTick(const u16 id, enemy_t* enemy)
 {
     if(enemy->x == enemy->moveTargetX && enemy->y == enemy->moveTargetY)
         return;
@@ -88,19 +108,21 @@ static void enemyMoveTick(enemy_t* enemy)
     {
         enemy->x = enemy->moveTargetX;
         enemy->y = enemy->moveTargetY;
+        enemyUpdateMapCell(id, enemy);
         return;
     }
 
     enemy->x += fpdiv(enemy->moveTargetX - enemy->x, int2fp(enemy->stateCounter));
     enemy->y += fpdiv(enemy->moveTargetY - enemy->y, int2fp(enemy->stateCounter));
+    enemyUpdateMapCell(id, enemy);
 }
 
-static u16 enemyCounterTick(enemy_t* enemy)
+static u16 enemyCounterTick(const u16 id, enemy_t* enemy)
 {
     if(enemy->stateCounter == 0)
         return FALSE;
 
-    enemyMoveTick(enemy);
+    enemyMoveTick(id, enemy);
     enemy->stateCounter--;
 
     return TRUE;
@@ -122,10 +144,11 @@ static void enemySetMoveTarget(enemy_t* enemy, const s16 x, const s16 y)
     enemy->moveTargetY = int2fp(y) + flt2fp(0.5f);
 }
 
-static void enemyFinishMove(enemy_t* enemy)
+static void enemyFinishMove(const u16 id, enemy_t* enemy)
 {
     enemy->x = enemy->moveTargetX;
     enemy->y = enemy->moveTargetY;
+    enemyUpdateMapCell(id, enemy);
 }
 
 static u8 enemyRandomBit()
@@ -176,23 +199,11 @@ static u16 enemyCanSeePlayer(const enemy_t* enemy)
 
 static u16 enemyTryMoveTo(const u16 id, enemy_t* enemy, const s16 newX, const s16 newY)
 {
-    s16 oldX = fp2int(enemy->x);
-    s16 oldY = fp2int(enemy->y);
-    u16 cell;
-
     if(newX < 0 || newY < 0 || newX >= MAP_X || newY >= MAP_Y)
         return FALSE;
 
     if(mapCell(newX, newY) != MAP_MASK_WALK)
         return FALSE;
-
-    cell = mapCell(oldX, oldY);
-
-    if(!isEnemy(cell) || GET_CELL_ID(cell) != id)
-        cell = enemyCellValue(id, enemy);
-
-    updateCell(oldX, oldY, MAP_MASK_WALK);
-    updateCell(newX, newY, cell & ~MAP_MASK_MARKED);
 
     enemySetMoveTarget(enemy, newX, newY);
 
@@ -345,6 +356,8 @@ u16 getEnemyCell(u16 x, u16 y, s8 cell)
     enemyList[enemyId].y = int2fp(y) + flt2fp(0.5f);
     enemyList[enemyId].moveTargetX = enemyList[enemyId].x;
     enemyList[enemyId].moveTargetY = enemyList[enemyId].y;
+    enemyList[enemyId].cellX = (u8)x;
+    enemyList[enemyId].cellY = (u8)y;
 
     switch(enemyType)
     {
@@ -399,7 +412,7 @@ void runAI()
 
         if(dist > ENEMY_LEASH_DIST)
         {
-            enemyFinishMove(enemy);
+            enemyFinishMove(id, enemy);
             enemy->state = ENEMY_STATE_IDLE;
             enemy->spriteFrame = ENEMY_FRAME_IDLE;
             enemy->stateCounter = 0;
@@ -416,7 +429,7 @@ void runAI()
             case ENEMY_STATE_IDLE:
                 enemy->spriteFrame = ENEMY_FRAME_IDLE;
 
-                if(enemyCounterTick(enemy))
+                if(enemyCounterTick(id, enemy))
                     break;
 
                 if(!canSee)
@@ -438,7 +451,7 @@ void runAI()
                 break;
 
             case ENEMY_STATE_SEARCHING:
-                if(enemyCounterTick(enemy))
+                if(enemyCounterTick(id, enemy))
                     break;
 
                 if(canSee)
@@ -465,7 +478,7 @@ void runAI()
             case ENEMY_STATE_SURPRISED:
                 enemy->spriteFrame = ENEMY_FRAME_IDLE;
 
-                if(enemyCounterTick(enemy))
+                if(enemyCounterTick(id, enemy))
                     break;
 
                 enemy->state = ENEMY_STATE_CHASING;
@@ -473,7 +486,7 @@ void runAI()
                 break;
 
             case ENEMY_STATE_CHASING:
-                if(enemyCounterTick(enemy))
+                if(enemyCounterTick(id, enemy))
                     break;
 
                 if(!canSee)
@@ -515,7 +528,7 @@ void runAI()
             case ENEMY_STATE_AIMING:
                 enemy->spriteFrame = ENEMY_FRAME_AIM;
 
-                if(enemyCounterTick(enemy))
+                if(enemyCounterTick(id, enemy))
                     break;
 
                 if(!canSee)
@@ -530,7 +543,7 @@ void runAI()
                 break;
 
             case ENEMY_STATE_EVADING:
-                if(enemyCounterTick(enemy))
+                if(enemyCounterTick(id, enemy))
                     break;
 
                 enemyStepSideways(id, enemy, (u8)fp2int(pos.x), (u8)fp2int(pos.y));
@@ -541,7 +554,7 @@ void runAI()
             case ENEMY_STATE_HURT:
                 enemy->spriteFrame = ENEMY_FRAME_HURT;
 
-                if(enemyCounterTick(enemy))
+                if(enemyCounterTick(id, enemy))
                     break;
 
                 if(enemyRandomBit())
@@ -558,7 +571,7 @@ void runAI()
             case ENEMY_STATE_ATTACKING:
                 enemy->spriteFrame = ENEMY_FRAME_SHOOT;
 
-                if(enemyCounterTick(enemy))
+                if(enemyCounterTick(id, enemy))
                     break;
 
                 if(enemyRandomBit())
