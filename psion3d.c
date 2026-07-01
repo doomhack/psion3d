@@ -117,7 +117,7 @@ static void mainLoop()
 				
 				lastSecond = t;
 			}
-
+			
 			p_sleep(0);
 		}
 		

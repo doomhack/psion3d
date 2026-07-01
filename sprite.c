@@ -226,8 +226,6 @@ u16 projectSprite(const f16 x, const f16 y, spritehit_t* hit, const f16 f_viewCo
 	if(f_depth > SPRITE_FAR_DEPTH)
 		return FALSE;
 
-	setDbgInt(f_depth);
-
 	f_side =
 		-fpmul(f_rx, f_viewSin) +
 		 fpmul(f_ry, f_viewCos);

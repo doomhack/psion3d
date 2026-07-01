@@ -15,6 +15,18 @@
 //Enemy has line of sight to player and attacking.
 #define ENEMY_STATE_ATTACKING 3
 
+//Enemy has just seen the player and pauses before reacting.
+#define ENEMY_STATE_SURPRISED 4
+
+//Enemy is aiming at the player before attacking.
+#define ENEMY_STATE_AIMING 5
+
+//Enemy has been hit by the player.
+#define ENEMY_STATE_HURT 6
+
+//Enemy is sidestepping to avoid player attacks.
+#define ENEMY_STATE_EVADING 7
+
 #define ENEMY_FRAME_IDLE 0
 #define ENEMY_FRAME_WALK_R1 1
 #define ENEMY_FRAME_WALK_R2 2
