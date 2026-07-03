@@ -3,7 +3,9 @@
 #include "bitmap.h"
 #include "debug.h"
 #include "enemy.h"
+#include "player.h"
 #include "units.h"
+#include "videomem.h"
 
 static WSERV_SPEC wSpec;
 static UINT gameWindowId = 0;
@@ -17,8 +19,6 @@ static UINT wgc[2]  = {0};
 const INT DEBUG_WIN = 1;
 const INT GAME_WIN = 2;
 
-
-position_t pos = {0};
 
 static void updateScreen()
 {
@@ -35,53 +35,9 @@ static void updateScreen()
 	wFlush();
 }
 
-static void tryMove(const f16 dx, const f16 dy)
+static void testVidPtr()
 {
-	f16 nx = pos.x + dx;
-	f16 ny = pos.y;
-	
-	u16 cell = fmapCell(nx, ny);
-	
-	if(canWalk(cell))
-		pos.x = nx;
-	
-	nx = pos.x;
-	ny = pos.y + dy;
-	
-	cell = fmapCell(nx, ny);
-	
-	if(canWalk(cell))
-		pos.y = ny;
-}
-
-static void handleKey(const u16 key)
-{
-	if(key == W_KEY_LEFT)
-	{
-		pos.angle -= flt2fp(0.1f);
-	}
-	else if(key == W_KEY_RIGHT)
-	{
-		pos.angle += flt2fp(0.1f);
-	}
-	else if(key == W_KEY_UP)
-	{		
-		const f16 dx = fpmul(fpcos(pos.angle), flt2fp(0.2f));
-		const f16 dy = fpmul(fpsin(pos.angle), flt2fp(0.2f));
-		
-		tryMove(dx, dy);
-	}
-	else if(key == W_KEY_DOWN)
-	{		
-		const f16 dx = -fpmul(fpcos(pos.angle), flt2fp(0.2f));
-		const f16 dy = -fpmul(fpsin(pos.angle), flt2fp(0.2f));
-		
-		tryMove(dx, dy);
-	}
-	else if(key == W_KEY_ESCAPE)
-	{
-		
-	}
+	pokeVideoMem();
 }
 
 static void mainLoop()
@@ -91,9 +47,7 @@ static void mainLoop()
 	u16 frames = 0, lastSecond = 0, t = 0;
 	TEXT buf[32];
 
-	pos.x = flt2fp(27.5f);
-	pos.y = flt2fp(1.5f);
-	pos.angle = 0;
+	initPlayer();
 		
 	wInvalidateWin(debugWindowId);
 
@@ -103,10 +57,12 @@ static void mainLoop()
 
 		while(event.type == E_FILE_PENDING)
 		{
+			updatePlayer();
 			runAI();
 			bmClearScreen();
 			draw();
 			updateScreen();
+			testVidPtr();
 			
 			frames++;
 			
@@ -119,7 +75,9 @@ static void mainLoop()
 				lastSecond = t;
 			}
 			
-			p_sleept(SYSTEM_TICKS_PER_SECOND / TICKS_PER_SECOND);
+			p_sleept(0);
+
+			//p_sleept(SYSTEM_TICKS_PER_SECOND / TICKS_PER_SECOND);
 		}
 		
 		if (event.type == WM_REDRAW)
@@ -152,7 +110,7 @@ static void mainLoop()
 		}
 		else if (event.type==WM_KEY)
 		{
-			handleKey(event.p.key.keycode);
+			handlePlayerKey(event.p.key.keycode);
 		}
 	}
 }

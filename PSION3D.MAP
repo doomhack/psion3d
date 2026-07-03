@@ -1,14 +1,14 @@
 
  Start  Stop   Length Name               Class              Group
 
- 00000H 02884H 02884H _TEXT              CODE               (none)
- 02890H 03890H 01000H STACK              STACK              (none)
- 03890H 04890H 01000H _MAGIC             MAGIC              DGROUP 
- 04890H 04892H 00002H _INIT              DATA               DGROUP 
- 04892H 0559AH 00D08H _CONST             DATA               DGROUP 
- 055A0H 055EDH 0004DH _DATA              DATA               DGROUP 
- 055F0H 0C6C3H 070D3H _BSS               BSS                DGROUP 
- 0C6C0H 0C6C6H 00006H BSS_END            BSS                DGROUP 
+ 00000H 029BAH 029BAH _TEXT              CODE               (none)
+ 029C0H 039C0H 01000H STACK              STACK              (none)
+ 039C0H 049C0H 01000H _MAGIC             MAGIC              DGROUP 
+ 049C0H 049C2H 00002H _INIT              DATA               DGROUP 
+ 049C2H 056CAH 00D08H _CONST             DATA               DGROUP 
+ 056D0H 05721H 00051H _DATA              DATA               DGROUP 
+ 05720H 0C86FH 0714FH _BSS               BSS                DGROUP 
+ 0C870H 0C876H 00006H BSS_END            BSS                DGROUP 
 
   Address         Publics by Value
 
@@ -30,130 +30,136 @@
  0000:03C0       _bmClearRect
  0000:040E       _bmClearRect4
  0000:0461       _bmFillPattern4
- 0000:0BEA       _resetEnemy
- 0000:0BF0       _getEnemyCell
- 0000:0CD7       _getEnemy
- 0000:0CF0       _runAI
- 0000:165B       _draw
- 0000:1CCC       _loadSprite
- 0000:1E30       _projectSprite
- 0000:1ED6       _drawSprite
- 0000:2082       _drawDbgText
- 0000:209F       _loadMapData
- 0000:20C2       _getCellEncoding
- 0000:213D       _loadMap
- 0000:2555       _main
- 0000:25BC       _p_atob
- 0000:25C1       _p_atos
- 0000:25DF       _p_close
- 0000:25E7       _p_date
- 0000:25ED       _p_open
- 0000:25FB       _p_read
- 0000:2603       _p_sgclose
- 0000:260D       _p_sgcopyfr
- 0000:2617       _p_sgcopyto
- 0000:2621       _p_sgcreate
- 0000:2629       _p_sgopen
- 0000:2631       _p_sleept
- 0000:263B       _p_slen
- 0000:263E       _wConnect
- 0000:2643       _wInvalidateWin
- 0000:2648       _wValidateWin
- 0000:264D       _wEndRedraw
- 0000:2652       _wCreateWindow
- 0000:2657       _wInitialiseWindowTree
- 0000:265C       _gCreateBit
- 0000:2665       _gPrintText
- 0000:266A       _gCopyBit
- 0000:266F       _gCreateGC
- 0000:2674       _wGetEventSpecial
- 0000:2679       _wFlush
- 0000:267E       _wBeginRedrawWinGC0
- 0000:2685       _gCreateGC0
- 0000:268C       _gSetGC0
- 0000:2693       _wCompatibilityMode
- 0000:269B       __FatalErrorPos
- 0000:26A4       __FatalError
- 0000:26A8       _ExtCatTable
- 0000:26A8       _ClassTable
- 0000:26AA       N$StdRet
- 0000:26B4       N$SgnMol
- 0000:26B4       N$UnsMol
- 0000:2713       N$SgnDiv
- 0000:27CC       N$UnsMul
- 0000:2810       N$LngShl
- 0000:281B       N$LngShr
- 0000:2826       N$CnsStk
- 0000:282C       N$CnsPtr
- 0000:2832       N$CnsIdx
- 0000:2838       N$CnsOvr
- 0000:283E       N$CnsRng
- 0000:2844       N$CnsRet
- 0000:284A       N$CnsCase
- 0000:2850       N$CnsDiv
- 0000:2856       N$CnsPVC
- 0000:2880       __FloatInit
- 0000:2883       __FloatJmpRestore
- 0000:2883       __FloatFinish
- 0000:2883       __FloatJmpSave
- 0000:2883       __FloatMathExcepDos
- 0000:2883       __FloatInitInstance
- 0389:0000       _DatWordDead
- 0389:0002       _DatHandNext
- 0389:0004       _DatHandPrev
- 0389:0006       _DatCountrySeg
- 0389:0008       _DatClassHandle
- 0389:000A       _DatClassPtr
- 0389:000C       _DatEClassHandle
- 0389:000E       _DatEClassPtr
- 0389:0010       _DatEnterFramePtr
- 0389:0012       _w_ws
- 0389:0014       _w_am
- 0389:0016       _wClientData
- 0389:0018       _wserv_channel
- 0389:001A       _T
- 0389:001C       _r
- 0389:001E       _DatOsFramePtr
- 0389:0020       _DatATFlag
- 0389:0021       _DatHeapLocked
- 0389:0022       _DatProcessNamePtr
- 0389:0024       _DatCommandPtr
- 0389:0026       _DatTest
- 0389:0028       _DatApp1
- 0389:002A       _DatApp2
- 0389:002C       _DatApp3
- 0389:002E       _DatApp4
- 0389:0030       _DatApp5
- 0389:0032       _DatApp6
- 0389:0034       _DatApp7
- 0389:0036       _DatDialogPtr
- 0389:0038       _DatGate
- 0389:003A       _DatLocked
- 0389:003C       _DatStatusNamePtr
- 0389:003E       _DatUsedPathNamePtr
- 0389:1000       __init_begin
- 0389:1002       __const_start
- 0389:1002       __init_start
- 0389:14DE       _sincos_tab
- 0389:1D10       __data_start
- 0389:1D10       CoreSig@CnsHandler
- 0389:1D12       @InitPointer
- 0389:1D14       @InitPriority
- 0389:1D15       _blackBm
- 0389:1D17       _greyBm
- 0389:1D29       _enemyCount
- 0389:1D2F       _pos
- 0389:1D60       __bss_start
- 0389:1D60       __SH_sword
- 0389:1D62       @InitCount
- 0389:1D64       @InitEnd
- 0389:1D66       @InitDone
- 0389:1D68       @ExitCode
- 0389:1D6A       @StackContextSP
- 0389:1D6C       @StackContextBP
- 0389:1D6E       _screenBm
- 0389:456E       _enemyList
- 0389:6DFE       _map
- 0389:8E30       __bss_end
+ 0000:0C28       _resetEnemy
+ 0000:0C2E       _getEnemyCell
+ 0000:0D2B       _getEnemy
+ 0000:0D45       _runAI
+ 0000:110E       _initPlayer
+ 0000:1128       _updatePlayer
+ 0000:1185       _handlePlayerKey
+ 0000:18C7       _draw
+ 0000:1F2E       _loadSprite
+ 0000:2092       _projectSprite
+ 0000:2127       _drawSprite
+ 0000:22D3       _drawDbgText
+ 0000:22F0       _loadMapData
+ 0000:2313       _getCellEncoding
+ 0000:238E       _loadMap
+ 0000:2452       _disableMemProtection
+ 0000:2457       _enableMemProtection
+ 0000:245C       _pokeVideoMem
+ 0000:268B       _main
+ 0000:26F2       _p_atob
+ 0000:26F7       _p_atos
+ 0000:2715       _p_close
+ 0000:271D       _p_date
+ 0000:2723       _p_open
+ 0000:2731       _p_read
+ 0000:2739       _p_sgclose
+ 0000:2743       _p_sgcopyfr
+ 0000:274D       _p_sgcopyto
+ 0000:2757       _p_sgcreate
+ 0000:275F       _p_sgopen
+ 0000:2767       _p_sleept
+ 0000:2771       _p_slen
+ 0000:2774       _wConnect
+ 0000:2779       _wInvalidateWin
+ 0000:277E       _wValidateWin
+ 0000:2783       _wEndRedraw
+ 0000:2788       _wCreateWindow
+ 0000:278D       _wInitialiseWindowTree
+ 0000:2792       _gCreateBit
+ 0000:279B       _gPrintText
+ 0000:27A0       _gCopyBit
+ 0000:27A5       _gCreateGC
+ 0000:27AA       _wGetEventSpecial
+ 0000:27AF       _wFlush
+ 0000:27B4       _wBeginRedrawWinGC0
+ 0000:27BB       _gCreateGC0
+ 0000:27C2       _gSetGC0
+ 0000:27C9       _wCompatibilityMode
+ 0000:27D1       __FatalErrorPos
+ 0000:27DA       __FatalError
+ 0000:27DE       _ExtCatTable
+ 0000:27DE       _ClassTable
+ 0000:27E0       N$StdRet
+ 0000:27EA       N$SgnMol
+ 0000:27EA       N$UnsMol
+ 0000:2849       N$SgnDiv
+ 0000:2902       N$UnsMul
+ 0000:2946       N$LngShl
+ 0000:2951       N$LngShr
+ 0000:295C       N$CnsStk
+ 0000:2962       N$CnsPtr
+ 0000:2968       N$CnsIdx
+ 0000:296E       N$CnsOvr
+ 0000:2974       N$CnsRng
+ 0000:297A       N$CnsRet
+ 0000:2980       N$CnsCase
+ 0000:2986       N$CnsDiv
+ 0000:298C       N$CnsPVC
+ 0000:29B6       __FloatInit
+ 0000:29B9       __FloatJmpRestore
+ 0000:29B9       __FloatFinish
+ 0000:29B9       __FloatJmpSave
+ 0000:29B9       __FloatMathExcepDos
+ 0000:29B9       __FloatInitInstance
+ 039C:0000       _DatWordDead
+ 039C:0002       _DatHandNext
+ 039C:0004       _DatHandPrev
+ 039C:0006       _DatCountrySeg
+ 039C:0008       _DatClassHandle
+ 039C:000A       _DatClassPtr
+ 039C:000C       _DatEClassHandle
+ 039C:000E       _DatEClassPtr
+ 039C:0010       _DatEnterFramePtr
+ 039C:0012       _w_ws
+ 039C:0014       _w_am
+ 039C:0016       _wClientData
+ 039C:0018       _wserv_channel
+ 039C:001A       _T
+ 039C:001C       _r
+ 039C:001E       _DatOsFramePtr
+ 039C:0020       _DatATFlag
+ 039C:0021       _DatHeapLocked
+ 039C:0022       _DatProcessNamePtr
+ 039C:0024       _DatCommandPtr
+ 039C:0026       _DatTest
+ 039C:0028       _DatApp1
+ 039C:002A       _DatApp2
+ 039C:002C       _DatApp3
+ 039C:002E       _DatApp4
+ 039C:0030       _DatApp5
+ 039C:0032       _DatApp6
+ 039C:0034       _DatApp7
+ 039C:0036       _DatDialogPtr
+ 039C:0038       _DatGate
+ 039C:003A       _DatLocked
+ 039C:003C       _DatStatusNamePtr
+ 039C:003E       _DatUsedPathNamePtr
+ 039C:1000       __init_begin
+ 039C:1002       __const_start
+ 039C:1002       __init_start
+ 039C:14DE       _sincos_tab
+ 039C:1D10       __data_start
+ 039C:1D10       CoreSig@CnsHandler
+ 039C:1D12       @InitPointer
+ 039C:1D14       @InitPriority
+ 039C:1D15       _blackBm
+ 039C:1D17       _greyBm
+ 039C:1D29       _enemyCount
+ 039C:1D2D       _pos
+ 039C:1D60       __bss_start
+ 039C:1D60       __SH_sword
+ 039C:1D62       @InitCount
+ 039C:1D64       @InitEnd
+ 039C:1D66       @InitDone
+ 039C:1D68       @ExitCode
+ 039C:1D6A       @StackContextSP
+ 039C:1D6C       @StackContextBP
+ 039C:1D6E       _screenBm
+ 039C:456E       _enemyList
+ 039C:6E7E       _map
+ 039C:8EB0       __bss_end
 
 Program entry point at 0000:0000

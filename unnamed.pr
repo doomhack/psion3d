@@ -3,10 +3,12 @@
 #model small jpi
 #compile bitmap
 #compile enemy
+#compile player
 #compile draw
 #compile sprite
 #compile debug
 #compile game_map
 #compile fp_math
+#compile videomem
 #compile %main
 #link %main

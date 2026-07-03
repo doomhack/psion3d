@@ -10,10 +10,10 @@ u16 map[MAP_Y][MAP_X];
 
 void loadMapData(const u8 mapId)
 {
-	loadSprite("sci", 0);
-	loadSprite("mer", 1);
-	loadSprite("sgr", 2);
-	loadSprite("hvy", 3);
+	loadSprite("sci", SPRITE_SLOT_CIV);
+	loadSprite("mer", SPRITE_SLOT_MER);
+	loadSprite("sgr", SPRITE_SLOT_SGR);
+	loadSprite("hvy", SPRITE_SLOT_HVY);
 }
 
 u16 getCellEncoding(u16 x, u16 y, s8 cell)

@@ -24,6 +24,7 @@ typedef struct markedsprite_t
 #define MODE_FILL 0
 #define MODE_CLEAR 1
 #define MODE_INVERT 2
+#define WALL_HEIGHT_NUM ((s16)30720)
 
 /* 60 degree FOV, 60 rays, 4 pixels each */
 static const f16 rayAngleOffset[60] =
@@ -117,7 +118,6 @@ static void depthWall(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 static u16 drawWallX(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
 	//Brick wall. Distance depth effect.
-	
 	depthWall(x, y, w, h, hit);
 
 	if(fp2int(hit->f_wallDist) < 6)
@@ -479,7 +479,10 @@ void draw()
 				f_wallx = pos.x + fpmul(f_dist, f_dx);
 			}
 
-			wallhits[hits].wallHeight = (s16)(((s32)120 << FP_BITS) / f_dist);
+			if(f_dist == 0)
+				f_dist = 1;
+
+			wallhits[hits].wallHeight = WALL_HEIGHT_NUM / f_dist;
 			wallhits[hits].f_wallDist = f_dist;
 			wallhits[hits].f_wallX = f_wallx - int2fp(fp2int(f_wallx));
 			

@@ -18,6 +18,7 @@
 #define SPRITE_NUM_MASK 0x1f
 #define SPRITE_FRAME_MASK 0x07
 #define SPRITE_CACHE_FRAMES 8
+#define SPRITE_HEIGHT_NUM ((s16)30720)
 
 #define SPR_TRANSPARENT 0
 #define SPR_GREY 1
@@ -240,7 +241,7 @@ u16 projectSprite(const f16 x, const f16 y, spritehit_t* hit, const f16 f_viewCo
 	if(spanx < 0 || spanx >= 60)
 		return FALSE;
 
-	hit->spriteHeight = (s16)(((s32)120 << FP_BITS) / f_depth);
+	hit->spriteHeight = SPRITE_HEIGHT_NUM / f_depth;
 	hit->f_spriteDist = f_depth;
 	hit->spanX = spanx;
 
