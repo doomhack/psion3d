@@ -12,7 +12,7 @@ extern u16 screenBm[BM_SCREEN_WORDS];
 extern u8* blackBm;
 extern u8* greyBm;
 
-void bmClearScreen();
+void bmClearScreen(void);
 void bmFillRect(s16 x, s16 y, s16 w, s16 h, u8* bm);
 void bmFillRect4(s16 x, s16 y, s16 h, u8* bm);
 void bmDrawRect(s16 x, s16 y, s16 w, s16 h, u8* bm);

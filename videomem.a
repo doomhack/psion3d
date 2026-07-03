@@ -12,23 +12,65 @@ public _enableMemProtection:
 	out	14H,al
 	ret 0
 
-public _pokeVideoMem:
+public _blitVideoMem:
 	push  bp
 	mov   bp,sp
 	sub   sp,4
+	mov   [bp][-2],ax
+	mov   [bp][-4],bx
+	push  ax
 	push  bx
+	push  cx
+	push  dx
+	push  si
+	push  di
+
+	cli
+
+	pushf
 	push  es
-	xor   bx,bx
-	mov   word [bp][-2],40H
+	mov   ax,40H
+	mov   es,ax
+
+
 	call  near _disableMemProtection
-	mov   es,[bp][-2]
-	mov   byte es:[bx],-1
+	cld
+
+	mov   si,[bp][-2]
+	mov   di,15
+	mov   dx,160
+blitBlackRow:
+	mov   cx,16
+	rep;  movsw
+	add   di,28
+	dec   dx
+	jne   blitBlackRow
+
+	mov   si,[bp][-4]
+	mov   di,9615
+	mov   dx,160
+blitGreyRow:
+	mov   cx,16
+	rep;  movsw
+	add   di,28
+	dec   dx
+	jne   blitGreyRow
+
 	call  near _enableMemProtection
 	pop   es
+	popf
+
+	sti
+
+	pop   di
+	pop   si
+	pop   dx
+	pop   cx
 	pop   bx
+	pop   ax
 	mov   sp,bp
 	pop   bp
-	ret 0 
+	ret 0
 
 
 end

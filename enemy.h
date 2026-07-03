@@ -67,8 +67,8 @@ extern enemy_t enemyList[MAX_ENEMIES];
 
 u16 getEnemyCell(u16 x, u16 y, s8 cell);
 enemy_t* getEnemy(u16 id);
-void runAI();
-void resetEnemy();
+void runAI(void);
+void resetEnemy(void);
 
 
 #endif

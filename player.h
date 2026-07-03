@@ -11,8 +11,8 @@ typedef struct position_t
 
 extern position_t pos;
 
-void initPlayer();
-void updatePlayer();
+void initPlayer(void);
+void updatePlayer(void);
 void handlePlayerKey(const u16 key);
 
 #endif

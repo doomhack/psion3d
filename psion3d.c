@@ -22,6 +22,7 @@ const INT GAME_WIN = 2;
 
 static void updateScreen()
 {
+#if 0
 	const P_RECT greyRect = {{0,160}, {240,320}};
 
 	p_sgcopyto(bmHandle, 0, &screenBm[0], BM_SCREEN_BYTES);
@@ -31,13 +32,17 @@ static void updateScreen()
 
 	gSetGC0(wgc[BM_GRY]);
 	gCopyBit(&gameWinRect.tl, bitmap, &greyRect, G_TRMODE_REPL);
+#else
+	blitVideoMem(blackBm, greyBm);
+#endif
 
 	wFlush();
+
 }
 
 static void testVidPtr()
 {
-	pokeVideoMem();
+	blitVideoMem(blackBm, greyBm);
 }
 
 static void mainLoop()
