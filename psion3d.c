@@ -40,17 +40,13 @@ static void updateScreen()
 
 }
 
-static void testVidPtr()
-{
-	blitVideoMem(blackBm, greyBm);
-}
-
 static void mainLoop()
 {
 	WS_EV event;
 	
 	u16 frames = 0, lastSecond = 0, t = 0;
 	TEXT buf[32];
+	u16 isForground = TRUE;
 
 	initPlayer();
 		
@@ -58,7 +54,10 @@ static void mainLoop()
 
 	while(1)
 	{
-		wGetEventSpecial(&event, WE_KEY | WE_REDRAW);
+		if(isForground)
+			wGetEventSpecial(&event, WE_KEY | WE_REDRAW | WE_STATUS);
+		else
+			wGetEventWait(&event);
 
 		while(event.type == E_FILE_PENDING)
 		{
@@ -67,7 +66,6 @@ static void mainLoop()
 			bmClearScreen();
 			draw();
 			updateScreen();
-			testVidPtr();
 			
 			frames++;
 			
@@ -113,9 +111,17 @@ static void mainLoop()
 				updateScreen();
 			}
 		}
-		else if (event.type==WM_KEY)
+		else if (event.type == WM_KEY)
 		{
 			handlePlayerKey(event.p.key.keycode);
+		}
+		else if(event.type == WM_BACKGROUND)
+		{
+			isForground = FALSE;
+		}
+		else if(event.type == WM_FOREGROUND)
+		{
+			isForground = TRUE;
 		}
 	}
 }
