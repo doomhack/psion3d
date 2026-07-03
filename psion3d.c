@@ -19,10 +19,17 @@ static UINT wgc[2]  = {0};
 const INT DEBUG_WIN = 1;
 const INT GAME_WIN = 2;
 
+#define DIRECT_VIDEO_MEM_ACCESS
+
 
 static void updateScreen()
 {
-#if 0
+#ifdef DIRECT_VIDEO_MEM_ACCESS
+
+	blitVideoMem(blackBm, greyBm);
+
+#else
+
 	const P_RECT greyRect = {{0,160}, {240,320}};
 
 	p_sgcopyto(bmHandle, 0, &screenBm[0], BM_SCREEN_BYTES);
@@ -32,8 +39,7 @@ static void updateScreen()
 
 	gSetGC0(wgc[BM_GRY]);
 	gCopyBit(&gameWinRect.tl, bitmap, &greyRect, G_TRMODE_REPL);
-#else
-	blitVideoMem(blackBm, greyBm);
+
 #endif
 
 	wFlush();
@@ -131,11 +137,13 @@ static void createGameWindow()
 	W_WINDATA windata;
 	G_GC ggc;
 
+#ifndef DIRECT_VIDEO_MEM_ACCESS
 	W_OPEN_BIT_SEG bmSeg;
 
 	bmSeg.size = gameBitmapRect.br;
 	bitmap = gCreateBit(WS_BIT_SEG_ACCESS, &bmSeg);
 	bmHandle = p_sgopen(bmSeg.seg_name);
+#endif
 
 	windata.flags = W_WIN_PRIORITY;
 	windata.extent.tl.x = 120;
