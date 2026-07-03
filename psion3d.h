@@ -16,6 +16,11 @@ static const P_RECT gameWinRect = {{0,0}, {240,160}};
 static const P_RECT gameBitmapRect = {{0,0}, {256,320}};
 
 
+#define KEY_UP 1
+#define KEY_DOWN 2
+#define KEY_LEFT 4
+#define KEY_RIGHT 8
+
 extern f16 dbgval;
 
 #endif

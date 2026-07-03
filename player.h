@@ -12,7 +12,6 @@ typedef struct position_t
 extern position_t pos;
 
 void initPlayer(void);
-void updatePlayer(void);
-void handlePlayerKey(const u16 key);
+void updatePlayer(u8 keys);
 
 #endif

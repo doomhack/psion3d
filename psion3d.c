@@ -19,6 +19,8 @@ static UINT wgc[2]  = {0};
 const INT DEBUG_WIN = 1;
 const INT GAME_WIN = 2;
 
+u8 keys = 0;
+
 #define DIRECT_VIDEO_MEM_ACCESS
 
 
@@ -46,6 +48,27 @@ static void updateScreen()
 
 }
 
+static void updateKeys()
+{
+	UWORD kbScan[10];
+
+	keys = 0;
+
+	p_getscancodes(kbScan);
+
+	if(kbScan[7] & 0x20)
+		keys |= KEY_UP;
+
+	if(kbScan[0] & 0x20)
+		keys |= KEY_DOWN;
+
+	if(kbScan[0] & 0x10)
+		keys |= KEY_LEFT;
+
+	if(kbScan[0] & 0x2)
+		keys |= KEY_RIGHT;
+}
+
 static void mainLoop()
 {
 	WS_EV event;
@@ -61,13 +84,14 @@ static void mainLoop()
 	while(1)
 	{
 		if(isForground)
-			wGetEventSpecial(&event, WE_KEY | WE_REDRAW | WE_STATUS);
+			wGetEventSpecial(&event, WE_REDRAW | WE_STATUS);
 		else
 			wGetEventWait(&event);
 
 		while(event.type == E_FILE_PENDING)
 		{
-			updatePlayer();
+			updateKeys();
+			updatePlayer(keys);
 			runAI();
 			bmClearScreen();
 			draw();
@@ -83,10 +107,6 @@ static void mainLoop()
 				
 				lastSecond = t;
 			}
-			
-			p_sleept(0);
-
-			//p_sleept(SYSTEM_TICKS_PER_SECOND / TICKS_PER_SECOND);
 		}
 		
 		if (event.type == WM_REDRAW)
@@ -116,10 +136,6 @@ static void mainLoop()
 				
 				updateScreen();
 			}
-		}
-		else if (event.type == WM_KEY)
-		{
-			handlePlayerKey(event.p.key.keycode);
 		}
 		else if(event.type == WM_BACKGROUND)
 		{
