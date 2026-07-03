@@ -3,8 +3,8 @@
 
 #include "fp_types.h"
 
-#define SYSTEM_TICKS_PER_SECOND 20
-#define TICKS_PER_SECOND 20
+#define SYSTEM_TICKS_PER_SECOND 32
+#define TICKS_PER_SECOND 32
 
 #define MAP_CELL_METERS 2
 #define MAP_UNITS_TO_METERS (int2fp(MAP_CELL_METERS))

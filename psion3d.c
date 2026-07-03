@@ -69,13 +69,22 @@ static void updateKeys()
 		keys |= KEY_RIGHT;
 }
 
+static s16 tickDelta(const u16 later, const u16 earlier)
+{
+	return (s16)(later - earlier);
+}
+
 static void mainLoop()
 {
 	WS_EV event;
 	
-	u16 frames = 0, lastSecond = 0, t = 0;
+	u16 frames = 0;
+	u16 lastTick = 0, t = 0;
 	TEXT buf[32];
 	u16 isForground = TRUE;
+
+	u16 gameTime = p_returntickcount();
+	u16 realTime;
 
 	initPlayer();
 		
@@ -90,22 +99,30 @@ static void mainLoop()
 
 		while(event.type == E_FILE_PENDING)
 		{
-			updateKeys();
-			updatePlayer(keys);
-			runAI();
+			realTime = p_returntickcount();
+
+			while(tickDelta(realTime, gameTime) > 0)
+			{
+				updateKeys();
+				updatePlayer(keys);
+				runAI();
+
+				gameTime++;
+			}
+			
 			bmClearScreen();
 			draw();
 			updateScreen();
 			
 			frames++;
 			
-			t = p_date();
+			t = p_returntickcount();
 			
-			if(t != lastSecond)
+			if((u16)(t - lastTick) >= TICKS_PER_SECOND)
 			{
 				wInvalidateWin(debugWindowId);
 				
-				lastSecond = t;
+				lastTick = t;
 			}
 		}
 		
@@ -144,6 +161,7 @@ static void mainLoop()
 		else if(event.type == WM_FOREGROUND)
 		{
 			isForground = TRUE;
+			gameTime = p_returntickcount();
 		}
 	}
 }
