@@ -74,17 +74,40 @@ static s16 tickDelta(const u16 later, const u16 earlier)
 	return (s16)(later - earlier);
 }
 
+static u16 tickElapsed(const u16 later, const u16 earlier)
+{
+	return (u16)(later - earlier);
+}
+
+static u16 runTicks(u16 gameTime)
+{
+	u16 realTime = p_returntickcount();
+
+	while(tickDelta(realTime, gameTime) > 0)
+	{
+		updateKeys();
+		updatePlayer(keys);
+		runAI();
+
+		gameTime++;
+	}
+	
+	bmClearScreen();
+	draw();
+	updateScreen();
+
+	return gameTime;
+}
+
 static void mainLoop()
 {
 	WS_EV event;
-	
+		
 	u16 frames = 0;
-	u16 lastTick = 0, t = 0;
+	u16 gameTime = p_returntickcount();
+	u16 lastTick = gameTime, t = 0;
 	TEXT buf[32];
 	u16 isForground = TRUE;
-
-	u16 gameTime = p_returntickcount();
-	u16 realTime;
 
 	initPlayer();
 		
@@ -99,26 +122,13 @@ static void mainLoop()
 
 		while(event.type == E_FILE_PENDING)
 		{
-			realTime = p_returntickcount();
-
-			while(tickDelta(realTime, gameTime) > 0)
-			{
-				updateKeys();
-				updatePlayer(keys);
-				runAI();
-
-				gameTime++;
-			}
-			
-			bmClearScreen();
-			draw();
-			updateScreen();
+			gameTime = runTicks(gameTime);
 			
 			frames++;
 			
 			t = p_returntickcount();
 			
-			if((u16)(t - lastTick) >= TICKS_PER_SECOND)
+			if(tickElapsed(t, lastTick) >= TICKS_PER_SECOND)
 			{
 				wInvalidateWin(debugWindowId);
 				
