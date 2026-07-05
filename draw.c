@@ -386,7 +386,7 @@ void draw()
 					hitcell = mapCell(mapx, mapy);
 					hit = isWall(hitcell);
 				}
-				else if(f_sidedy < f_sidedx)
+				else
 				{
 					f_sidedy = f_sidedy + f_deltay;
 					mapy += stepy;
@@ -394,41 +394,6 @@ void draw()
 
 					hitcell = mapCell(mapx, mapy);
 					hit = isWall(hitcell);
-				}
-				else
-				{
-					s16 xmap = mapx + stepx;
-					s16 ymap = mapy + stepy;
-					u16 xcell = mapCell(xmap, mapy);
-					u16 ycell = mapCell(mapx, ymap);
-
-					if(isWall(xcell))
-					{
-						f_sidedx = f_sidedx + f_deltax;
-						mapx = xmap;
-						side = 0;
-						hitcell = xcell;
-						hit = TRUE;
-					}
-					else if(isWall(ycell))
-					{
-						f_sidedy = f_sidedy + f_deltay;
-						mapy = ymap;
-						side = 1;
-						hitcell = ycell;
-						hit = TRUE;
-					}
-					else
-					{
-						f_sidedx = f_sidedx + f_deltax;
-						f_sidedy = f_sidedy + f_deltay;
-						mapx = xmap;
-						mapy = ymap;
-						side = 0;
-
-						hitcell = mapCell(mapx, mapy);
-						hit = isWall(hitcell);
-					}
 				}
 				
 				if(hit == 0)
