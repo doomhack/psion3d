@@ -43,8 +43,8 @@ static u16 enemyDistanceToPlayer(const enemy_t* enemy)
 {
     s16 enemyX = fp2int(enemy->x);
     s16 enemyY = fp2int(enemy->y);
-    s16 playerX = fp2int(pos.x);
-    s16 playerY = fp2int(pos.y);
+    s16 playerX = fp2int(player.pos.x);
+    s16 playerY = fp2int(player.pos.y);
 
     return absDiff(enemyX, playerX) + absDiff(enemyY, playerY);
 }
@@ -88,8 +88,8 @@ static void enemySetWalkFrame(enemy_t* enemy)
     f16 f_dx = enemy->moveTargetX - enemy->x;
     f16 f_dy = enemy->moveTargetY - enemy->y;
     f16 f_side =
-        -fpmul(f_dx, fpsin(pos.angle)) +
-         fpmul(f_dy, fpcos(pos.angle));
+        -fpmul(f_dx, fpsin(player.pos.angle)) +
+         fpmul(f_dy, fpcos(player.pos.angle));
 
     if(f_side > 0)
         enemy->spriteFrame = (enemy->stateCounter & 1) ? ENEMY_FRAME_WALK_R1 : ENEMY_FRAME_WALK_R2;
@@ -162,8 +162,8 @@ static u16 enemyCanSeePlayer(const enemy_t* enemy)
 {
     s16 x0 = fp2int(enemy->x);
     s16 y0 = fp2int(enemy->y);
-    s16 x1 = fp2int(pos.x);
-    s16 y1 = fp2int(pos.y);
+    s16 x1 = fp2int(player.pos.x);
+    s16 y1 = fp2int(player.pos.y);
     s16 dx = absDiff(x0, x1);
     s16 dy = absDiff(y0, y1);
     s16 sx = x0 < x1 ? 1 : -1;
@@ -301,8 +301,8 @@ static void enemyStepSideways(const u16 id, enemy_t* enemy, const u8 targetX, co
 
 static void enemySetTargetToPlayer(enemy_t* enemy)
 {
-    enemy->targetX = (u8)fp2int(pos.x);
-    enemy->targetY = (u8)fp2int(pos.y);
+    enemy->targetX = (u8)fp2int(player.pos.x);
+    enemy->targetY = (u8)fp2int(player.pos.y);
 }
 
 void resetEnemy()
@@ -546,7 +546,7 @@ void runAI()
                 if(enemyCounterTick(id, enemy))
                     break;
 
-                enemyStepSideways(id, enemy, (u8)fp2int(pos.x), (u8)fp2int(pos.y));
+                enemyStepSideways(id, enemy, (u8)fp2int(player.pos.x), (u8)fp2int(player.pos.y));
                 enemy->state = ENEMY_STATE_CHASING;
                 enemySetMoveCounter(enemy, ENEMY_MOVE_TICKS);
                 break;

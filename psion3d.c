@@ -59,6 +59,9 @@ static void updateKeys()
 	if(kbScan[7] & 0x20)
 		keys |= KEY_UP;
 
+	if(kbScan[2] & 0x80)
+		keys |= KEY_FIRE;
+
 	if(kbScan[0] & 0x20)
 		keys |= KEY_DOWN;
 
@@ -145,10 +148,10 @@ static void mainLoop()
 				p_atos(&buf[0], "%d fps", frames);
 				gPrintText(5, 20, &buf[0], p_slen(&buf[0]));
 				
-				p_atos(&buf[0], "Pos: %d,%d", pos.x, pos.y);
+				p_atos(&buf[0], "Pos: %d,%d", player.pos.x, player.pos.y);
 				gPrintText(5, 40, &buf[0], p_slen(&buf[0]));
 				
-				p_atos(&buf[0], "Angle: %d", pos.angle);
+				p_atos(&buf[0], "Angle: %d", player.pos.angle);
 				gPrintText(5, 80, &buf[0], p_slen(&buf[0]));
 
 				drawDbgText(5, 100);

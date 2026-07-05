@@ -14,6 +14,8 @@ void loadMapData(const u8 mapId)
 	loadSprite("mer", SPRITE_SLOT_MER);
 	loadSprite("sgr", SPRITE_SLOT_SGR);
 	loadSprite("hvy", SPRITE_SLOT_HVY);
+
+	loadSprite("ppk", 5);
 }
 
 u16 getCellEncoding(u16 x, u16 y, s8 cell)

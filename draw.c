@@ -315,15 +315,15 @@ void draw()
 	markedsprite_t markedSprites[8];
 	spritehit_t spriteHits[8];
 	f16 f_wallDepth[60];
-	const f16 f_viewCos = fpcos(pos.angle);
-	const f16 f_viewSin = fpsin(pos.angle);
+	const f16 f_viewCos = fpcos(player.pos.angle);
+	const f16 f_viewSin = fpsin(player.pos.angle);
 
 	for(i = 0; i < 60; i++)
 	{
 		wallhit_t wallhits[3];
 	
-		s16 mapx = fp2int(pos.x);
-		s16 mapy = fp2int(pos.y);
+		s16 mapx = fp2int(player.pos.x);
+		s16 mapy = fp2int(player.pos.y);
 
 		s16 stepx, stepy;
 		f16 f_sidedx, f_sidedy;
@@ -332,7 +332,7 @@ void draw()
 		
 		u16 solid, hits;
 	
-		const f16 f_ra = pos.angle + rayAngleOffset[i];
+		const f16 f_ra = player.pos.angle + rayAngleOffset[i];
 
 		const f16 f_dx = fpcos(f_ra);
 		const f16 f_dy = fpsin(f_ra);
@@ -346,23 +346,23 @@ void draw()
 		if(f_dx < 0)
 		{
 			stepx = -1;
-			f_sidedx = fpmul(pos.x - int2fp(mapx), f_deltax);
+			f_sidedx = fpmul(player.pos.x - int2fp(mapx), f_deltax);
 		}
 		else
 		{
 			stepx = 1;
-			f_sidedx = fpmul(int2fp(mapx + 1) - pos.x, f_deltax);
+			f_sidedx = fpmul(int2fp(mapx + 1) - player.pos.x, f_deltax);
 		}
 
 		if(f_dy < 0)
 		{
 			stepy = -1;
-			f_sidedy = fpmul(pos.y - int2fp(mapy), f_deltay);
+			f_sidedy = fpmul(player.pos.y - int2fp(mapy), f_deltay);
 		}
 		else
 		{
 			stepy = 1;
-			f_sidedy = fpmul(int2fp(mapy + 1) - pos.y, f_deltay);
+			f_sidedy = fpmul(int2fp(mapy + 1) - player.pos.y, f_deltay);
 		}
 		
 		solid = 0;
@@ -435,13 +435,13 @@ void draw()
 
 			if(side == 0)
 			{
-				f_dist = fpdiv((int2fp(mapx) - pos.x) + int2fp(((1-stepx)>>1)), f_dx);
-				f_wallx = pos.y + fpmul(f_dist, f_dy);
+				f_dist = fpdiv((int2fp(mapx) - player.pos.x) + int2fp(((1-stepx)>>1)), f_dx);
+				f_wallx = player.pos.y + fpmul(f_dist, f_dy);
 			}
 			else
 			{
-				f_dist = fpdiv((int2fp(mapy) - pos.y) + int2fp(((1-stepy)>>1)), f_dy);
-				f_wallx = pos.x + fpmul(f_dist, f_dx);
+				f_dist = fpdiv((int2fp(mapy) - player.pos.y) + int2fp(((1-stepy)>>1)), f_dy);
+				f_wallx = player.pos.x + fpmul(f_dist, f_dx);
 			}
 
 			if(f_dist == 0)
@@ -470,7 +470,7 @@ void draw()
 		spritesHit--;
 		
 		if(spriteHits[spritesHit].f_spriteDist < f_wallDepth[spriteHits[spritesHit].spanX])
-			drawSprite(&spriteHits[spritesHit]);
+			drawProjectedSprite(&spriteHits[spritesHit]);
 	}
 	
 	while(spritesMarked > 0)
@@ -479,6 +479,9 @@ void draw()
 		
 		unmarkSprite(markedSprites[spritesMarked].x, markedSprites[spritesMarked].y);
 	}
+
+	//Draw player weapon.
+	drawSprite(35, 96, player.weaponState.weaponSpriteId);
 
 	//Add rect around screen.
 	bmDrawRect(0, 0, 240, 160, blackBm);

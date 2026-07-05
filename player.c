@@ -6,7 +6,16 @@
 #include "units.h"
 #include "psion3d.h"
 
-position_t pos = {0};
+player_t player = {0};
+
+const weapon_t weapons[] = 
+{
+	{24, 40, 225, 0, SPRITE_SLOT_PISTOL, 35, 96}, //Pistol
+	{6, 10, 128, 0, SPRITE_SLOT_SMG, 35, 96}, //SMG
+	{10, 20, 160, 1, SPRITE_SLOT_AR, 35, 96}, //AR
+	{12, 25, 150, 2, SPRITE_SLOT_LMG, 35, 96}, //LMG
+};
+
 
 #define PLAYER_MOVE_SPEED_MPS flt2fp(4.0f)
 #define PLAYER_TURN_SPEED_RADPS flt2fp(2.0f)
@@ -33,20 +42,20 @@ static f16 clampFp(const f16 value, const f16 min, const f16 max)
 
 static void tryMove(const f16 dx, const f16 dy)
 {
-	f16 nx = pos.x + dx;
-	f16 ny = pos.y;
+	f16 nx = player.pos.x + dx;
+	f16 ny = player.pos.y;
 	u16 cell = fmapCell(nx, ny);
 
 	if(canWalk(cell))
-		pos.x = nx;
+		player.pos.x = nx;
 
-	nx = pos.x;
-	ny = pos.y + dy;
+	nx = player.pos.x;
+	ny = player.pos.y + dy;
 
 	cell = fmapCell(nx, ny);
 
 	if(canWalk(cell))
-		pos.y = ny;
+		player.pos.y = ny;
 }
 
 static void addMoveImpulse(const f16 amount)
@@ -74,14 +83,45 @@ static f16 dampMomentum(const f16 value)
 	return damped;
 }
 
+static void updatePlayerWeapon(u8 keys)
+{
+	if(player.weaponState.shootCooldown > 0)
+	{
+		player.weaponState.shootCooldown--;
+
+		if(player.weaponState.shootFrames > 0)
+		{
+			player.weaponState.shootFrames--;
+
+			if(player.weaponState.shootFrames == 0)
+				player.weaponState.weaponSpriteId = (player.currentWeapon->weaponSprite << 3) | 0;
+		}
+	}
+	else
+	{
+		if(keys & KEY_FIRE)
+		{
+			player.weaponState.shootCooldown = player.currentWeapon->fireDelay;
+			player.weaponState.weaponSpriteId = (player.currentWeapon->weaponSprite << 3) | 1;
+			player.weaponState.shootFrames = 5;
+
+			//TODO: Check enemy damage.
+		}
+	}
+}
+
 void initPlayer()
 {
-	pos.x = flt2fp(27.5f);
-	pos.y = flt2fp(1.5f);
+	player.pos.x = flt2fp(27.5f);
+	player.pos.y = flt2fp(1.5f);
 
-	pos.angle = 0;
+	player.pos.angle = 0;
 	f_moveVel = 0;
 	f_turnVel = 0;
+
+	player.currentWeapon = &weapons[0];
+	player.weaponState.shootCooldown = 0;
+	player.weaponState.weaponSpriteId = (player.currentWeapon->weaponSprite << 3);
 }
 
 void updatePlayer(u8 keys)
@@ -114,10 +154,12 @@ void updatePlayer(u8 keys)
 		f_moveVel = dampMomentum(f_moveVel);
 	}
 
-	pos.angle += f_turnVel;
+	player.pos.angle += f_turnVel;
 
-	dx = fpmul(fpcos(pos.angle), f_moveVel);
-	dy = fpmul(fpsin(pos.angle), f_moveVel);
+	dx = fpmul(fpcos(player.pos.angle), f_moveVel);
+	dy = fpmul(fpsin(player.pos.angle), f_moveVel);
 
 	tryMove(dx, dy);
+
+	updatePlayerWeapon(keys);
 }

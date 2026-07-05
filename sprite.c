@@ -211,8 +211,8 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 
 u16 projectSprite(const f16 x, const f16 y, spritehit_t* hit, const f16 f_viewCos, const f16 f_viewSin)
 {
-	f16 f_rx = x - pos.x;
-	f16 f_ry = y - pos.y;
+	f16 f_rx = x - player.pos.x;
+	f16 f_ry = y - player.pos.y;
 
 	f16 f_depth =
 		fpmul(f_rx, f_viewCos) +
@@ -248,7 +248,7 @@ u16 projectSprite(const f16 x, const f16 y, spritehit_t* hit, const f16 f_viewCo
 	return TRUE;
 }
 
-void drawSprite(const spritehit_t* spriteHit)
+void drawProjectedSprite(const spritehit_t* spriteHit)
 {
 	s16 height = spriteHit->spriteHeight;
 	s16 width;
@@ -353,5 +353,83 @@ void drawSprite(const spritehit_t* spriteHit)
 		}
 
 		sourceXAcc += sourceXStep;
+	}
+}
+
+void drawSprite(u8 spanX, u8 y, u8 spriteId)
+{
+	s16 left = spanX << 2;
+	s16 top = y;
+	s16 right = left + SPRITE_SIZE;
+	s16 bottom = top + SPRITE_SIZE;
+	s16 xStart = left;
+	s16 xEnd = right;
+	s16 yStart = top;
+	s16 yEnd = bottom;
+	s16 x;
+	const u8* spriteData;
+
+	if(xStart < 0)
+		xStart = 0;
+
+	if(xEnd > SCREEN_WIDTH)
+		xEnd = SCREEN_WIDTH;
+
+	if(xStart >= xEnd)
+		return;
+
+	if(yStart < 0)
+		yStart = 0;
+
+	if(yEnd > SCREEN_HEIGHT)
+		yEnd = SCREEN_HEIGHT;
+
+	if(yStart >= yEnd)
+		return;
+
+	spriteData = getSpriteFrame(spriteId);
+
+	for(x = xStart; x < xEnd; x++)
+	{
+		const u8* sourceCol;
+		u16 offset;
+		u8 mask;
+		u8 keepMask;
+		s16 sourceY;
+		s16 yPos;
+
+		sourceCol = spriteData + ((x - left) << 4);
+		offset = (yStart << 5) + (x >> 3);
+		mask = 1 << (x & 7);
+		keepMask = ~mask;
+		sourceY = yStart - top;
+
+		for(yPos = yStart; yPos < yEnd; yPos++)
+		{
+			u8 packed;
+			u8 pix;
+
+			packed = sourceCol[sourceY >> 2];
+			pix = (packed >> ((sourceY & 3) << 1)) & 3;
+
+			switch(pix)
+			{
+				case SPR_GREY:
+					blackBm[offset] &= keepMask;
+					greyBm[offset] |= mask;
+					break;
+				case SPR_BLACK:
+					blackBm[offset] |= mask;
+					greyBm[offset] &= keepMask;
+					break;
+				case SPR_WHITE:
+					blackBm[offset] &= keepMask;
+					greyBm[offset] &= keepMask;
+					break;
+			}
+
+			sourceY++;
+			offset += SCREEN_ROW_BYTES;
+		}
 	}
 }

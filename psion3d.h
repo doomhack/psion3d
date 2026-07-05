@@ -20,6 +20,7 @@ static const P_RECT gameBitmapRect = {{0,0}, {256,320}};
 #define KEY_DOWN 2
 #define KEY_LEFT 4
 #define KEY_RIGHT 8
+#define KEY_FIRE 16
 
 extern f16 dbgval;
 
