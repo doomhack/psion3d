@@ -44,8 +44,6 @@ static void updateScreen()
 
 #endif
 
-	wFlush();
-
 }
 
 static void updateKeys()
@@ -96,7 +94,7 @@ static u16 runTicks(u16 gameTime)
 	}
 	
 	bmClearScreen();
-	draw();
+	draw();	
 	updateScreen();
 
 	return gameTime;
@@ -127,6 +125,8 @@ static void mainLoop()
 		{
 			gameTime = runTicks(gameTime);
 			
+			wFlush();
+
 			frames++;
 			
 			t = p_returntickcount();

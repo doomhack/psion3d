@@ -45,12 +45,115 @@ typedef struct sprite_cache_entry_t
 	u8 valid;
 } sprite_cache_entry_t;
 
+typedef struct sprite_bounds_t
+{
+	u8 left;
+	u8 top;
+	u8 right;
+	u8 bottom;
+} sprite_bounds_t;
+
 static u8 spriteLoadBuffer[SPRITE_BYTES];
 static HANDLE spriteSegs[SPRITE_MAX_SPRITES];
 static u8 spriteFrameCounts[SPRITE_MAX_SPRITES];
 static u8 spriteCache[SPRITE_CACHE_FRAMES * SPRITE_BYTES];
+static u8 testPatternCache[SPRITE_BYTES];
+static u8 spriteOpaqueMask[256];
+static u8 spriteBlackMask[256];
+static u8 spriteGreyMask[256];
 static sprite_cache_entry_t spriteCacheEntries[SPRITE_CACHE_FRAMES];
+static sprite_bounds_t spriteCacheBounds[SPRITE_CACHE_FRAMES];
+static sprite_bounds_t testPatternBounds;
 static u16 spriteCacheRand = 0xace1;
+static u8 testPatternCached = FALSE;
+static u8 spriteMasksReady = FALSE;
+
+static void prepareSpriteMasks()
+{
+	u16 packed;
+
+	for(packed = 0; packed < 256; packed++)
+	{
+		u8 i;
+
+		for(i = 0; i < 4; i++)
+		{
+			u8 pix = (packed >> (i << 1)) & 3;
+			u8 mask = 1 << i;
+
+			if(pix != SPR_TRANSPARENT)
+				spriteOpaqueMask[packed] |= mask;
+
+			if(pix == SPR_BLACK)
+				spriteBlackMask[packed] |= mask;
+			else if(pix == SPR_GREY)
+				spriteGreyMask[packed] |= mask;
+		}
+	}
+
+	spriteMasksReady = TRUE;
+}
+
+/* Cached sprites are transposed from file-order columns to packed rows. */
+static void prepareSpriteFrame(const u8* source, u8* dest, sprite_bounds_t* bounds)
+{
+	u16 y;
+	u8 minX = SPRITE_SIZE;
+	u8 minY = SPRITE_SIZE;
+	u8 maxX = 0;
+	u8 maxY = 0;
+
+	if(!spriteMasksReady)
+		prepareSpriteMasks();
+
+	for(y = 0; y < SPRITE_SIZE; y++)
+	{
+		u16 x;
+		u16 destOffset = y << 4;
+
+		for(x = 0; x < SPRITE_SIZE; x += 4)
+		{
+			u8 packed = 0;
+			u8 i;
+
+			for(i = 0; i < 4; i++)
+			{
+				const u8* sourceCol = source + ((x + i) << 4);
+				u8 pix = (sourceCol[y >> 2] >> ((y & 3) << 1)) & 3;
+
+				packed |= pix << (i << 1);
+			}
+
+			dest[destOffset + (x >> 2)] = packed;
+
+			if(packed != 0)
+			{
+				if(x < minX)
+					minX = x;
+				if(x + 4 > maxX)
+					maxX = x + 4;
+				if(y < minY)
+					minY = y;
+				if(y + 1 > maxY)
+					maxY = y + 1;
+			}
+		}
+	}
+
+	if(minX == SPRITE_SIZE)
+	{
+		bounds->left = 0;
+		bounds->top = 0;
+		bounds->right = 0;
+		bounds->bottom = 0;
+		return;
+	}
+
+	bounds->left = minX;
+	bounds->top = minY;
+	bounds->right = maxX;
+	bounds->bottom = maxY;
+}
 
 static u8 randomCacheSlot()
 {
@@ -89,7 +192,7 @@ static void invalidateSpriteCache(const u8 spriteNum)
 	}
 }
 
-static const u8* getSpriteFrame(const u8 spriteId)
+static const u8* getSpriteFrame(const u8 spriteId, sprite_bounds_t* bounds)
 {
 	u8 slot;
 	u8 spriteNum = (spriteId >> 3) & SPRITE_NUM_MASK;
@@ -99,7 +202,16 @@ static const u8* getSpriteFrame(const u8 spriteId)
 	HANDLE segHandle = spriteSegs[spriteNum];
 
 	if(segHandle <= 0 || frameCount == 0)
-		return &testPatternSprite[0];
+	{
+		if(!testPatternCached)
+		{
+			prepareSpriteFrame(&testPatternSprite[0], &testPatternCache[0], &testPatternBounds);
+			testPatternCached = TRUE;
+		}
+
+		*bounds = testPatternBounds;
+		return &testPatternCache[0];
+	}
 
 	while(frameNum >= frameCount)
 		frameNum -= frameCount;
@@ -109,15 +221,20 @@ static const u8* getSpriteFrame(const u8 spriteId)
 	for(slot = 0; slot < SPRITE_CACHE_FRAMES; slot++)
 	{
 		if(spriteCacheEntries[slot].valid && spriteCacheEntries[slot].spriteId == cacheSpriteId)
+		{
+			*bounds = spriteCacheBounds[slot];
 			return cacheFramePtr(slot);
+		}
 	}
 
 	slot = chooseCacheSlot();
-	p_sgcopyfr(segHandle, ((u32)frameNum) * SPRITE_BYTES, cacheFramePtr(slot), SPRITE_BYTES);
+	p_sgcopyfr(segHandle, ((u32)frameNum) * SPRITE_BYTES, &spriteLoadBuffer[0], SPRITE_BYTES);
+	prepareSpriteFrame(&spriteLoadBuffer[0], cacheFramePtr(slot), &spriteCacheBounds[slot]);
 
 	spriteCacheEntries[slot].spriteId = cacheSpriteId;
 	spriteCacheEntries[slot].valid = TRUE;
 
+	*bounds = spriteCacheBounds[slot];
 	return cacheFramePtr(slot);
 }
 
@@ -255,6 +372,7 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 	s16 left;
 	s16 right;
 	s16 x;
+	s16 y;
 	s16 xStart;
 	s16 xEnd;
 	s16 top;
@@ -263,8 +381,10 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 	s16 yEnd;
 	s16 sourceXStep;
 	s16 sourceYStep;
-	s16 sourceXAcc;
+	s16 sourceYAcc;
+	s16 boundOffset;
 	const u8* spriteData;
+	sprite_bounds_t bounds;
 
 	if(height <= 0)
 		return;
@@ -302,57 +422,85 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 	if(yStart >= yEnd)
 		return;
 
+	spriteData = getSpriteFrame(spriteHit->spriteId, &bounds);
+
+	if(bounds.right == 0)
+		return;
+
 	sourceXStep = (s16)((SPRITE_SIZE << SPRITE_SCALE_BITS) / width);
 	sourceYStep = (s16)((SPRITE_SIZE << SPRITE_SCALE_BITS) / height);
-	sourceXAcc = (s16)((s32)(xStart - left) * sourceXStep);
-	spriteData = getSpriteFrame(spriteHit->spriteId);
 
-	for(x = xStart; x < xEnd; x++)
+	boundOffset = (s16)((((s32)bounds.left << SPRITE_SCALE_BITS) +
+		sourceXStep - 1) / sourceXStep);
+	if(xStart < left + boundOffset)
+		xStart = left + boundOffset;
+
+	boundOffset = (s16)((((s32)bounds.right << SPRITE_SCALE_BITS) +
+		sourceXStep - 1) / sourceXStep);
+	if(xEnd > left + boundOffset)
+		xEnd = left + boundOffset;
+
+	boundOffset = (s16)((((s32)bounds.top << SPRITE_SCALE_BITS) +
+		sourceYStep - 1) / sourceYStep);
+	if(yStart < top + boundOffset)
+		yStart = top + boundOffset;
+
+	boundOffset = (s16)((((s32)bounds.bottom << SPRITE_SCALE_BITS) +
+		sourceYStep - 1) / sourceYStep);
+	if(yEnd > top + boundOffset)
+		yEnd = top + boundOffset;
+
+	if(xStart >= xEnd || yStart >= yEnd)
+		return;
+
+	sourceYAcc = (s16)((s32)(yStart - top) * sourceYStep);
+
+	for(y = yStart; y < yEnd; y++)
 	{
-		u16 sourceX = sourceXAcc >> SPRITE_SCALE_BITS;
-		const u8* sourceCol;
-		u16 offset;
-		u8 mask;
-		u8 keepMask;
-		s16 sourceYAcc;
-		s16 y;
+		u16 sourceY = sourceYAcc >> SPRITE_SCALE_BITS;
+		const u8* sourceRow = spriteData + (sourceY << 4);
+		s16 sourceXAcc = (s16)((s32)(xStart - left) * sourceXStep);
+		u16 offset = (y << 5) + (xStart >> 3);
 
-		sourceCol = spriteData + (sourceX << 4);
-		offset = (yStart << 5) + (x >> 3);
-		mask = 1 << (x & 7);
-		keepMask = ~mask;
-		sourceYAcc = (s16)((s32)(yStart - top) * sourceYStep);
-
-		for(y = yStart; y < yEnd; y++)
+		x = xStart;
+		while(x < xEnd)
 		{
-			u16 sourceY = sourceYAcc >> SPRITE_SCALE_BITS;
-			u8 packed;
-			u8 pix;
+			u8 opaqueMask = 0;
+			u8 blackMask = 0;
+			u8 greyMask = 0;
+			u8 count = 8 - (x & 7);
+			u8 i;
 
-			packed = sourceCol[sourceY >> 2];
-			pix = (packed >> ((sourceY & 3) << 1)) & 3;
+			if(count > xEnd - x)
+				count = xEnd - x;
 
-			switch(pix)
+			for(i = 0; i < count; i++)
 			{
-				case SPR_GREY:
-					blackBm[offset] &= keepMask;
-					greyBm[offset] |= mask;
-					break;
-				case SPR_BLACK:
-					blackBm[offset] |= mask;
-					greyBm[offset] &= keepMask;
-					break;
-				case SPR_WHITE:
-					blackBm[offset] &= keepMask;
-					greyBm[offset] &= keepMask;
-					break;
+				u16 sourceX = sourceXAcc >> SPRITE_SCALE_BITS;
+				u8 packed = sourceRow[sourceX >> 2];
+				u8 pix = (packed >> ((sourceX & 3) << 1)) & 3;
+				u8 mask = 1 << ((x + i) & 7);
+
+				if(pix != SPR_TRANSPARENT)
+				{
+					opaqueMask |= mask;
+
+					if(pix == SPR_BLACK)
+						blackMask |= mask;
+					else if(pix == SPR_GREY)
+						greyMask |= mask;
+				}
+
+				sourceXAcc += sourceXStep;
 			}
 
-			sourceYAcc += sourceYStep;
-			offset += SCREEN_ROW_BYTES;
+			blackBm[offset] = (blackBm[offset] & ~opaqueMask) | blackMask;
+			greyBm[offset] = (greyBm[offset] & ~opaqueMask) | greyMask;
+			x += count;
+			offset++;
 		}
 
-		sourceXAcc += sourceXStep;
+		sourceYAcc += sourceYStep;
 	}
 }
 
@@ -366,8 +514,9 @@ void drawSprite(u8 spanX, u8 y, u8 spriteId)
 	s16 xEnd = right;
 	s16 yStart = top;
 	s16 yEnd = bottom;
-	s16 x;
+	s16 yPos;
 	const u8* spriteData;
+	sprite_bounds_t bounds;
 
 	if(xStart < 0)
 		xStart = 0;
@@ -387,49 +536,46 @@ void drawSprite(u8 spanX, u8 y, u8 spriteId)
 	if(yStart >= yEnd)
 		return;
 
-	spriteData = getSpriteFrame(spriteId);
+	spriteData = getSpriteFrame(spriteId, &bounds);
 
-	for(x = xStart; x < xEnd; x++)
+	if(bounds.right == 0)
+		return;
+
+	if(xStart < left + bounds.left)
+		xStart = left + bounds.left;
+
+	if(xEnd > left + bounds.right)
+		xEnd = left + bounds.right;
+
+	if(yStart < top + bounds.top)
+		yStart = top + bounds.top;
+
+	if(yEnd > top + bounds.bottom)
+		yEnd = top + bounds.bottom;
+
+	if(xStart >= xEnd || yStart >= yEnd)
+		return;
+
+	for(yPos = yStart; yPos < yEnd; yPos++)
 	{
-		const u8* sourceCol;
-		u16 offset;
-		u8 mask;
-		u8 keepMask;
-		s16 sourceY;
-		s16 yPos;
+		const u8* sourceRow = spriteData + ((yPos - top) << 4);
+		u16 offset = (yPos << 5) + (xStart >> 3);
+		s16 x = xStart;
 
-		sourceCol = spriteData + ((x - left) << 4);
-		offset = (yStart << 5) + (x >> 3);
-		mask = 1 << (x & 7);
-		keepMask = ~mask;
-		sourceY = yStart - top;
-
-		for(yPos = yStart; yPos < yEnd; yPos++)
+		while(x < xEnd)
 		{
-			u8 packed;
-			u8 pix;
+			u8 packed = sourceRow[(x - left) >> 2];
+			u8 shift = x & 4;
+			u8 opaqueMask = spriteOpaqueMask[packed] << shift;
+			u8 blackMask = spriteBlackMask[packed] << shift;
+			u8 greyMask = spriteGreyMask[packed] << shift;
 
-			packed = sourceCol[sourceY >> 2];
-			pix = (packed >> ((sourceY & 3) << 1)) & 3;
+			blackBm[offset] = (blackBm[offset] & ~opaqueMask) | blackMask;
+			greyBm[offset] = (greyBm[offset] & ~opaqueMask) | greyMask;
+			x += 4;
 
-			switch(pix)
-			{
-				case SPR_GREY:
-					blackBm[offset] &= keepMask;
-					greyBm[offset] |= mask;
-					break;
-				case SPR_BLACK:
-					blackBm[offset] |= mask;
-					greyBm[offset] &= keepMask;
-					break;
-				case SPR_WHITE:
-					blackBm[offset] &= keepMask;
-					greyBm[offset] &= keepMask;
-					break;
-			}
-
-			sourceY++;
-			offset += SCREEN_ROW_BYTES;
+			if(!(x & 7))
+				offset++;
 		}
 	}
 }
