@@ -7,7 +7,7 @@ $InputPath = ""
 $Name = "spriteData"
 $OutputPath = ""
 $Raw = $false
-$WhiteTransparent = $true
+$WhiteTransparent = $false
 
 for($argIndex = 0; $argIndex -lt $args.Count; $argIndex++)
 {
@@ -119,24 +119,79 @@ try
 	}
 
 	$bytes = New-Object System.Collections.Generic.List[byte]
+	$minX = 64
+	$minY = 64
+	$maxX = 0
+	$maxY = 0
+	$bandLeft = @(16, 16, 16, 16, 16, 16, 16, 16)
+	$bandRight = @(-1, -1, -1, -1, -1, -1, -1, -1)
 
-	for($x = 0; $x -lt 64; $x++)
+	# Render-ready row-major data: four horizontal 2bpp pixels per byte.
+	for($y = 0; $y -lt 64; $y++)
 	{
-		for($y = 0; $y -lt 64; $y += 4)
+		for($x = 0; $x -lt 64; $x += 4)
 		{
 			$packed = 0
 
 			for($bit = 0; $bit -lt 4; $bit++)
 			{
-				$pixel = Get-Sprite-PixelValue $bitmap.GetPixel($x, $y + $bit)
+				$pixel = Get-Sprite-PixelValue $bitmap.GetPixel($x + $bit, $y)
 				$packed = $packed -bor ($pixel -shl ($bit * 2))
 			}
 
 			$bytes.Add([byte]$packed)
+
+			if($packed -ne 0)
+			{
+				$band = $y -shr 3
+				$group = $x -shr 2
+
+				if($x -lt $minX) { $minX = $x }
+				if($x + 4 -gt $maxX) { $maxX = $x + 4 }
+				if($y -lt $minY) { $minY = $y }
+				if($y + 1 -gt $maxY) { $maxY = $y + 1 }
+				if($group -lt $bandLeft[$band]) { $bandLeft[$band] = $group }
+				if($group -gt $bandRight[$band]) { $bandRight[$band] = $group }
+			}
 		}
 	}
 
-	$rawBytes = $bytes.ToArray()
+	if($minX -eq 64)
+	{
+		$minX = 0
+		$minY = 0
+		$maxX = 0
+		$maxY = 0
+	}
+
+	$fileBytes = New-Object System.Collections.Generic.List[byte]
+	$fileBytes.Add(0x53) # S
+	$fileBytes.Add(0x50) # P
+	$fileBytes.Add(0x52) # R
+	$fileBytes.Add(0x01) # format version
+	$fileBytes.Add([byte]$minX)
+	$fileBytes.Add([byte]$minY)
+	$fileBytes.Add([byte]$maxX)
+	$fileBytes.Add([byte]$maxY)
+
+	for($band = 0; $band -lt 8; $band++)
+	{
+		if($bandRight[$band] -lt 0)
+		{
+			$fileBytes.Add(0xf0)
+		}
+		else
+		{
+			$fileBytes.Add([byte](($bandLeft[$band] -shl 4) -bor $bandRight[$band]))
+		}
+	}
+
+	foreach($value in $bytes)
+	{
+		$fileBytes.Add($value)
+	}
+
+	$rawBytes = $fileBytes.ToArray()
 
 	if($Raw)
 	{
@@ -169,13 +224,13 @@ try
 	}
 
 	$lines = New-Object System.Collections.Generic.List[string]
-	$lines.Add("static u8 $Name[SPRITE_BYTES] =")
+	$lines.Add("static const u8 $Name[] =")
 	$lines.Add("{")
 
-	for($i = 0; $i -lt $bytes.Count; $i += 16)
+	for($i = 0; $i -lt $fileBytes.Count; $i += 16)
 	{
-		$slice = $bytes.GetRange($i, 16) | ForEach-Object { Format-HexByte $_ }
-		$suffix = if($i + 16 -lt $bytes.Count) { "," } else { "" }
+		$slice = $fileBytes.GetRange($i, 16) | ForEach-Object { Format-HexByte $_ }
+		$suffix = if($i + 16 -lt $fileBytes.Count) { "," } else { "" }
 		$lines.Add("`t" + ($slice -join ", ") + $suffix)
 	}
 

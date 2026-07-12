@@ -9,8 +9,9 @@
 
 
 #define SPRITE_SIZE 64
-#define SPRITE_COL_BYTES 16
-#define SPRITE_BYTES (SPRITE_SIZE * SPRITE_COL_BYTES)
+#define SPRITE_ROW_BYTES 16
+#define SPRITE_BYTES (SPRITE_SIZE * SPRITE_ROW_BYTES)
+#define SPRITE_HEADER_BYTES 16
 #define SPRITE_MAX_FRAMES 8
 #define SPRITE_FRAME_PARAS (SPRITE_BYTES / 16)
 #define SPRITE_SCALE_BITS 8
@@ -51,18 +52,20 @@ typedef struct sprite_bounds_t
 	u8 top;
 	u8 right;
 	u8 bottom;
+	u8 bands[8];
 } sprite_bounds_t;
 
 static u8 spriteLoadBuffer[SPRITE_BYTES];
+static u8 spriteHeader[SPRITE_HEADER_BYTES];
 static HANDLE spriteSegs[SPRITE_MAX_SPRITES];
 static u8 spriteFrameCounts[SPRITE_MAX_SPRITES];
+static sprite_bounds_t spriteFrameBounds[SPRITE_MAX_SPRITES][SPRITE_MAX_FRAMES];
 static u8 spriteCache[SPRITE_CACHE_FRAMES * SPRITE_BYTES];
 static u8 testPatternCache[SPRITE_BYTES];
 static u8 spriteOpaqueMask[256];
 static u8 spriteBlackMask[256];
 static u8 spriteGreyMask[256];
 static sprite_cache_entry_t spriteCacheEntries[SPRITE_CACHE_FRAMES];
-static sprite_bounds_t spriteCacheBounds[SPRITE_CACHE_FRAMES];
 static sprite_bounds_t testPatternBounds;
 static u16 spriteCacheRand = 0xace1;
 static u8 testPatternCached = FALSE;
@@ -94,7 +97,7 @@ static void prepareSpriteMasks()
 	spriteMasksReady = TRUE;
 }
 
-/* Cached sprites are transposed from file-order columns to packed rows. */
+/* Prepare the built-in legacy test pattern in the render-ready format. */
 static void prepareSpriteFrame(const u8* source, u8* dest, sprite_bounds_t* bounds)
 {
 	u16 y;
@@ -102,6 +105,10 @@ static void prepareSpriteFrame(const u8* source, u8* dest, sprite_bounds_t* boun
 	u8 minY = SPRITE_SIZE;
 	u8 maxX = 0;
 	u8 maxY = 0;
+	u8 band;
+
+	for(band = 0; band < 8; band++)
+		bounds->bands[band] = 0xf0;
 
 	if(!spriteMasksReady)
 		prepareSpriteMasks();
@@ -128,6 +135,25 @@ static void prepareSpriteFrame(const u8* source, u8* dest, sprite_bounds_t* boun
 
 			if(packed != 0)
 			{
+				u8 leftGroup = bounds->bands[y >> 3] >> 4;
+				u8 rightGroup = bounds->bands[y >> 3] & 0x0f;
+				u8 group = x >> 2;
+
+				if(leftGroup > rightGroup)
+				{
+					leftGroup = group;
+					rightGroup = group;
+				}
+				else
+				{
+					if(group < leftGroup)
+						leftGroup = group;
+					if(group > rightGroup)
+						rightGroup = group;
+				}
+
+				bounds->bands[y >> 3] = (leftGroup << 4) | rightGroup;
+
 				if(x < minX)
 					minX = x;
 				if(x + 4 > maxX)
@@ -201,6 +227,9 @@ static const u8* getSpriteFrame(const u8 spriteId, sprite_bounds_t* bounds)
 	u8 cacheSpriteId;
 	HANDLE segHandle = spriteSegs[spriteNum];
 
+	if(!spriteMasksReady)
+		prepareSpriteMasks();
+
 	if(segHandle <= 0 || frameCount == 0)
 	{
 		if(!testPatternCached)
@@ -217,25 +246,46 @@ static const u8* getSpriteFrame(const u8 spriteId, sprite_bounds_t* bounds)
 		frameNum -= frameCount;
 
 	cacheSpriteId = (spriteNum << 3) | frameNum;
+	*bounds = spriteFrameBounds[spriteNum][frameNum];
 
 	for(slot = 0; slot < SPRITE_CACHE_FRAMES; slot++)
 	{
 		if(spriteCacheEntries[slot].valid && spriteCacheEntries[slot].spriteId == cacheSpriteId)
-		{
-			*bounds = spriteCacheBounds[slot];
 			return cacheFramePtr(slot);
-		}
 	}
 
 	slot = chooseCacheSlot();
-	p_sgcopyfr(segHandle, ((u32)frameNum) * SPRITE_BYTES, &spriteLoadBuffer[0], SPRITE_BYTES);
-	prepareSpriteFrame(&spriteLoadBuffer[0], cacheFramePtr(slot), &spriteCacheBounds[slot]);
+	p_sgcopyfr(segHandle, ((u32)frameNum) * SPRITE_BYTES, cacheFramePtr(slot), SPRITE_BYTES);
 
 	spriteCacheEntries[slot].spriteId = cacheSpriteId;
 	spriteCacheEntries[slot].valid = TRUE;
 
-	*bounds = spriteCacheBounds[slot];
 	return cacheFramePtr(slot);
+}
+
+static u16 readSpriteHeader(VOID* fileHandle, sprite_bounds_t* bounds)
+{
+	INT bytesRead = p_read(fileHandle, &spriteHeader[0], SPRITE_HEADER_BYTES);
+	u8 band;
+
+	if(bytesRead != SPRITE_HEADER_BYTES ||
+		spriteHeader[0] != 'S' || spriteHeader[1] != 'P' ||
+		spriteHeader[2] != 'R' || spriteHeader[3] != 1)
+		return FALSE;
+
+	bounds->left = spriteHeader[4];
+	bounds->top = spriteHeader[5];
+	bounds->right = spriteHeader[6];
+	bounds->bottom = spriteHeader[7];
+
+	for(band = 0; band < 8; band++)
+		bounds->bands[band] = spriteHeader[8 + band];
+
+	if(bounds->left > bounds->right || bounds->right > SPRITE_SIZE ||
+		bounds->top > bounds->bottom || bounds->bottom > SPRITE_SIZE)
+		return FALSE;
+
+	return TRUE;
 }
 
 HANDLE loadSprite(TEXT* baseName, u8 id)
@@ -261,6 +311,12 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 				return 0;
 
 			break;
+		}
+
+		if(!readSpriteHeader(fileHandle, &spriteFrameBounds[spriteNum][frame]))
+		{
+			p_close(fileHandle);
+			return 0;
 		}
 
 		bytesRead = p_read(fileHandle, &spriteLoadBuffer[0], SPRITE_BYTES);
@@ -302,6 +358,13 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 
 		if(p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
 		{
+			p_sgclose(segHandle);
+			return 0;
+		}
+
+		if(!readSpriteHeader(fileHandle, &spriteFrameBounds[spriteNum][frame]))
+		{
+			p_close(fileHandle);
 			p_sgclose(segHandle);
 			return 0;
 		}
@@ -383,8 +446,11 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 	s16 sourceYStep;
 	s16 sourceYAcc;
 	s16 boundOffset;
+	s16 bandXStart[8];
+	s16 bandXEnd[8];
 	const u8* spriteData;
 	sprite_bounds_t bounds;
+	u8 band;
 
 	if(height <= 0)
 		return;
@@ -453,17 +519,47 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 	if(xStart >= xEnd || yStart >= yEnd)
 		return;
 
+	for(band = 0; band < 8; band++)
+	{
+		u8 bandBounds = bounds.bands[band];
+		u8 bandLeft = bandBounds >> 4;
+		u8 bandRight = bandBounds & 0x0f;
+
+		if(bandLeft > bandRight)
+		{
+			bandXStart[band] = 0;
+			bandXEnd[band] = 0;
+			continue;
+		}
+
+		boundOffset = (s16)((((s32)(bandLeft << 2) << SPRITE_SCALE_BITS) +
+			sourceXStep - 1) / sourceXStep);
+		bandXStart[band] = left + boundOffset;
+		if(bandXStart[band] < xStart)
+			bandXStart[band] = xStart;
+
+		boundOffset = (s16)((((s32)((bandRight + 1) << 2) << SPRITE_SCALE_BITS) +
+			sourceXStep - 1) / sourceXStep);
+		bandXEnd[band] = left + boundOffset;
+		if(bandXEnd[band] > xEnd)
+			bandXEnd[band] = xEnd;
+	}
+
 	sourceYAcc = (s16)((s32)(yStart - top) * sourceYStep);
 
 	for(y = yStart; y < yEnd; y++)
 	{
 		u16 sourceY = sourceYAcc >> SPRITE_SCALE_BITS;
 		const u8* sourceRow = spriteData + (sourceY << 4);
-		s16 sourceXAcc = (s16)((s32)(xStart - left) * sourceXStep);
-		u16 offset = (y << 5) + (xStart >> 3);
+		s16 rowXEnd = bandXEnd[sourceY >> 3];
+		s16 sourceXAcc;
+		u16 offset;
 
-		x = xStart;
-		while(x < xEnd)
+		x = bandXStart[sourceY >> 3];
+		sourceXAcc = (s16)((s32)(x - left) * sourceXStep);
+		offset = (y << 5) + (x >> 3);
+
+		while(x < rowXEnd)
 		{
 			u8 opaqueMask = 0;
 			u8 blackMask = 0;
@@ -471,8 +567,8 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 			u8 count = 8 - (x & 7);
 			u8 i;
 
-			if(count > xEnd - x)
-				count = xEnd - x;
+			if(count > rowXEnd - x)
+				count = rowXEnd - x;
 
 			for(i = 0; i < count; i++)
 			{
@@ -558,11 +654,32 @@ void drawSprite(u8 spanX, u8 y, u8 spriteId)
 
 	for(yPos = yStart; yPos < yEnd; yPos++)
 	{
-		const u8* sourceRow = spriteData + ((yPos - top) << 4);
-		u16 offset = (yPos << 5) + (xStart >> 3);
-		s16 x = xStart;
+		u8 sourceY = yPos - top;
+		u8 bandBounds = bounds.bands[sourceY >> 3];
+		u8 bandLeft = bandBounds >> 4;
+		u8 bandRight = bandBounds & 0x0f;
+		const u8* sourceRow;
+		u16 offset;
+		s16 rowXStart;
+		s16 rowXEnd;
+		s16 x;
 
-		while(x < xEnd)
+		if(bandLeft > bandRight)
+			continue;
+
+		rowXStart = left + (bandLeft << 2);
+		rowXEnd = left + ((bandRight + 1) << 2);
+
+		if(rowXStart < xStart)
+			rowXStart = xStart;
+		if(rowXEnd > xEnd)
+			rowXEnd = xEnd;
+
+		sourceRow = spriteData + (sourceY << 4);
+		offset = (yPos << 5) + (rowXStart >> 3);
+		x = rowXStart;
+
+		while(x < rowXEnd)
 		{
 			u8 packed = sourceRow[(x - left) >> 2];
 			u8 shift = x & 4;

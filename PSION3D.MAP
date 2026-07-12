@@ -1,14 +1,14 @@
 
  Start  Stop   Length Name               Class              Group
 
- 00000H 02E67H 02E67H _TEXT              CODE               (none)
- 02E70H 03E70H 01000H STACK              STACK              (none)
- 03E70H 04E70H 01000H _MAGIC             MAGIC              DGROUP 
- 04E70H 04E72H 00002H _INIT              DATA               DGROUP 
- 04E72H 05B8AH 00D18H _CONST             DATA               DGROUP 
- 05B90H 05BDFH 0004FH _DATA              DATA               DGROUP 
- 05BE0H 0D455H 07875H _BSS               BSS                DGROUP 
- 0D450H 0D452H 00002H BSS_END            BSS                DGROUP 
+ 00000H 030ADH 030ADH _TEXT              CODE               (none)
+ 030B0H 040B0H 01000H STACK              STACK              (none)
+ 040B0H 050B0H 01000H _MAGIC             MAGIC              DGROUP 
+ 050B0H 050B2H 00002H _INIT              DATA               DGROUP 
+ 050B2H 05DCAH 00D18H _CONST             DATA               DGROUP 
+ 05DD0H 05E1FH 0004FH _DATA              DATA               DGROUP 
+ 05E20H 0E28DH 0846DH _BSS               BSS                DGROUP 
+ 0E290H 0E29AH 0000AH BSS_END            BSS                DGROUP 
 
   Address         Publics by Value
 
@@ -37,129 +37,129 @@
  0000:117D       _initPlayer
  0000:11B1       _updatePlayer
  0000:194E       _draw
- 0000:20F0       _loadSprite
- 0000:2254       _projectSprite
- 0000:22E9       _drawProjectedSprite
- 0000:25A0       _drawSprite
- 0000:2717       _drawDbgText
- 0000:2734       _loadMapData
- 0000:275F       _getCellEncoding
- 0000:27DA       _loadMap
- 0000:289E       _disableMemProtection
- 0000:28A3       _enableMemProtection
- 0000:28A8       _blitVideoMem
- 0000:2B49       _main
- 0000:2BB0       _p_atob
- 0000:2BB5       _p_atos
- 0000:2BD3       _p_close
- 0000:2BDB       _p_setirpowerlevel
- 0000:2BE0       _p_returntickcount
- 0000:2BE5       _p_open
- 0000:2BF3       _p_read
- 0000:2BFB       _p_getscancodes
- 0000:2C00       _p_sgclose
- 0000:2C0A       _p_sgcopyfr
- 0000:2C14       _p_sgcopyto
- 0000:2C1E       _p_sgcreate
- 0000:2C26       _p_slen
- 0000:2C29       _wConnect
- 0000:2C2E       _wInvalidateWin
- 0000:2C33       _wValidateWin
- 0000:2C38       _wEndRedraw
- 0000:2C3D       _wCreateWindow
- 0000:2C42       _wInitialiseWindowTree
- 0000:2C47       _gPrintText
- 0000:2C4C       _gCreateGC
- 0000:2C51       _wGetEventSpecial
- 0000:2C56       _wGetEventWait
- 0000:2C63       _wFlush
- 0000:2C68       _wBeginRedrawWinGC0
- 0000:2C6F       _gCreateGC0
- 0000:2C76       _wCompatibilityMode
- 0000:2C7E       __FatalErrorPos
- 0000:2C87       __FatalError
- 0000:2C8B       _ExtCatTable
- 0000:2C8B       _ClassTable
- 0000:2C8D       N$StdRet
- 0000:2C97       N$SgnMol
- 0000:2C97       N$UnsMol
- 0000:2CF6       N$SgnDiv
- 0000:2DAF       N$UnsMul
- 0000:2DF3       N$LngShl
- 0000:2DFE       N$LngShr
- 0000:2E09       N$CnsStk
- 0000:2E0F       N$CnsPtr
- 0000:2E15       N$CnsIdx
- 0000:2E1B       N$CnsOvr
- 0000:2E21       N$CnsRng
- 0000:2E27       N$CnsRet
- 0000:2E2D       N$CnsCase
- 0000:2E33       N$CnsDiv
- 0000:2E39       N$CnsPVC
- 0000:2E63       __FloatInit
- 0000:2E66       __FloatJmpRestore
- 0000:2E66       __FloatFinish
- 0000:2E66       __FloatJmpSave
- 0000:2E66       __FloatMathExcepDos
- 0000:2E66       __FloatInitInstance
- 03E7:0000       _DatWordDead
- 03E7:0002       _DatHandNext
- 03E7:0004       _DatHandPrev
- 03E7:0006       _DatCountrySeg
- 03E7:0008       _DatClassHandle
- 03E7:000A       _DatClassPtr
- 03E7:000C       _DatEClassHandle
- 03E7:000E       _DatEClassPtr
- 03E7:0010       _DatEnterFramePtr
- 03E7:0012       _w_ws
- 03E7:0014       _w_am
- 03E7:0016       _wClientData
- 03E7:0018       _wserv_channel
- 03E7:001A       _T
- 03E7:001C       _r
- 03E7:001E       _DatOsFramePtr
- 03E7:0020       _DatATFlag
- 03E7:0021       _DatHeapLocked
- 03E7:0022       _DatProcessNamePtr
- 03E7:0024       _DatCommandPtr
- 03E7:0026       _DatTest
- 03E7:0028       _DatApp1
- 03E7:002A       _DatApp2
- 03E7:002C       _DatApp3
- 03E7:002E       _DatApp4
- 03E7:0030       _DatApp5
- 03E7:0032       _DatApp6
- 03E7:0034       _DatApp7
- 03E7:0036       _DatDialogPtr
- 03E7:0038       _DatGate
- 03E7:003A       _DatLocked
- 03E7:003C       _DatStatusNamePtr
- 03E7:003E       _DatUsedPathNamePtr
- 03E7:1000       __init_begin
- 03E7:1002       __const_start
- 03E7:1002       __init_start
- 03E7:1004       _weapons
- 03E7:14FE       _sincos_tab
- 03E7:1D20       __data_start
- 03E7:1D20       CoreSig@CnsHandler
- 03E7:1D22       @InitPointer
- 03E7:1D24       @InitPriority
- 03E7:1D25       _blackBm
- 03E7:1D27       _greyBm
- 03E7:1D39       _enemyCount
- 03E7:1D3D       _player
- 03E7:1D68       _keys
- 03E7:1D70       __bss_start
- 03E7:1D70       __SH_sword
- 03E7:1D72       @InitCount
- 03E7:1D74       @InitEnd
- 03E7:1D76       @InitDone
- 03E7:1D78       @ExitCode
- 03E7:1D7A       @StackContextSP
- 03E7:1D7C       @StackContextBP
- 03E7:1D7E       _screenBm
- 03E7:457E       _enemyList
- 03E7:75B2       _map
- 03E7:95E0       __bss_end
+ 0000:21B8       _loadSprite
+ 0000:2383       _projectSprite
+ 0000:2418       _drawProjectedSprite
+ 0000:27A0       _drawSprite
+ 0000:295C       _drawDbgText
+ 0000:2979       _loadMapData
+ 0000:29A4       _getCellEncoding
+ 0000:2A1F       _loadMap
+ 0000:2AE4       _disableMemProtection
+ 0000:2AE9       _enableMemProtection
+ 0000:2AEE       _blitVideoMem
+ 0000:2D8F       _main
+ 0000:2DF6       _p_atob
+ 0000:2DFB       _p_atos
+ 0000:2E19       _p_close
+ 0000:2E21       _p_setirpowerlevel
+ 0000:2E26       _p_returntickcount
+ 0000:2E2B       _p_open
+ 0000:2E39       _p_read
+ 0000:2E41       _p_getscancodes
+ 0000:2E46       _p_sgclose
+ 0000:2E50       _p_sgcopyfr
+ 0000:2E5A       _p_sgcopyto
+ 0000:2E64       _p_sgcreate
+ 0000:2E6C       _p_slen
+ 0000:2E6F       _wConnect
+ 0000:2E74       _wInvalidateWin
+ 0000:2E79       _wValidateWin
+ 0000:2E7E       _wEndRedraw
+ 0000:2E83       _wCreateWindow
+ 0000:2E88       _wInitialiseWindowTree
+ 0000:2E8D       _gPrintText
+ 0000:2E92       _gCreateGC
+ 0000:2E97       _wGetEventSpecial
+ 0000:2E9C       _wGetEventWait
+ 0000:2EA9       _wFlush
+ 0000:2EAE       _wBeginRedrawWinGC0
+ 0000:2EB5       _gCreateGC0
+ 0000:2EBC       _wCompatibilityMode
+ 0000:2EC4       __FatalErrorPos
+ 0000:2ECD       __FatalError
+ 0000:2ED1       _ExtCatTable
+ 0000:2ED1       _ClassTable
+ 0000:2ED3       N$StdRet
+ 0000:2EDD       N$SgnMol
+ 0000:2EDD       N$UnsMol
+ 0000:2F3C       N$SgnDiv
+ 0000:2FF5       N$UnsMul
+ 0000:3039       N$LngShl
+ 0000:3044       N$LngShr
+ 0000:304F       N$CnsStk
+ 0000:3055       N$CnsPtr
+ 0000:305B       N$CnsIdx
+ 0000:3061       N$CnsOvr
+ 0000:3067       N$CnsRng
+ 0000:306D       N$CnsRet
+ 0000:3073       N$CnsCase
+ 0000:3079       N$CnsDiv
+ 0000:307F       N$CnsPVC
+ 0000:30A9       __FloatInit
+ 0000:30AC       __FloatJmpRestore
+ 0000:30AC       __FloatFinish
+ 0000:30AC       __FloatJmpSave
+ 0000:30AC       __FloatMathExcepDos
+ 0000:30AC       __FloatInitInstance
+ 040B:0000       _DatWordDead
+ 040B:0002       _DatHandNext
+ 040B:0004       _DatHandPrev
+ 040B:0006       _DatCountrySeg
+ 040B:0008       _DatClassHandle
+ 040B:000A       _DatClassPtr
+ 040B:000C       _DatEClassHandle
+ 040B:000E       _DatEClassPtr
+ 040B:0010       _DatEnterFramePtr
+ 040B:0012       _w_ws
+ 040B:0014       _w_am
+ 040B:0016       _wClientData
+ 040B:0018       _wserv_channel
+ 040B:001A       _T
+ 040B:001C       _r
+ 040B:001E       _DatOsFramePtr
+ 040B:0020       _DatATFlag
+ 040B:0021       _DatHeapLocked
+ 040B:0022       _DatProcessNamePtr
+ 040B:0024       _DatCommandPtr
+ 040B:0026       _DatTest
+ 040B:0028       _DatApp1
+ 040B:002A       _DatApp2
+ 040B:002C       _DatApp3
+ 040B:002E       _DatApp4
+ 040B:0030       _DatApp5
+ 040B:0032       _DatApp6
+ 040B:0034       _DatApp7
+ 040B:0036       _DatDialogPtr
+ 040B:0038       _DatGate
+ 040B:003A       _DatLocked
+ 040B:003C       _DatStatusNamePtr
+ 040B:003E       _DatUsedPathNamePtr
+ 040B:1000       __init_begin
+ 040B:1002       __const_start
+ 040B:1002       __init_start
+ 040B:1004       _weapons
+ 040B:14FE       _sincos_tab
+ 040B:1D20       __data_start
+ 040B:1D20       CoreSig@CnsHandler
+ 040B:1D22       @InitPointer
+ 040B:1D24       @InitPriority
+ 040B:1D25       _blackBm
+ 040B:1D27       _greyBm
+ 040B:1D39       _enemyCount
+ 040B:1D3D       _player
+ 040B:1D68       _keys
+ 040B:1D70       __bss_start
+ 040B:1D70       __SH_sword
+ 040B:1D72       @InitCount
+ 040B:1D74       @InitEnd
+ 040B:1D76       @InitDone
+ 040B:1D78       @ExitCode
+ 040B:1D7A       @StackContextSP
+ 040B:1D7C       @StackContextBP
+ 040B:1D7E       _screenBm
+ 040B:457E       _enemyList
+ 040B:81AA       _map
+ 040B:A1E0       __bss_end
 
 Program entry point at 0000:0000

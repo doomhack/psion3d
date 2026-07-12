@@ -23,9 +23,9 @@ Generated outputs (`*.OBJ`, `*.MAP`, `PSION3D.EXE`, `PSION3D.IMG`) currently liv
 
 The build requires the Psion/SIBO SDK tools (`checkvid`, `tsc`) on `PATH`. `unnamed.pr` lists modules with `#compile`; when adding a `.c` file, add it there and update link settings if the linker reports unresolved symbols.
 
-Sprite assets are converted with `tools\convert_sprite.bat`. For raw `.spr` files, avoid PowerShell redirection because `> file.spr` can encode native stdout as UTF-16 and produce a 2054-byte file. Use `.\tools\convert_sprite.bat /f tools\health.png health.0.spr` or `-OutputPath`; a single 64x64 sprite frame should be exactly 1024 bytes. Runtime sprites are stored as one frame per file named `baseName0.spr` through `baseName7.spr`; `loadSprite("sci", 0)` loads `sci0.spr`, then optional subsequent frames until the first missing file. Sprite segments are sized to the number of loaded frames, not the 8-frame maximum.
+Sprite assets are converted with `tools\convert_sprite.bat`. For raw `.spr` files, avoid PowerShell redirection because it can alter binary output; use `.\tools\convert_sprite.bat /f tools\health.png health0.spr` or `-OutputPath`. A 64x64 sprite frame is 1040 bytes: a 16-byte metadata header followed by a 1024-byte row-major 2bpp payload. Only the paragraph-aligned payload is copied into the sprite segment. Runtime sprites are stored as one frame per file named `baseName0.spr` through `baseName7.spr`; `loadSprite("sci", 0)` loads `sci0.spr`, then optional subsequent frames until the first missing file. Sprite segments are sized to the number of loaded frames, not the 8-frame maximum.
 
-Sprite pixels are packed 2bpp with values `0=transparent`, `1=grey`, `2=black`, and `3=white`. The converter defaults to treating near-white as transparent; pass `-WhiteTransparent false` when white sprite pixels should render as white.
+Sprite pixels are packed 2bpp with values `0=transparent`, `1=grey`, `2=black`, and `3=white`. The converter preserves near-white pixels as white by default; pass `-WhiteTransparent true` only when near-white should be transparent.
 
 There is no automated test suite. Verify by building, running the resulting `PSION3D.EXE` or `PSION3D.IMG` in the target emulator/device, and checking rendering, movement, sprite occlusion, and map boundary behavior.
 
