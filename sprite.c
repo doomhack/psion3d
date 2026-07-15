@@ -71,6 +71,25 @@ static u16 spriteCacheRand = 0xace1;
 static u8 testPatternCached = FALSE;
 static u8 spriteMasksReady = FALSE;
 
+static void mirrorSpriteBounds(sprite_bounds_t* bounds)
+{
+	u8 left = bounds->left;
+	u8 band;
+
+	bounds->left = SPRITE_SIZE - bounds->right;
+	bounds->right = SPRITE_SIZE - left;
+
+	for(band = 0; band < 8; band++)
+	{
+		u8 bandBounds = bounds->bands[band];
+		u8 bandLeft = bandBounds >> 4;
+		u8 bandRight = bandBounds & 0x0f;
+
+		if(bandLeft <= bandRight)
+			bounds->bands[band] = ((15 - bandRight) << 4) | (15 - bandLeft);
+	}
+}
+
 static void prepareSpriteMasks()
 {
 	u16 packed;
@@ -443,6 +462,7 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 	s16 yStart;
 	s16 yEnd;
 	s16 sourceXStep;
+	s16 sourceXAdvance;
 	s16 sourceYStep;
 	s16 sourceYAcc;
 	s16 boundOffset;
@@ -492,6 +512,9 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 
 	if(bounds.right == 0)
 		return;
+
+	if(spriteHit->mirrored)
+		mirrorSpriteBounds(&bounds);
 
 	sourceXStep = (s16)((SPRITE_SIZE << SPRITE_SCALE_BITS) / width);
 	sourceYStep = (s16)((SPRITE_SIZE << SPRITE_SCALE_BITS) / height);
@@ -545,6 +568,8 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 			bandXEnd[band] = xEnd;
 	}
 
+	sourceXAdvance = spriteHit->mirrored ? -sourceXStep : sourceXStep;
+
 	sourceYAcc = (s16)((s32)(yStart - top) * sourceYStep);
 
 	for(y = yStart; y < yEnd; y++)
@@ -557,6 +582,10 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 
 		x = bandXStart[sourceY >> 3];
 		sourceXAcc = (s16)((s32)(x - left) * sourceXStep);
+
+		if(spriteHit->mirrored)
+			sourceXAcc = ((SPRITE_SIZE << SPRITE_SCALE_BITS) - 1) - sourceXAcc;
+
 		offset = (y << 5) + (x >> 3);
 
 		while(x < rowXEnd)
@@ -573,9 +602,12 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 			for(i = 0; i < count; i++)
 			{
 				u16 sourceX = sourceXAcc >> SPRITE_SCALE_BITS;
-				u8 packed = sourceRow[sourceX >> 2];
-				u8 pix = (packed >> ((sourceX & 3) << 1)) & 3;
+				u8 packed;
+				u8 pix;
 				u8 mask = 1 << ((x + i) & 7);
+
+				packed = sourceRow[sourceX >> 2];
+				pix = (packed >> ((sourceX & 3) << 1)) & 3;
 
 				if(pix != SPR_TRANSPARENT)
 				{
@@ -587,7 +619,7 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 						greyMask |= mask;
 				}
 
-				sourceXAcc += sourceXStep;
+				sourceXAcc += sourceXAdvance;
 			}
 
 			blackBm[offset] = (blackBm[offset] & ~opaqueMask) | blackMask;

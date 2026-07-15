@@ -9,6 +9,7 @@ typedef struct spritehit_t
 	f16 f_spriteDist;
 	u16 spanX;
 	u8 spriteId;
+	u8 mirrored;
 } spritehit_t;
 
 HANDLE loadSprite(TEXT* baseName, u8 id);

@@ -92,9 +92,15 @@ static void enemySetWalkFrame(enemy_t* enemy)
          fpmul(f_dy, fpcos(player.pos.angle));
 
     if(f_side > 0)
+    {
         enemy->spriteFrame = (enemy->stateCounter & 1) ? ENEMY_FRAME_WALK_R1 : ENEMY_FRAME_WALK_R2;
+        enemy->spriteMirrored = FALSE;
+    }
     else
-        enemy->spriteFrame = (enemy->stateCounter & 1) ? ENEMY_FRAME_WALK_L1 : ENEMY_FRAME_WALK_L2;
+    {
+        enemy->spriteFrame = (enemy->stateCounter & 1) ? ENEMY_FRAME_WALK_R1 : ENEMY_FRAME_WALK_R2;
+        enemy->spriteMirrored = TRUE;
+    }
 }
 
 static void enemyMoveTick(const u16 id, enemy_t* enemy)
@@ -348,6 +354,7 @@ u16 getEnemyCell(u16 x, u16 y, s8 cell)
     //Start in idle state.
     enemyList[enemyId].state = ENEMY_STATE_IDLE;
     enemyList[enemyId].spriteFrame = ENEMY_FRAME_IDLE;
+    enemyList[enemyId].spriteMirrored = FALSE;
 
     enemyList[enemyId].stateCounter = SECONDS_TO_TICKS(5);
 

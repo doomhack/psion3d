@@ -30,11 +30,11 @@
 #define ENEMY_FRAME_IDLE 0
 #define ENEMY_FRAME_WALK_R1 1
 #define ENEMY_FRAME_WALK_R2 2
-#define ENEMY_FRAME_WALK_L1 3
-#define ENEMY_FRAME_WALK_L2 4
-#define ENEMY_FRAME_HURT 5
-#define ENEMY_FRAME_AIM 6
-#define ENEMY_FRAME_SHOOT 7
+#define ENEMY_FRAME_HURT 3
+#define ENEMY_FRAME_AIM 4
+#define ENEMY_FRAME_SHOOT 5
+#define ENEMY_FRAME_DYING 6
+#define ENEMY_FRAME_DEATH 7
 
 
 #define ENEMY_TYPE_CIV 0
@@ -59,6 +59,7 @@ typedef struct enemy_t
     u8 state; //ENEMY_STATE_IDLE, ENEMY_STATE_SEARCHING etc. State of enemy.
     u8 spriteId; //Slot of sprite.
     u8 spriteFrame; //Current frame of sprite to draw.
+    u8 spriteMirrored; //Draw the current frame horizontally mirrored.
     u8 health; //Heath of enemy.
     u8 stateCounter; //Decrements per AI tick. Once 0, choose new state and set new stateCounter.
 } enemy_t;

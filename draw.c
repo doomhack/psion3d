@@ -412,6 +412,9 @@ void draw()
 							if(enemy && projectSprite(enemy->x, enemy->y, &spriteHits[spritesHit], f_viewCos, f_viewSin))
 							{
 								spriteHits[spritesHit].spriteId = ((enemy->spriteId << 3) | enemy->spriteFrame);
+								spriteHits[spritesHit].mirrored = enemy->spriteMirrored &&
+									(enemy->spriteFrame == ENEMY_FRAME_WALK_R1 ||
+									 enemy->spriteFrame == ENEMY_FRAME_WALK_R2);
 								spritesHit++;
 							}
 						}
@@ -421,6 +424,7 @@ void draw()
 							{
 								//TODO: Impliment sprite selection here. For now 0..3 are populated
 								spriteHits[spritesHit].spriteId = 0;
+								spriteHits[spritesHit].mirrored = FALSE;
 								spritesHit++;
 							}
 						}
