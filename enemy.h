@@ -55,6 +55,16 @@
 
 #define MAX_ENEMIES 64
 
+typedef struct enemystats_t
+{
+    f16 moveSpeed; //Move and sidestep speed meters per second
+    u8 evadeChance; //0..255 chance of going into evade state.
+    u8 health; //Starting health.
+    u8 damage; //How damage a shot does to the player.
+    u8 accuracy; //..255 chance of enemy hitting the player.
+    u8 spriteId; //Sprite Slot.
+} enemystats_t;
+
 typedef struct enemy_t
 {
     f16 x, y; //Position X, Y
@@ -63,11 +73,11 @@ typedef struct enemy_t
     u8 targetX, targetY; //If searching, destination cell.
     u8 type; //Enemy type. ENEMY_TYPE_CIV, ENEMY_TYPE_MER etc
     u8 state; //ENEMY_STATE_IDLE, ENEMY_STATE_SEARCHING etc. State of enemy.
-    u8 spriteId; //Slot of sprite.
     u8 spriteFrame; //Current frame of sprite to draw.
     u8 spriteMirrored; //Draw the current frame horizontally mirrored.
     u8 health; //Heath of enemy.
     u8 stateCounter; //Decrements per AI tick. Once 0, choose new state and set new stateCounter.
+    const enemystats_t* enemyStats; //Enemy stats.
 } enemy_t;
 
 extern enemy_t enemyList[MAX_ENEMIES];

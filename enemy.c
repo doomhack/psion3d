@@ -15,8 +15,6 @@
 #define ENEMY_ATTACK_DIST_HVY METERS_TO_MAP_CELLS(ENEMY_ATTACK_DIST_HVY_METERS)
 #define ENEMY_ATTACK_MIN_DIST METERS_TO_MAP_CELLS(ENEMY_ATTACK_MIN_DIST_METERS)
 
-#define ENEMY_MOVE_SPEED_MPS flt2fp(4.5f)
-#define ENEMY_MOVE_TICKS fpMetersPerSecondToCellTicks(ENEMY_MOVE_SPEED_MPS)
 #define ENEMY_ATTACK_DELAY SECONDS_TO_TICKS(1)
 #define ENEMY_IDLE_DELAY SECONDS_TO_TICKS(1)
 #define ENEMY_SURPRISED_DELAY fpSecondsToTicks(flt2fp(0.5f))
@@ -24,6 +22,15 @@
 #define ENEMY_EVADE_DELAY fpSecondsToTicks(flt2fp(0.4f))
 #define ENEMY_HURT_DELAY fpSecondsToTicks(flt2fp(0.25f))
 #define ENEMY_DYING_DELAY fpSecondsToTicks(flt2fp(0.5f))
+
+const enemystats_t enemyStats[] =
+{
+	{flt2fp(2),    8,  100,  0,  0,  SPRITE_SLOT_CIV}, //Civilian
+	{flt2fp(3),    16, 75,   10, 10, SPRITE_SLOT_MER}, //Mercenary
+	{flt2fp(3.5),  32, 100,  15, 40, SPRITE_SLOT_SGR}, //Soldier
+	{flt2fp(1.0),  8,  250,  25, 25, SPRITE_SLOT_HVY}  //Heavy
+};
+
 
 enemy_t enemyList[MAX_ENEMIES];
 
@@ -164,6 +171,33 @@ static u8 enemyRandomBit()
     enemyRand = (u16)(enemyRand * 17 + 43);
 
     return (u8)((enemyRand >> 8) & 1);
+}
+
+static u8 enemyRandomChance(const u8 chance)
+{
+    enemyRand = (u16)(enemyRand * 17 + 43);
+
+    return (u8)(enemyRand >> 8) < chance;
+}
+
+static u8 enemyMoveTicks(const enemy_t* enemy)
+{
+    return fpMetersPerSecondToCellTicks(enemy->enemyStats->moveSpeed);
+}
+
+static void enemyShootPlayer(const enemy_t* enemy)
+{
+    u8 damage;
+
+    if(!enemyRandomChance(enemy->enemyStats->accuracy) || player.health == 0)
+        return;
+
+    damage = enemy->enemyStats->damage;
+
+    if(damage >= player.health)
+        player.health = 0;
+    else
+        player.health -= damage;
 }
 
 static u16 enemyCanSeePlayer(const enemy_t* enemy)
@@ -368,29 +402,9 @@ u16 getEnemyCell(u16 x, u16 y, s8 cell)
     enemyList[enemyId].cellX = (u8)x;
     enemyList[enemyId].cellY = (u8)y;
 
-    switch(enemyType)
-    {
-        case ENEMY_TYPE_CIV:
-            enemyList[enemyId].health = 50;
-            enemyList[enemyId].spriteId = SPRITE_SLOT_CIV;
-            break;
 
-        case ENEMY_TYPE_MER:
-            enemyList[enemyId].health = 50;
-            enemyList[enemyId].spriteId = SPRITE_SLOT_MER;
-            break;
-
-        case ENEMY_TYPE_SGR:
-            enemyList[enemyId].health = 75;
-            enemyList[enemyId].spriteId = SPRITE_SLOT_SGR;
-            break;
-
-        case ENEMY_TYPE_HVY:
-            enemyList[enemyId].health = 100;
-            enemyList[enemyId].spriteId = SPRITE_SLOT_HVY;
-            break;
-
-    }
+    enemyList[enemyId].enemyStats = &enemyStats[enemyType];
+    enemyList[enemyId].health = enemyStats[enemyType].health;
 
     return (MAP_MASK_SPRITE | MAP_MASK_ENEMY | MAP_MASK_WALK | SET_CELL_TYPE_ID(enemyType) | enemyId);
 }
@@ -521,7 +535,7 @@ void runAI()
                 }
 
                 enemyStepToward(id, enemy, enemy->targetX, enemy->targetY);
-                enemySetMoveCounter(enemy, ENEMY_MOVE_TICKS);
+                enemySetMoveCounter(enemy, enemyMoveTicks(enemy));
                 break;
 
             case ENEMY_STATE_SURPRISED:
@@ -541,11 +555,11 @@ void runAI()
                 if(!canSee)
                 {
                     enemy->state = ENEMY_STATE_SEARCHING;
-                    enemy->stateCounter = ENEMY_MOVE_TICKS;
+                    enemy->stateCounter = enemyMoveTicks(enemy);
                     break;
                 }
 
-                if(enemyRandomBit())
+                if(enemyRandomChance(enemy->enemyStats->evadeChance))
                 {
                     enemy->state = ENEMY_STATE_EVADING;
                     enemy->stateCounter = ENEMY_EVADE_DELAY;
@@ -560,7 +574,7 @@ void runAI()
                     {
                         enemyStepAwayFrom(id, enemy, enemy->targetX, enemy->targetY);
                         enemy->state = ENEMY_STATE_CHASING;
-                        enemySetMoveCounter(enemy, ENEMY_MOVE_TICKS);
+                        enemySetMoveCounter(enemy, enemyMoveTicks(enemy));
                         break;
                     }
 
@@ -571,7 +585,7 @@ void runAI()
                 }
 
                 enemyStepToward(id, enemy, enemy->targetX, enemy->targetY);
-                enemySetMoveCounter(enemy, ENEMY_MOVE_TICKS);
+                enemySetMoveCounter(enemy, enemyMoveTicks(enemy));
                 break;
 
             case ENEMY_STATE_AIMING:
@@ -583,12 +597,13 @@ void runAI()
                 if(!canSee)
                 {
                     enemy->state = ENEMY_STATE_SEARCHING;
-                    enemy->stateCounter = ENEMY_MOVE_TICKS;
+                    enemy->stateCounter = enemyMoveTicks(enemy);
                     break;
                 }
 
                 enemy->state = ENEMY_STATE_ATTACKING;
                 enemy->stateCounter = ENEMY_ATTACK_DELAY;
+                enemyShootPlayer(enemy);
                 break;
 
             case ENEMY_STATE_EVADING:
@@ -597,7 +612,7 @@ void runAI()
 
                 enemyStepSideways(id, enemy, (u8)fp2int(player.pos.x), (u8)fp2int(player.pos.y));
                 enemy->state = ENEMY_STATE_CHASING;
-                enemySetMoveCounter(enemy, ENEMY_MOVE_TICKS);
+                enemySetMoveCounter(enemy, enemyMoveTicks(enemy));
                 break;
 
             case ENEMY_STATE_HURT:
@@ -606,7 +621,7 @@ void runAI()
                 if(enemyCounterTick(id, enemy))
                     break;
 
-                if(enemyRandomBit())
+                if(enemyRandomChance(enemy->enemyStats->evadeChance))
                 {
                     enemy->state = ENEMY_STATE_EVADING;
                     enemy->stateCounter = ENEMY_EVADE_DELAY;

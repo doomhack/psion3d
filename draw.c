@@ -462,7 +462,7 @@ void draw()
 								projectSprite(enemy->x, enemy->y, &spriteHits[spritesHit], f_viewCos, f_viewSin))
 							{
 								spriteHits[spritesHit].enemyId = (u8)GET_CELL_ID(hitcell);
-								spriteHits[spritesHit].spriteId = ((enemy->spriteId << 3) | enemy->spriteFrame);
+								spriteHits[spritesHit].spriteId = ((enemy->enemyStats->spriteId << 3) | enemy->spriteFrame);
 								spriteHits[spritesHit].mirrored = enemy->spriteMirrored &&
 									(enemy->spriteFrame == ENEMY_FRAME_WALK_R1 ||
 									 enemy->spriteFrame == ENEMY_FRAME_WALK_R2);

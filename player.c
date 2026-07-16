@@ -138,6 +138,7 @@ void initPlayer()
 	player.pos.y = flt2fp(1.5f);
 
 	player.pos.angle = 0;
+	player.health = 100;
 	f_moveVel = 0;
 	f_turnVel = 0;
 
