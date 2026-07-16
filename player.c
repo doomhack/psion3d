@@ -1,6 +1,7 @@
 #include <wlib.h>
 
 #include "player.h"
+#include "sprslot.h"
 #include "fp_math.h"
 #include "game_map.h"
 #include "units.h"

@@ -4,6 +4,7 @@
 #include "psion3d.h"
 #include "bitmap.h"
 #include "sprite.h"
+#include "sprslot.h"
 #include "game_map.h"
 #include "enemy.h"
 
@@ -25,9 +26,12 @@ typedef struct markedsprite_t
 #define MODE_CLEAR 1
 #define MODE_INVERT 2
 #define WALL_HEIGHT_NUM ((s16)30720)
+#define IMPACT_HEIGHT_NUM ((s16)30720)
+#define IMPACT_NEAR_DEPTH ((f16)32)
 #define MAX_VISIBLE_SPRITES 8
 
-static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHit, const f16* f_wallDepth)
+static u16 resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHit,
+	const f16* f_wallDepth, spritehit_t* wallImpact)
 {
 	u16 i;
 	u8 aimSpan;
@@ -36,7 +40,7 @@ static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHi
 	u8 targetId = SPRITE_NO_ENEMY;
 
 	if(!player.weaponState.shotPending)
-		return;
+		return FALSE;
 
 	aimSpan = player.weaponState.shotSpan;
 	aimX = (aimSpan << 2) + 2;
@@ -69,9 +73,31 @@ static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHi
 	}
 
 	if(targetId != SPRITE_NO_ENEMY)
+	{
 		damageEnemy(targetId, player.currentWeapon->damage);
+		player.weaponState.shotPending = FALSE;
+		return FALSE;
+	}
+
+	if(f_wallDepth[aimSpan] != FP_MAX)
+	{
+		f16 f_impactDepth = f_wallDepth[aimSpan];
+
+		if(f_impactDepth < IMPACT_NEAR_DEPTH)
+			f_impactDepth = IMPACT_NEAR_DEPTH;
+
+		wallImpact->spriteHeight = IMPACT_HEIGHT_NUM / f_impactDepth;
+		wallImpact->f_spriteDist = f_wallDepth[aimSpan];
+		wallImpact->spanX = aimSpan;
+		wallImpact->spriteId = SPRITE_SLOT_PARTICLES << 3;
+		wallImpact->mirrored = FALSE;
+		wallImpact->enemyId = SPRITE_NO_ENEMY;
+		player.weaponState.shotPending = FALSE;
+		return TRUE;
+	}
 
 	player.weaponState.shotPending = FALSE;
+	return FALSE;
 }
 
 /* 60 degree FOV, 60 rays, 4 pixels each */
@@ -360,8 +386,10 @@ void draw()
 	u16 i;
 	u16 spritesMarked = 0;
 	u16 spritesHit = 0;
+	u16 drawWallImpact;
 	markedsprite_t markedSprites[MAX_VISIBLE_SPRITES];
 	spritehit_t spriteHits[MAX_VISIBLE_SPRITES];
+	spritehit_t wallImpact;
 	f16 f_wallDepth[60];
 	const f16 f_viewCos = fpcos(player.pos.angle);
 	const f16 f_viewSin = fpsin(player.pos.angle);
@@ -522,7 +550,10 @@ void draw()
 		}
 	}
 	
-	resolvePlayerShot(spriteHits, spritesHit, f_wallDepth);
+	drawWallImpact = resolvePlayerShot(spriteHits, spritesHit, f_wallDepth, &wallImpact);
+
+	if(drawWallImpact)
+		drawProjectedSprite(&wallImpact);
 
 	while(spritesHit > 0)
 	{

@@ -1,6 +1,7 @@
 #include "fp_types.h"
 #include "game_map.h"
 #include "sprite.h"
+#include "sprslot.h"
 #include "debug.h"
 #include "enemy.h"
 
@@ -14,8 +15,9 @@ void loadMapData(const u8 mapId)
 	loadSprite("mer", SPRITE_SLOT_MER);
 	loadSprite("sgr", SPRITE_SLOT_SGR);
 	loadSprite("hvy", SPRITE_SLOT_HVY);
+	loadSprite("hit", SPRITE_SLOT_PARTICLES);
 
-	loadSprite("ppk", 5);
+	loadSprite("ppk", SPRITE_SLOT_PISTOL);
 }
 
 u16 getCellEncoding(u16 x, u16 y, s8 cell)

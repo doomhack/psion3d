@@ -48,11 +48,6 @@
 #define ENEMY_TYPE_SGR 2
 #define ENEMY_TYPE_HVY 3
 
-#define SPRITE_SLOT_CIV 0
-#define SPRITE_SLOT_MER 1
-#define SPRITE_SLOT_SGR 2
-#define SPRITE_SLOT_HVY 3
-
 #define MAX_ENEMIES 64
 
 typedef struct enemystats_t

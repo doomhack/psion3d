@@ -8,11 +8,6 @@
 #define WEAPON_AR 2
 #define WEAPON_LMG 3
 
-#define SPRITE_SLOT_PISTOL 5
-#define SPRITE_SLOT_SMG 6
-#define SPRITE_SLOT_AR 7
-#define SPRITE_SLOT_LMG 8
-
 typedef struct weapon_t
 {
 	u8 fireDelay; //Ticks between sucessive fire rounds.

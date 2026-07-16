@@ -113,10 +113,13 @@ $bitmap = [System.Drawing.Bitmap]::new($resolvedInput.ProviderPath)
 
 try
 {
-	if($bitmap.Width -ne 64 -or $bitmap.Height -ne 64)
+	if($bitmap.Width -gt 64 -or $bitmap.Height -gt 64)
 	{
-		throw "Input image must be exactly 64x64 pixels. Got $($bitmap.Width)x$($bitmap.Height)."
+		throw "Input image cannot exceed 64x64 pixels. Got $($bitmap.Width)x$($bitmap.Height)."
 	}
+
+	$xOffset = [int][Math]::Floor((64 - $bitmap.Width) / 2)
+	$yOffset = [int][Math]::Floor((64 - $bitmap.Height) / 2)
 
 	$bytes = New-Object System.Collections.Generic.List[byte]
 	$minX = 64
@@ -135,7 +138,16 @@ try
 
 			for($bit = 0; $bit -lt 4; $bit++)
 			{
-				$pixel = Get-Sprite-PixelValue $bitmap.GetPixel($x + $bit, $y)
+				$sourceX = $x + $bit - $xOffset
+				$sourceY = $y - $yOffset
+				$pixel = 0
+
+				if($sourceX -ge 0 -and $sourceX -lt $bitmap.Width -and
+					$sourceY -ge 0 -and $sourceY -lt $bitmap.Height)
+				{
+					$pixel = Get-Sprite-PixelValue $bitmap.GetPixel($sourceX, $sourceY)
+				}
+
 				$packed = $packed -bor ($pixel -shl ($bit * 2))
 			}
 

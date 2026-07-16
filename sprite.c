@@ -4,6 +4,7 @@
 #include "psion3d.h"
 #include "bitmap.h"
 #include "sprite.h"
+#include "sprslot.h"
 
 #include "debug.h"
 
@@ -15,7 +16,6 @@
 #define SPRITE_MAX_FRAMES 8
 #define SPRITE_FRAME_PARAS (SPRITE_BYTES / 16)
 #define SPRITE_SCALE_BITS 8
-#define SPRITE_MAX_SPRITES 32
 #define SPRITE_NUM_MASK 0x1f
 #define SPRITE_FRAME_MASK 0x07
 #define SPRITE_CACHE_FRAMES 8
@@ -57,9 +57,9 @@ typedef struct sprite_bounds_t
 
 static u8 spriteLoadBuffer[SPRITE_BYTES];
 static u8 spriteHeader[SPRITE_HEADER_BYTES];
-static HANDLE spriteSegs[SPRITE_MAX_SPRITES];
-static u8 spriteFrameCounts[SPRITE_MAX_SPRITES];
-static sprite_bounds_t spriteFrameBounds[SPRITE_MAX_SPRITES][SPRITE_MAX_FRAMES];
+static HANDLE spriteSegs[SPRITE_SLOT_CAPACITY];
+static u8 spriteFrameCounts[SPRITE_SLOT_CAPACITY];
+static sprite_bounds_t spriteFrameBounds[SPRITE_SLOT_CAPACITY][SPRITE_MAX_FRAMES];
 static u8 spriteCache[SPRITE_CACHE_FRAMES * SPRITE_BYTES];
 static u8 testPatternCache[SPRITE_BYTES];
 static u8 spriteOpaqueMask[256];
@@ -518,6 +518,12 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 
 	sourceXStep = (s16)((SPRITE_SIZE << SPRITE_SCALE_BITS) / width);
 	sourceYStep = (s16)((SPRITE_SIZE << SPRITE_SCALE_BITS) / height);
+
+	if(sourceXStep < 1)
+		sourceXStep = 1;
+
+	if(sourceYStep < 1)
+		sourceYStep = 1;
 
 	boundOffset = (s16)((((s32)bounds.left << SPRITE_SCALE_BITS) +
 		sourceXStep - 1) / sourceXStep);

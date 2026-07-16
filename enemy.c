@@ -1,4 +1,5 @@
 #include "enemy.h"
+#include "sprslot.h"
 #include "game_map.h"
 #include "psion3d.h"
 #include "units.h"
@@ -25,10 +26,10 @@
 
 const enemystats_t enemyStats[] =
 {
-	{flt2fp(2),    8,  100,  0,  0,  SPRITE_SLOT_CIV}, //Civilian
-	{flt2fp(3),    16, 75,   10, 10, SPRITE_SLOT_MER}, //Mercenary
-	{flt2fp(3.5),  32, 100,  15, 40, SPRITE_SLOT_SGR}, //Soldier
-	{flt2fp(1.0),  8,  250,  25, 25, SPRITE_SLOT_HVY}  //Heavy
+	{flt2fp(2),    48,  100,  0,  0,  SPRITE_SLOT_CIV}, //Civilian
+	{flt2fp(3),    32, 75,   10, 10, SPRITE_SLOT_MER}, //Mercenary
+	{flt2fp(3.5),  64, 100,  15, 40, SPRITE_SLOT_SGR}, //Soldier
+	{flt2fp(1.0),  16,  250,  25, 25, SPRITE_SLOT_HVY}  //Heavy
 };
 
 
