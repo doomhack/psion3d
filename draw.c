@@ -25,6 +25,54 @@ typedef struct markedsprite_t
 #define MODE_CLEAR 1
 #define MODE_INVERT 2
 #define WALL_HEIGHT_NUM ((s16)30720)
+#define MAX_VISIBLE_SPRITES 8
+
+static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHit, const f16* f_wallDepth)
+{
+	u16 i;
+	u8 aimSpan;
+	s16 aimX;
+	f16 f_targetDepth;
+	u8 targetId = SPRITE_NO_ENEMY;
+
+	if(!player.weaponState.shotPending)
+		return;
+
+	aimSpan = player.weaponState.shotSpan;
+	aimX = (aimSpan << 2) + 2;
+	f_targetDepth = f_wallDepth[aimSpan];
+
+	for(i = 0; i < spritesHit; i++)
+	{
+		const spritehit_t* hit = &spriteHits[i];
+		s16 width;
+		s16 left;
+
+		if(hit->enemyId == SPRITE_NO_ENEMY || hit->spriteHeight <= 0)
+			continue;
+
+		width = hit->spriteHeight;
+		if(width < 1)
+			width = 1;
+
+		left = (hit->spanX << 2) + 2 - (width >> 1);
+
+		if(aimX < left || aimX >= left + width)
+			continue;
+
+		if(hit->f_spriteDist >= f_wallDepth[hit->spanX] ||
+			hit->f_spriteDist >= f_targetDepth)
+			continue;
+
+		targetId = hit->enemyId;
+		f_targetDepth = hit->f_spriteDist;
+	}
+
+	if(targetId != SPRITE_NO_ENEMY)
+		damageEnemy(targetId, player.currentWeapon->damage);
+
+	player.weaponState.shotPending = FALSE;
+}
 
 /* 60 degree FOV, 60 rays, 4 pixels each */
 static const f16 rayAngleOffset[60] =
@@ -312,8 +360,8 @@ void draw()
 	u16 i;
 	u16 spritesMarked = 0;
 	u16 spritesHit = 0;
-	markedsprite_t markedSprites[8];
-	spritehit_t spriteHits[8];
+	markedsprite_t markedSprites[MAX_VISIBLE_SPRITES];
+	spritehit_t spriteHits[MAX_VISIBLE_SPRITES];
 	f16 f_wallDepth[60];
 	const f16 f_viewCos = fpcos(player.pos.angle);
 	const f16 f_viewSin = fpsin(player.pos.angle);
@@ -398,7 +446,8 @@ void draw()
 				
 				if(hit == 0)
 				{
-					if(isSprite(hitcell) && !isMarked(hitcell))
+					if(isSprite(hitcell) && !isMarked(hitcell) &&
+						spritesMarked < MAX_VISIBLE_SPRITES)
 					{
 						markSprite(mapx, mapy);
 						markedSprites[spritesMarked].x = mapx;
@@ -409,8 +458,10 @@ void draw()
 						{
 							enemy_t* enemy = getEnemy(GET_CELL_ID(hitcell));
 
-							if(enemy && projectSprite(enemy->x, enemy->y, &spriteHits[spritesHit], f_viewCos, f_viewSin))
+							if(enemy && spritesHit < MAX_VISIBLE_SPRITES &&
+								projectSprite(enemy->x, enemy->y, &spriteHits[spritesHit], f_viewCos, f_viewSin))
 							{
+								spriteHits[spritesHit].enemyId = (u8)GET_CELL_ID(hitcell);
 								spriteHits[spritesHit].spriteId = ((enemy->spriteId << 3) | enemy->spriteFrame);
 								spriteHits[spritesHit].mirrored = enemy->spriteMirrored &&
 									(enemy->spriteFrame == ENEMY_FRAME_WALK_R1 ||
@@ -420,11 +471,13 @@ void draw()
 						}
 						else
 						{
-							if(projectSprite(int2fp(mapx) + flt2fp(0.5f), int2fp(mapy) + flt2fp(0.5f), &spriteHits[spritesHit], f_viewCos, f_viewSin))
+							if(spritesHit < MAX_VISIBLE_SPRITES &&
+								projectSprite(int2fp(mapx) + flt2fp(0.5f), int2fp(mapy) + flt2fp(0.5f), &spriteHits[spritesHit], f_viewCos, f_viewSin))
 							{
 								//TODO: Impliment sprite selection here. For now 0..3 are populated
 								spriteHits[spritesHit].spriteId = 0;
 								spriteHits[spritesHit].mirrored = FALSE;
+								spriteHits[spritesHit].enemyId = SPRITE_NO_ENEMY;
 								spritesHit++;
 							}
 						}
@@ -469,6 +522,8 @@ void draw()
 		}
 	}
 	
+	resolvePlayerShot(spriteHits, spritesHit, f_wallDepth);
+
 	while(spritesHit > 0)
 	{
 		spritesHit--;

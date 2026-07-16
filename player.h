@@ -31,6 +31,8 @@ typedef struct weapon_state_t
 	u8 weaponSpriteId; //Sprite ID to draw.
 	u8 shootCooldown; //Cooldown between bullets.
 	u8 shootFrames; //Show firing frame time.
+	u8 shotPending; //A fired round waiting for the current frame's visibility data.
+	u8 shotSpan; //Horizontal ray span selected by weapon accuracy.
 } weapon_state_t;
 
 typedef struct position_t

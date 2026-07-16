@@ -10,7 +10,10 @@ typedef struct spritehit_t
 	u16 spanX;
 	u8 spriteId;
 	u8 mirrored;
+	u8 enemyId;
 } spritehit_t;
+
+#define SPRITE_NO_ENEMY 255
 
 HANDLE loadSprite(TEXT* baseName, u8 id);
 u16 projectSprite(const f16 x, const f16 y, spritehit_t* hit, const f16 f_viewCos, const f16 f_viewSin);

@@ -25,9 +25,31 @@ const weapon_t weapons[] =
 #define PLAYER_MOVE_IMPULSE (PLAYER_MOVE_TICK >> 1)
 #define PLAYER_TURN_IMPULSE (PLAYER_TURN_TICK >> 1)
 #define PLAYER_MOMENTUM_DAMPING flt2fp(0.33f)
+#define PLAYER_AIM_SPAN 30
+#define PLAYER_MAX_SPREAD_SPANS 15
 
 static f16 f_moveVel = 0;
 static f16 f_turnVel = 0;
+static u16 shotRand = 0x6d2b;
+
+static u8 getShotSpan(const u8 accuracy)
+{
+	u16 spread = ((u16)(255 - accuracy) * (PLAYER_MAX_SPREAD_SPANS + 1)) >> 8;
+	s16 span;
+
+	if(spread == 0)
+		return PLAYER_AIM_SPAN;
+
+	shotRand = (u16)(shotRand * 25173 + 13849);
+	span = PLAYER_AIM_SPAN + (s16)(shotRand % ((spread << 1) + 1)) - spread;
+
+	if(span < 0)
+		span = 0;
+	else if(span > 59)
+		span = 59;
+
+	return (u8)span;
+}
 
 static f16 clampFp(const f16 value, const f16 min, const f16 max)
 {
@@ -104,8 +126,8 @@ static void updatePlayerWeapon(u8 keys)
 			player.weaponState.shootCooldown = player.currentWeapon->fireDelay;
 			player.weaponState.weaponSpriteId = (player.currentWeapon->weaponSprite << 3) | 1;
 			player.weaponState.shootFrames = 5;
-
-			//TODO: Check enemy damage.
+			player.weaponState.shotSpan = getShotSpan(player.currentWeapon->accuracy);
+			player.weaponState.shotPending = TRUE;
 		}
 	}
 }
@@ -121,6 +143,8 @@ void initPlayer()
 
 	player.currentWeapon = &weapons[0];
 	player.weaponState.shootCooldown = 0;
+	player.weaponState.shotPending = FALSE;
+	player.weaponState.shotSpan = PLAYER_AIM_SPAN;
 	player.weaponState.weaponSpriteId = (player.currentWeapon->weaponSprite << 3);
 }
 

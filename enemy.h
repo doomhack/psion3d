@@ -27,6 +27,12 @@
 //Enemy is sidestepping to avoid player attacks.
 #define ENEMY_STATE_EVADING 7
 
+//Enemy is falling to the ground.
+#define ENEMY_STATE_DYING 8
+
+//Enemy is dead and cannot leave this state.
+#define ENEMY_STATE_DEAD 9
+
 #define ENEMY_FRAME_IDLE 0
 #define ENEMY_FRAME_WALK_R1 1
 #define ENEMY_FRAME_WALK_R2 2
@@ -68,6 +74,7 @@ extern enemy_t enemyList[MAX_ENEMIES];
 
 u16 getEnemyCell(u16 x, u16 y, s8 cell);
 enemy_t* getEnemy(u16 id);
+void damageEnemy(u16 id, u8 damage);
 void runAI(void);
 void resetEnemy(void);
 

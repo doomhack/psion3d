@@ -22,6 +22,8 @@
 #define ENEMY_SURPRISED_DELAY fpSecondsToTicks(flt2fp(0.5f))
 #define ENEMY_AIM_DELAY fpSecondsToTicks(flt2fp(0.5f))
 #define ENEMY_EVADE_DELAY fpSecondsToTicks(flt2fp(0.4f))
+#define ENEMY_HURT_DELAY fpSecondsToTicks(flt2fp(0.25f))
+#define ENEMY_DYING_DELAY fpSecondsToTicks(flt2fp(0.5f))
 
 enemy_t enemyList[MAX_ENEMIES];
 
@@ -403,6 +405,28 @@ enemy_t* getEnemy(u16 id)
     return NULL;
 }
 
+void damageEnemy(u16 id, u8 damage)
+{
+    enemy_t* enemy = getEnemy(id);
+
+    if(!enemy || enemy->state == ENEMY_STATE_DYING || enemy->state == ENEMY_STATE_DEAD)
+        return;
+
+    if(damage >= enemy->health)
+    {
+        enemy->health = 0;
+        enemy->state = ENEMY_STATE_DYING;
+        enemy->stateCounter = ENEMY_DYING_DELAY;
+        enemy->spriteFrame = ENEMY_FRAME_DYING;
+        return;
+    }
+
+    enemy->health -= damage;
+    enemy->state = ENEMY_STATE_HURT;
+    enemy->stateCounter = ENEMY_HURT_DELAY;
+    enemy->spriteFrame = ENEMY_FRAME_HURT;
+}
+
 void runAI()
 {
     u16 id;
@@ -414,6 +438,24 @@ void runAI()
     for(id = 0; id < enemyCount; id++)
     {
         enemy_t* enemy = &enemyList[id];
+
+        if(enemy->state == ENEMY_STATE_DYING)
+        {
+            enemy->spriteFrame = ENEMY_FRAME_DYING;
+
+            if(enemy->stateCounter > 0)
+                enemy->stateCounter--;
+            else
+                enemy->state = ENEMY_STATE_DEAD;
+
+            continue;
+        }
+
+        if(enemy->state == ENEMY_STATE_DEAD)
+        {
+            enemy->spriteFrame = ENEMY_FRAME_DEATH;
+            continue;
+        }
 
         dist = enemyDistanceToPlayer(enemy);
 
