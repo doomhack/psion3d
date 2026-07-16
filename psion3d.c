@@ -150,6 +150,9 @@ static void mainLoop()
 				
 				p_atos(&buf[0], "Pos: %d,%d", player.pos.x, player.pos.y);
 				gPrintText(5, 40, &buf[0], p_slen(&buf[0]));
+
+				p_atos(&buf[0], "Health: %d", player.health);
+				gPrintText(5, 60, &buf[0], p_slen(&buf[0]));
 				
 				p_atos(&buf[0], "Angle: %d", player.pos.angle);
 				gPrintText(5, 80, &buf[0], p_slen(&buf[0]));
