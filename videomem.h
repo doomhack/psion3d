@@ -3,6 +3,6 @@
 
 #include "fp_types.h"
 
-void blitVideoMem(u8* black, u8* grey);
+void blitVideoMem(u8* packed);
 
 #endif

@@ -32,8 +32,6 @@
 
 #define SCREEN_WIDTH 240
 #define SCREEN_HEIGHT 160
-#define SCREEN_ROW_BYTES 32
-
 #define SPRITE_FILE_NAME_LEN 64
 #define SPRITE_SEG_NAME_LEN 16
 
@@ -592,14 +590,14 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 		if(spriteHit->mirrored)
 			sourceXAcc = ((SPRITE_SIZE << SPRITE_SCALE_BITS) - 1) - sourceXAcc;
 
-		offset = (y << 5) + (x >> 3);
+		offset = (y << 6) + (x >> 2);
 
 		while(x < rowXEnd)
 		{
 			u8 opaqueMask = 0;
 			u8 blackMask = 0;
 			u8 greyMask = 0;
-			u8 count = 8 - (x & 7);
+			u8 count = 4 - (x & 3);
 			u8 i;
 
 			if(count > rowXEnd - x)
@@ -610,7 +608,7 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 				u16 sourceX = sourceXAcc >> SPRITE_SCALE_BITS;
 				u8 packed;
 				u8 pix;
-				u8 mask = 1 << ((x + i) & 7);
+				u8 mask = 1 << ((x + i) & 3);
 
 				packed = sourceRow[sourceX >> 2];
 				pix = (packed >> ((sourceX & 3) << 1)) & 3;
@@ -628,8 +626,9 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 				sourceXAcc += sourceXAdvance;
 			}
 
-			blackBm[offset] = (blackBm[offset] & ~opaqueMask) | blackMask;
-			greyBm[offset] = (greyBm[offset] & ~opaqueMask) | greyMask;
+			opaqueMask |= opaqueMask << 4;
+			((u8*)screenBm)[offset] = (((u8*)screenBm)[offset] & ~opaqueMask) |
+				blackMask | (greyMask << 4);
 			x += count;
 			offset++;
 		}
@@ -714,23 +713,21 @@ void drawSprite(u8 spanX, u8 y, u8 spriteId)
 			rowXEnd = xEnd;
 
 		sourceRow = spriteData + (sourceY << 4);
-		offset = (yPos << 5) + (rowXStart >> 3);
+		offset = (yPos << 6) + (rowXStart >> 2);
 		x = rowXStart;
 
 		while(x < rowXEnd)
 		{
 			u8 packed = sourceRow[(x - left) >> 2];
-			u8 shift = x & 4;
-			u8 opaqueMask = spriteOpaqueMask[packed] << shift;
-			u8 blackMask = spriteBlackMask[packed] << shift;
-			u8 greyMask = spriteGreyMask[packed] << shift;
+			u8 opaqueMask = spriteOpaqueMask[packed];
+			u8 blackMask = spriteBlackMask[packed];
+			u8 greyMask = spriteGreyMask[packed];
 
-			blackBm[offset] = (blackBm[offset] & ~opaqueMask) | blackMask;
-			greyBm[offset] = (greyBm[offset] & ~opaqueMask) | greyMask;
+			opaqueMask |= opaqueMask << 4;
+			((u8*)screenBm)[offset] = (((u8*)screenBm)[offset] & ~opaqueMask) |
+				blackMask | (greyMask << 4);
 			x += 4;
-
-			if(!(x & 7))
-				offset++;
+			offset++;
 		}
 	}
 }

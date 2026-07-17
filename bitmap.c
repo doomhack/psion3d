@@ -1,22 +1,6 @@
 #include "bitmap.h"
 
 u16 screenBm[BM_SCREEN_WORDS];
-u8* blackBm = (u8*)&screenBm[0];
-u8* greyBm = (u8*)&screenBm[BM_WORDS];
-
-#define BM_WIDTH 256
-#define BM_HEIGHT 160
-#define BM_ROW_BYTES 32
-
-static u8 leftMask[8] =
-{
-	0xff, 0xfe, 0xfc, 0xf8, 0xf0, 0xe0, 0xc0, 0x80
-};
-
-static u8 rightMask[8] =
-{
-	0x01, 0x03, 0x07, 0x0f, 0x1f, 0x3f, 0x7f, 0xff
-};
 
 static u16 clipRect(s16* x, s16* y, s16* w, s16* h)
 {
@@ -47,77 +31,43 @@ static u16 clipRect(s16* x, s16* y, s16* w, s16* h)
 	return *w > 0 && *h > 0;
 }
 
-static void setPixel(s16 x, s16 y, u8* bm)
+static u8 planeMask(u16 plane, u8 pixels)
 {
-	bm[(y << 5) + (x >> 3)] |= (1 << (x & 7));
+	return plane == BM_PLANE_GREY ? pixels << 4 : pixels;
 }
 
-static void fillSpan(s16 x, s16 y, s16 w, u8* bm, u8 value)
+static void writePixel(s16 x, s16 y, u16 plane, u16 value)
 {
-	u8* row = bm + (y << 5);
-	u16 startByte = x >> 3;
-	u16 endByte = (x + w - 1) >> 3;
-	u8 startBit = x & 7;
-	u8 endBit = (x + w - 1) & 7;
-	u8 mask;
-	u16 i;
-
-	if(startByte == endByte)
-	{
-		mask = leftMask[startBit] & rightMask[endBit];
-
-		if(value)
-			row[startByte] |= mask;
-		else
-			row[startByte] &= ~mask;
-
-		return;
-	}
-
-	mask = leftMask[startBit];
+	u8* bm = (u8*)screenBm;
+	u8 mask = planeMask(plane, 1 << (x & 3));
+	u16 offset = (y << 6) + (x >> 2);
 
 	if(value)
-		row[startByte] |= mask;
+		bm[offset] |= mask;
 	else
-		row[startByte] &= ~mask;
-
-	for(i = startByte + 1; i < endByte; i++)
-		row[i] = value;
-
-	mask = rightMask[endBit];
-
-	if(value)
-		row[endByte] |= mask;
-	else
-		row[endByte] &= ~mask;
+		bm[offset] &= ~mask;
 }
 
-static void patternSpan(s16 x, s16 y, s16 w, u8* bm)
+static void fillSpan(s16 x, s16 y, s16 w, u16 plane, u16 value)
 {
-	u8* row = bm + (y << 5);
-	u16 startByte = x >> 3;
-	u16 endByte = (x + w - 1) >> 3;
-	u8 startBit = x & 7;
-	u8 endBit = (x + w - 1) & 7;
-	u8 pat = (y & 1) ? 0x55 : 0xaa;
-	u8 mask;
-	u16 i;
+	s16 end = x + w;
 
-	if(startByte == endByte)
+	while(x < end)
 	{
-		mask = leftMask[startBit] & rightMask[endBit];
-		row[startByte] = (row[startByte] & ~mask) | (pat & mask);
-		return;
+		writePixel(x, y, plane, value);
+		x++;
 	}
+}
 
-	mask = leftMask[startBit];
-	row[startByte] = (row[startByte] & ~mask) | (pat & mask);
+static void patternSpan(s16 x, s16 y, s16 w, u16 plane)
+{
+	s16 end = x + w;
 
-	for(i = startByte + 1; i < endByte; i++)
-		row[i] = pat;
-
-	mask = rightMask[endBit];
-	row[endByte] = (row[endByte] & ~mask) | (pat & mask);
+	while(x < end)
+	{
+		writePixel(x, y, plane, (x ^ y) & 1);
+		x++;
+	}
 }
 
 void bmClearScreen()
@@ -146,23 +96,15 @@ void bmClearScreen()
 	} while(--i);
 }
 
-void bmFillRect(s16 x, s16 y, s16 w, s16 h, u8* bm)
-{
-	s16 yy;
-
-	if(!clipRect(&x, &y, &w, &h))
-		return;
-
-	for(yy = y; yy < y + h; yy++)
-		fillSpan(x, yy, w, bm, 0xff);
-}
-
-void bmFillRect4(s16 x, s16 y, s16 h, u8* bm)
+void bmDraw4(s16 x, s16 y, s16 h, u16 blackOp, u16 greyOp)
 {
 	u8* row;
-	u8 mask;
+	u8 keepMask = 0;
+	u8 value = 0;
+	u8 pattern = 0;
+	u8 patternFlip = 0;
 
-	if(h <= 0 || x < 0 || x > BM_WIDTH - 4)
+	if(h <= 0 || x < 0 || x > BM_WIDTH - 4 || (x & 3))
 		return;
 
 	if(y < 0)
@@ -177,17 +119,62 @@ void bmFillRect4(s16 x, s16 y, s16 h, u8* bm)
 	if(h <= 0)
 		return;
 
-	row = bm + (y << 5) + (x >> 3);
-	mask = (x & 4) ? 0xf0 : 0x0f;
+	row = (u8*)screenBm + (y << 6) + (x >> 2);
 
-	do
+	if(blackOp == BM_OP_NO_OP)
+		keepMask |= 0x0f;
+	else if(blackOp == BM_OP_FILL)
+		value |= 0x0f;
+	else if(blackOp == BM_OP_PATTERN)
 	{
-		*row |= mask;
-		row += BM_ROW_BYTES;
-	} while(--h);
+		pattern |= (y & 1) ? 0x05 : 0x0a;
+		patternFlip |= 0x0f;
+	}
+
+	if(greyOp == BM_OP_NO_OP)
+		keepMask |= 0xf0;
+	else if(greyOp == BM_OP_FILL)
+		value |= 0xf0;
+	else if(greyOp == BM_OP_PATTERN)
+	{
+		pattern |= (y & 1) ? 0x50 : 0xa0;
+		patternFlip |= 0xf0;
+	}
+
+	value |= pattern;
+
+	if(keepMask)
+	{
+		do
+		{
+			*row = (*row & keepMask) | value;
+			value ^= patternFlip;
+			row += BM_ROW_BYTES;
+		} while(--h);
+	}
+	else
+	{
+		do
+		{
+			*row = value;
+			value ^= patternFlip;
+			row += BM_ROW_BYTES;
+		} while(--h);
+	}
 }
 
-void bmDrawRect(s16 x, s16 y, s16 w, s16 h, u8* bm)
+void bmFillRect(s16 x, s16 y, s16 w, s16 h, u16 plane)
+{
+	s16 yy;
+
+	if(!clipRect(&x, &y, &w, &h))
+		return;
+
+	for(yy = y; yy < y + h; yy++)
+		fillSpan(x, yy, w, plane, TRUE);
+}
+
+void bmDrawRect(s16 x, s16 y, s16 w, s16 h, u16 plane)
 {
 	s16 yy;
 	s16 right;
@@ -199,24 +186,24 @@ void bmDrawRect(s16 x, s16 y, s16 w, s16 h, u8* bm)
 	right = x + w - 1;
 	bottom = y + h - 1;
 
-	fillSpan(x, y, w, bm, 0xff);
+	fillSpan(x, y, w, plane, TRUE);
 
 	if(bottom != y)
-		fillSpan(x, bottom, w, bm, 0xff);
+		fillSpan(x, bottom, w, plane, TRUE);
 
 	if(h <= 2)
 		return;
 
 	for(yy = y + 1; yy < bottom; yy++)
 	{
-		setPixel(x, yy, bm);
+		writePixel(x, yy, plane, TRUE);
 
 		if(right != x)
-			setPixel(right, yy, bm);
+			writePixel(right, yy, plane, TRUE);
 	}
 }
 
-void bmClearRect(s16 x, s16 y, s16 w, s16 h, u8* bm)
+void bmClearRect(s16 x, s16 y, s16 w, s16 h, u16 plane)
 {
 	s16 yy;
 
@@ -224,40 +211,10 @@ void bmClearRect(s16 x, s16 y, s16 w, s16 h, u8* bm)
 		return;
 
 	for(yy = y; yy < y + h; yy++)
-		fillSpan(x, yy, w, bm, 0);
+		fillSpan(x, yy, w, plane, FALSE);
 }
 
-void bmClearRect4(s16 x, s16 y, s16 h, u8* bm)
-{
-	u8* row;
-	u8 mask;
-
-	if(h <= 0 || x < 0 || x > BM_WIDTH - 4)
-		return;
-
-	if(y < 0)
-	{
-		h += y;
-		y = 0;
-	}
-
-	if(y + h > BM_HEIGHT)
-		h = BM_HEIGHT - y;
-
-	if(h <= 0)
-		return;
-
-	row = bm + (y << 5) + (x >> 3);
-	mask = (x & 4) ? 0x0f : 0xf0;
-
-	do
-	{
-		*row &= mask;
-		row += BM_ROW_BYTES;
-	} while(--h);
-}
-
-void bmFillPattern(s16 x, s16 y, s16 w, s16 h, u8* bm)
+void bmFillPattern(s16 x, s16 y, s16 w, s16 h, u16 plane)
 {
 	s16 yy;
 
@@ -265,45 +222,10 @@ void bmFillPattern(s16 x, s16 y, s16 w, s16 h, u8* bm)
 		return;
 
 	for(yy = y; yy < y + h; yy++)
-		patternSpan(x, yy, w, bm);
+		patternSpan(x, yy, w, plane);
 }
 
-void bmFillPattern4(s16 x, s16 y, s16 h, u8* bm)
-{
-	u8* row;
-	u8 mask;
-	u8 keepMask;
-	u8 pat;
-
-	if(h <= 0 || x < 0 || x > BM_WIDTH - 4)
-		return;
-
-	if(y < 0)
-	{
-		h += y;
-		y = 0;
-	}
-
-	if(y + h > BM_HEIGHT)
-		h = BM_HEIGHT - y;
-
-	if(h <= 0)
-		return;
-
-	row = bm + (y << 5) + (x >> 3);
-	mask = (x & 4) ? 0xf0 : 0x0f;
-	keepMask = ~mask;
-	pat = (y & 1) ? (0x55 & mask) : (0xaa & mask);
-
-	do
-	{
-		*row = (*row & keepMask) | pat;
-		pat ^= mask;
-		row += BM_ROW_BYTES;
-	} while(--h);
-}
-
-void bmDrawLine(s16 start_x, s16 start_y, s16 end_x, s16 end_y, u8* bm)
+void bmDrawLine(s16 start_x, s16 start_y, s16 end_x, s16 end_y, u16 plane)
 {
 	s16 dx = end_x > start_x ? end_x - start_x : start_x - end_x;
 	s16 dy = end_y > start_y ? end_y - start_y : start_y - end_y;
@@ -315,7 +237,7 @@ void bmDrawLine(s16 start_x, s16 start_y, s16 end_x, s16 end_y, u8* bm)
 	while(TRUE)
 	{
 		if(start_x >= 0 && start_x < BM_WIDTH && start_y >= 0 && start_y < BM_HEIGHT)
-			setPixel(start_x, start_y, bm);
+			writePixel(start_x, start_y, plane, TRUE);
 
 		if(start_x == end_x && start_y == end_y)
 			break;

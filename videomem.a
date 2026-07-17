@@ -15,9 +15,8 @@ public _enableMemProtection:
 public _blitVideoMem:
 	push  bp
 	mov   bp,sp
-	sub   sp,4
+	sub   sp,2
 	mov   [bp][-2],ax
-	mov   [bp][-4],bx
 	push  ax
 	push  bx
 	push  cx
@@ -38,23 +37,31 @@ public _blitVideoMem:
 
 	mov   si,[bp][-2]
 	mov   di,15
-	mov   dx,160
-blitBlackRow:
-	mov   cx,16
-	rep;  movsw
+	mov   bx,160
+blitPackedRow:
+	mov   cx,32
+blitPackedByte:
+	lodsw
+	mov   dx,ax
+	and   ax,0F0FH
+	shl   ah,1
+	shl   ah,1
+	shl   ah,1
+	shl   ah,1
+	or    al,ah
+	stosb
+	mov   ax,dx
+	and   ax,0F0F0H
+	shr   al,1
+	shr   al,1
+	shr   al,1
+	shr   al,1
+	or    al,ah
+	mov   es:[di] [9599],al
+	loop  blitPackedByte
 	add   di,28
-	dec   dx
-	jne   blitBlackRow
-
-	mov   si,[bp][-4]
-	mov   di,9615
-	mov   dx,160
-blitGreyRow:
-	mov   cx,16
-	rep;  movsw
-	add   di,28
-	dec   dx
-	jne   blitGreyRow
+	dec   bx
+	jne   blitPackedRow
 
 	call  near _enableMemProtection
 	pop   es

@@ -28,7 +28,7 @@ static void updateScreen()
 {
 #ifdef DIRECT_VIDEO_MEM_ACCESS
 
-	blitVideoMem(blackBm, greyBm);
+	blitVideoMem((u8*)screenBm);
 
 #else
 

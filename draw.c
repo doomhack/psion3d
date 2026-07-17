@@ -142,28 +142,28 @@ static void brickPattern(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit, const
 
 	if(mode == MODE_FILL)
 	{
-		bmFillRect4(x, 80, 1, blackBm);
-		bmFillRect4(x, 80 - qheight, 1, blackBm);
-		bmFillRect4(x, 80 + qheight, 1, blackBm);
+		bmDraw4(x, 80, 1, BM_OP_FILL, BM_OP_CLEAR);
+		bmDraw4(x, 80 - qheight, 1, BM_OP_FILL, BM_OP_CLEAR);
+		bmDraw4(x, 80 + qheight, 1, BM_OP_FILL, BM_OP_CLEAR);
 	}
 	else if(mode == MODE_CLEAR)
 	{
-		bmClearRect4(x, 80, 1, blackBm);
-		bmClearRect4(x, 80 - qheight, 1, blackBm);
-		bmClearRect4(x, 80 + qheight, 1, blackBm);
+		bmDraw4(x, 80, 1, BM_OP_CLEAR, BM_OP_CLEAR);
+		bmDraw4(x, 80 - qheight, 1, BM_OP_CLEAR, BM_OP_CLEAR);
+		bmDraw4(x, 80 + qheight, 1, BM_OP_CLEAR, BM_OP_CLEAR);
 	}
 
 	if((wallx >= 64 && wallx < 72) || (wallx >= 192 && wallx < 200))
 	{
 		if(mode == MODE_FILL)
 		{
-			bmFillRect(x, y, 1, qheight, blackBm);
-			bmFillRect(x, 80, 1, qheight, blackBm);
+			bmFillRect(x, y, 1, qheight, BM_PLANE_BLACK);
+			bmFillRect(x, 80, 1, qheight, BM_PLANE_BLACK);
 		}
 		else if(mode == MODE_CLEAR)
 		{
-			bmClearRect(x, y, 1, qheight, blackBm);
-			bmClearRect(x, 80, 1, qheight, blackBm);
+			bmClearRect(x, y, 1, qheight, BM_PLANE_BLACK);
+			bmClearRect(x, 80, 1, qheight, BM_PLANE_BLACK);
 		}
 	}
 }
@@ -176,21 +176,14 @@ static void depthWall(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 
 	if(depth >= 6)
 	{
-		bmFillRect4(x, y, h, blackBm);
+		bmDraw4(x, y, h, BM_OP_FILL, BM_OP_CLEAR);
 		return;
 	}
 
-	bmFillPattern4(x, y, h, blackBm);
-	
-
 	if(depth >= 4 || hit->side)
-	{
-		bmFillRect4(x, y, h, greyBm);
-	}
+		bmDraw4(x, y, h, BM_OP_PATTERN, BM_OP_FILL);
 	else
-	{
-		bmClearRect4(x, y, h, greyBm);
-	}
+		bmDraw4(x, y, h, BM_OP_PATTERN, BM_OP_CLEAR);
 }
 
 static u16 drawWallX(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
@@ -244,28 +237,27 @@ static u16 drawWallD(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 	{
 		//Black edge of door.
 
-		bmFillRect4(x, y, h, blackBm);
+		bmDraw4(x, y, h, BM_OP_FILL, BM_OP_CLEAR);
 	}
 	else if(wallx < dleft || wallx > dright)
 	{
 		if((wallx < (dleft - 2) && wallx >= (dleft - 5)) || (wallx > (dright + 2) && wallx <= (dright + 5)))
 		{
 			//Grey door face.
-			bmFillRect4(x, y, h, greyBm);
+			bmDraw4(x, y, h, BM_OP_CLEAR, BM_OP_FILL);
 
 			//Clear black behind
-			bmClearRect4(x, y, (h >> 2), blackBm); //Top qtr.
-			bmClearRect4(x, y + (h >> 1), (h >> 1), blackBm); //Bottom half.
+			//bmDraw4(x, y, (h >> 2), BM_OP_CLEAR, BM_OP_NO_OP); //Top qtr.
+			//bmDraw4(x, y + (h >> 1), (h >> 1), BM_OP_CLEAR, BM_OP_NO_OP); //Bottom half.
 		}
 		else
 		{
-			bmClearRect4(x, y, h, blackBm);
-			bmFillRect4(x, y, h, greyBm);
+			bmDraw4(x, y, h, BM_OP_CLEAR, BM_OP_FILL);
 		}
 
 
 		//Kickplate.
-		bmFillPattern4(x, y + h - (h >> 3), h >> 3, blackBm);
+		bmDraw4(x, y + h - (h >> 3), h >> 3, BM_OP_PATTERN, BM_OP_FILL);
 	}
 	else
 	{
@@ -279,7 +271,7 @@ static u16 drawWallP(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
 	//Black wall with brick effect.
 
-	bmFillRect4(x, y, h, blackBm);
+	bmDraw4(x, y, h, BM_OP_FILL, BM_OP_NO_OP);
 
 	if(fp2int(hit->f_wallDist) < 6)
 		brickPattern(x, y, w, h, hit, MODE_CLEAR);
@@ -300,7 +292,7 @@ static u16 drawWallB(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 
 	if((hit->f_wallX >> 3) & 1)
 	{
-		bmFillRect4(x, y + (h >> 3), h - (h >> 2), blackBm);
+		bmDraw4(x, y + (h >> 3), h - (h >> 2), BM_OP_FILL, BM_OP_CLEAR);
 
 		return TRUE;
 	}
@@ -316,7 +308,7 @@ static u16 drawWallW(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 	s16 bottom = y + h;
 	s16 capHeight = hit->wallHeight >> 2;
 
-	bmFillRect4(x, y + (h >> 2), h - (h >> 1), greyBm);
+	bmDraw4(x, y + (h >> 2), h - (h >> 1), BM_OP_NO_OP, BM_OP_FILL);
 	
 	depthWall(x, top, w, capHeight, hit);
 	depthWall(x, bottom - capHeight, w, capHeight, hit);
@@ -328,7 +320,7 @@ static u16 drawWallV(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
 	//The Void. Horizon line.
 
-	bmFillRect4(x, 80, 1, blackBm);
+	bmDraw4(x, 80, 1, BM_OP_FILL, BM_OP_NO_OP);
 
 	return FALSE;
 }
@@ -578,6 +570,6 @@ void draw()
 	drawSprite(player.currentWeapon->spanX, player.currentWeapon->y, player.weaponState.weaponSpriteId);
 
 	//Add rect around screen.
-	bmDrawRect(0, 0, 240, 160, blackBm);
+	bmDrawRect(0, 0, 240, 160, BM_PLANE_BLACK);
 
 }
