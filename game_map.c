@@ -4,6 +4,7 @@
 #include "sprslot.h"
 #include "debug.h"
 #include "enemy.h"
+#include "walls.h"
 
 #define MAP_FILE_NAME_LEN 64
 
@@ -11,6 +12,14 @@ u16 map[MAP_Y][MAP_X];
 
 void loadMapData(const u8 mapId)
 {
+	/* Select the complete wall style for this level here. */
+	switch(mapId)
+	{
+		default:
+			drawWall = drawWallDefault;
+			break;
+	}
+
 	loadSprite("sci", SPRITE_SLOT_CIV);
 	loadSprite("mer", SPRITE_SLOT_MER);
 	loadSprite("sgr", SPRITE_SLOT_SGR);

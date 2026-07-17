@@ -1,14 +1,14 @@
 
  Start  Stop   Length Name               Class              Group
 
- 00000H 03554H 03554H _TEXT              CODE               (none)
+ 00000H 0355EH 0355EH _TEXT              CODE               (none)
  03560H 04560H 01000H STACK              STACK              (none)
  04560H 05560H 01000H _MAGIC             MAGIC              DGROUP 
  05560H 05562H 00002H _INIT              DATA               DGROUP 
  05562H 062A5H 00D43H _CONST             DATA               DGROUP 
  062B0H 06308H 00058H _DATA              DATA               DGROUP 
- 06300H 0E7E9H 084E9H _BSS               BSS                DGROUP 
- 0E7F0H 0E7FAH 0000AH BSS_END            BSS                DGROUP 
+ 06300H 0E7EBH 084EBH _BSS               BSS                DGROUP 
+ 0E7F0H 0E7F8H 00008H BSS_END            BSS                DGROUP 
 
   Address         Publics by Value
 
@@ -38,72 +38,73 @@
  0000:0EAF       _runAI
  0000:13A1       _initPlayer
  0000:13E4       _updatePlayer
- 0000:1CB0       _draw
- 0000:25E7       _loadSprite
- 0000:27B2       _projectSprite
- 0000:2847       _drawProjectedSprite
- 0000:2C18       _drawSprite
- 0000:2DD4       _drawDbgText
- 0000:2DF1       _loadMapData
- 0000:2E24       _getCellEncoding
- 0000:2E9F       _loadMap
- 0000:2F64       _disableMemProtection
- 0000:2F69       _enableMemProtection
- 0000:2F6E       _blitVideoMem
- 0000:3236       _main
- 0000:329D       _p_atob
- 0000:32A2       _p_atos
- 0000:32C0       _p_close
- 0000:32C8       _p_setirpowerlevel
- 0000:32CD       _p_returntickcount
- 0000:32D2       _p_open
- 0000:32E0       _p_read
- 0000:32E8       _p_getscancodes
- 0000:32ED       _p_sgclose
- 0000:32F7       _p_sgcopyfr
- 0000:3301       _p_sgcopyto
- 0000:330B       _p_sgcreate
- 0000:3313       _p_slen
- 0000:3316       _wConnect
- 0000:331B       _wInvalidateWin
- 0000:3320       _wValidateWin
- 0000:3325       _wEndRedraw
- 0000:332A       _wCreateWindow
- 0000:332F       _wInitialiseWindowTree
- 0000:3334       _gPrintText
- 0000:3339       _gCreateGC
- 0000:333E       _wGetEventSpecial
- 0000:3343       _wGetEventWait
- 0000:3350       _wFlush
- 0000:3355       _wBeginRedrawWinGC0
- 0000:335C       _gCreateGC0
- 0000:3363       _wCompatibilityMode
- 0000:336B       __FatalErrorPos
- 0000:3374       __FatalError
- 0000:3378       _ExtCatTable
- 0000:3378       _ClassTable
- 0000:337A       N$StdRet
- 0000:3384       N$SgnMol
- 0000:3384       N$UnsMol
- 0000:33E3       N$SgnDiv
- 0000:349C       N$UnsMul
- 0000:34E0       N$LngShl
- 0000:34EB       N$LngShr
- 0000:34F6       N$CnsStk
- 0000:34FC       N$CnsPtr
- 0000:3502       N$CnsIdx
- 0000:3508       N$CnsOvr
- 0000:350E       N$CnsRng
- 0000:3514       N$CnsRet
- 0000:351A       N$CnsCase
- 0000:3520       N$CnsDiv
- 0000:3526       N$CnsPVC
- 0000:3550       __FloatInit
- 0000:3553       __FloatJmpRestore
- 0000:3553       __FloatFinish
- 0000:3553       __FloatJmpSave
- 0000:3553       __FloatMathExcepDos
- 0000:3553       __FloatInitInstance
+ 0000:1759       _draw
+ 0000:2001       _drawWallDefault
+ 0000:25E8       _loadSprite
+ 0000:27B3       _projectSprite
+ 0000:2848       _drawProjectedSprite
+ 0000:2C19       _drawSprite
+ 0000:2DD5       _drawDbgText
+ 0000:2DF2       _loadMapData
+ 0000:2E2F       _getCellEncoding
+ 0000:2EAA       _loadMap
+ 0000:2F6E       _disableMemProtection
+ 0000:2F73       _enableMemProtection
+ 0000:2F78       _blitVideoMem
+ 0000:3240       _main
+ 0000:32A7       _p_atob
+ 0000:32AC       _p_atos
+ 0000:32CA       _p_close
+ 0000:32D2       _p_setirpowerlevel
+ 0000:32D7       _p_returntickcount
+ 0000:32DC       _p_open
+ 0000:32EA       _p_read
+ 0000:32F2       _p_getscancodes
+ 0000:32F7       _p_sgclose
+ 0000:3301       _p_sgcopyfr
+ 0000:330B       _p_sgcopyto
+ 0000:3315       _p_sgcreate
+ 0000:331D       _p_slen
+ 0000:3320       _wConnect
+ 0000:3325       _wInvalidateWin
+ 0000:332A       _wValidateWin
+ 0000:332F       _wEndRedraw
+ 0000:3334       _wCreateWindow
+ 0000:3339       _wInitialiseWindowTree
+ 0000:333E       _gPrintText
+ 0000:3343       _gCreateGC
+ 0000:3348       _wGetEventSpecial
+ 0000:334D       _wGetEventWait
+ 0000:335A       _wFlush
+ 0000:335F       _wBeginRedrawWinGC0
+ 0000:3366       _gCreateGC0
+ 0000:336D       _wCompatibilityMode
+ 0000:3375       __FatalErrorPos
+ 0000:337E       __FatalError
+ 0000:3382       _ExtCatTable
+ 0000:3382       _ClassTable
+ 0000:3384       N$StdRet
+ 0000:338E       N$SgnMol
+ 0000:338E       N$UnsMol
+ 0000:33ED       N$SgnDiv
+ 0000:34A6       N$UnsMul
+ 0000:34EA       N$LngShl
+ 0000:34F5       N$LngShr
+ 0000:3500       N$CnsStk
+ 0000:3506       N$CnsPtr
+ 0000:350C       N$CnsIdx
+ 0000:3512       N$CnsOvr
+ 0000:3518       N$CnsRng
+ 0000:351E       N$CnsRet
+ 0000:3524       N$CnsCase
+ 0000:352A       N$CnsDiv
+ 0000:3530       N$CnsPVC
+ 0000:355A       __FloatInit
+ 0000:355D       __FloatJmpRestore
+ 0000:355D       __FloatFinish
+ 0000:355D       __FloatJmpSave
+ 0000:355D       __FloatMathExcepDos
+ 0000:355D       __FloatInitInstance
  0456:0000       _DatWordDead
  0456:0002       _DatHandNext
  0456:0004       _DatHandPrev
@@ -162,7 +163,8 @@
  0456:1DAC       @StackContextBP
  0456:1DAE       _screenBm
  0456:45AE       _enemyList
- 0456:825A       _map
+ 0456:4AAE       _drawWall
+ 0456:825C       _map
  0456:A290       __bss_end
 
 Program entry point at 0000:0000

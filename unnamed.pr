@@ -5,6 +5,7 @@
 #compile enemy
 #compile player
 #compile draw
+#compile walls
 #compile sprite
 #compile debug
 #compile game_map

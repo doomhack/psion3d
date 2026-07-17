@@ -5,7 +5,8 @@
 This is a Psion 3a/c/mx PLIB/WLIB C raycaster. Source is split by subsystem in the repository root:
 
 - `psion3d.c` owns startup, windows, bitmaps, input, player position, and the main loop.
-- `draw.c` owns ray casting, wall/sprite projection, and all wall drawing variants.
+- `draw.c` owns ray casting, depth/occlusion tracking, sprite projection, and the main render pass.
+- `walls.c` owns wall-style rendering and the `drawWall` function pointer; `walls.h` exposes `wallhit_t`, `wall_draw_fn`, and wall-style entry points.
 - `bitmap.c` owns the local screen buffers and software bitmap fill/clear/line routines.
 - `game_map.c` stores the 64x64 map; `game_map.h` exposes inline/static helpers for cell tests.
 - `sprite.c` owns sprite loading, caching, projection, and drawing. `sprite_test_pattern.h` contains the private fallback sprite pattern included by `sprite.c`.
@@ -44,6 +45,10 @@ Rendering uses two logical bitplanes (`BM_BLK`, `BM_GRY`) stored in one local 25
 Bitmap rows are 32 bytes wide (`256 / 8`) so row addressing is `y << 5` for bytes and `y << 4` for words. Pixels are low-bit-first inside each byte: pixel `x` uses mask `1 << (x & 7)`. Preserve this bit order; high-bit-first masks cause column pairs to appear swapped and create jagged wall/floor edges.
 
 The raycaster renders wall columns as 4-pixel-wide spans with `x` aligned to a nibble boundary. Use the fixed-width helpers (`bmFillRect4`, `bmClearRect4`, `bmFillPattern4`) for those hot wall-column fills/clears/patterns. Keep the general `bmFillRect`, `bmClearRect`, and `bmFillPattern` for variable-width sprites, UI, and 1-pixel brick/detail marks.
+
+Wall appearance is selected per level in `loadMapData()` by assigning the global `drawWall` function pointer. The existing style is `drawWallDefault()`. Add complete environment-specific implementations to `walls.c`, declare exported entry points in `walls.h`, and select them in the `loadMapData()` `mapId` switch. Each implementation receives the same `wallhit_t`, so map keys and `WALL_TYPE_*` values remain environment-independent. A wall renderer returns `TRUE` when the column should update the wall depth buffer and `FALSE` for openings or translucent/non-occluding features; preserve this contract for sprite occlusion and weapon impacts.
+
+Keep the DDA and wall presentation boundary intact: `draw.c` calculates `wallHeight`, `f_wallDist`, `f_wallX`, `cell`, and `side`, then calls `drawWall`. Environment-specific patterns, shading, door/window shapes, and `WALL_TYPE_*` dispatch belong in `walls.c`. Wall drawing is a hot path invoked for every visible span, so avoid allocation, floating point, and unnecessary division in new styles.
 
 The app copies the whole combined buffer to the segment-backed WLIB bitmap with one `p_sgcopyto()`, then blits the top half to the black window plane and the bottom half to the grey window plane. Avoid reintroducing per-primitive WLIB drawing in hot paths unless it is a deliberate compatibility fallback.
 
