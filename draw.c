@@ -28,6 +28,7 @@ typedef struct markedsprite_t
 #define WALL_HEIGHT_NUM ((s16)30720)
 #define IMPACT_HEIGHT_NUM ((s16)30720)
 #define IMPACT_NEAR_DEPTH ((f16)32)
+#define IMPACT_FAR_DEPTH ((f16)512)
 #define MAX_VISIBLE_SPRITES 8
 
 static u16 resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHit,
@@ -82,6 +83,9 @@ static u16 resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHit
 	if(f_wallDepth[aimSpan] != FP_MAX)
 	{
 		f16 f_impactDepth = f_wallDepth[aimSpan];
+
+		if(f_impactDepth > IMPACT_FAR_DEPTH)
+			f_impactDepth = IMPACT_FAR_DEPTH;
 
 		if(f_impactDepth < IMPACT_NEAR_DEPTH)
 			f_impactDepth = IMPACT_NEAR_DEPTH;
@@ -571,7 +575,7 @@ void draw()
 	}
 
 	//Draw player weapon.
-	drawSprite(35, 96, player.weaponState.weaponSpriteId);
+	drawSprite(player.currentWeapon->spanX, player.currentWeapon->y, player.weaponState.weaponSpriteId);
 
 	//Add rect around screen.
 	bmDrawRect(0, 0, 240, 160, blackBm);

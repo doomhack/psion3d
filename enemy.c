@@ -24,6 +24,8 @@
 #define ENEMY_HURT_DELAY fpSecondsToTicks(flt2fp(0.25f))
 #define ENEMY_DYING_DELAY fpSecondsToTicks(flt2fp(0.5f))
 
+#define ENEMY_COLLISION_RADIUS flt2fp(0.75f)
+
 const enemystats_t enemyStats[] =
 {
 	{flt2fp(2),    48,  100,  0,  0,  SPRITE_SLOT_CIV}, //Civilian
@@ -418,6 +420,34 @@ enemy_t* getEnemy(u16 id)
     }
 
     return NULL;
+}
+
+u16 enemyBlocksPosition(f16 x, f16 y)
+{
+    u16 id;
+    s32 radiusSquared = (s32)ENEMY_COLLISION_RADIUS * ENEMY_COLLISION_RADIUS;
+
+    for(id = 0; id < enemyCount; id++)
+    {
+        const enemy_t* enemy = &enemyList[id];
+        s32 dx;
+        s32 dy;
+
+        if(enemy->state == ENEMY_STATE_DEAD)
+            continue;
+
+        dx = (s32)x - enemy->x;
+        dy = (s32)y - enemy->y;
+
+        if(dx > ENEMY_COLLISION_RADIUS || dx < -ENEMY_COLLISION_RADIUS ||
+            dy > ENEMY_COLLISION_RADIUS || dy < -ENEMY_COLLISION_RADIUS)
+            continue;
+
+        if(dx * dx + dy * dy <= radiusSquared)
+            return TRUE;
+    }
+
+    return FALSE;
 }
 
 void damageEnemy(u16 id, u8 damage)

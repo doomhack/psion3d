@@ -4,6 +4,7 @@
 #include "sprslot.h"
 #include "fp_math.h"
 #include "game_map.h"
+#include "enemy.h"
 #include "units.h"
 #include "psion3d.h"
 
@@ -69,7 +70,7 @@ static void tryMove(const f16 dx, const f16 dy)
 	f16 ny = player.pos.y;
 	u16 cell = fmapCell(nx, ny);
 
-	if(canWalk(cell))
+	if(canWalk(cell) && !enemyBlocksPosition(nx, ny))
 		player.pos.x = nx;
 
 	nx = player.pos.x;
@@ -77,7 +78,7 @@ static void tryMove(const f16 dx, const f16 dy)
 
 	cell = fmapCell(nx, ny);
 
-	if(canWalk(cell))
+	if(canWalk(cell) && !enemyBlocksPosition(nx, ny))
 		player.pos.y = ny;
 }
 
