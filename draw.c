@@ -15,6 +15,11 @@ typedef struct markedsprite_t
 } markedsprite_t;
 
 #define WALL_HEIGHT_NUM ((s16)30720)
+
+/* Largest per cell step the s16 side distance accumulator can take and still
+   not wrap over the map's ~90 cell diagonal. A ray with a bigger delta is
+   within about a degree of axis-parallel; those take the fpdiv path below. */
+#define DDA_SAFE_DELTA ((f16)9728)
 #define IMPACT_HEIGHT_NUM ((s16)30720)
 #define IMPACT_NEAR_DEPTH ((f16)32)
 #define IMPACT_FAR_DEPTH ((f16)512)
@@ -93,16 +98,24 @@ static u16 resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHit
 	return FALSE;
 }
 
-/* 60 degree FOV, 60 rays, 4 pixels each */
-static const f16 rayAngleOffset[60] =
+/* 60 degree FOV, 60 rays, 4 pixels each. Held as sincos_tab index offsets
+   rather than as angles, so a ray direction is one add onto the player's table
+   index instead of a trigidx() conversion per ray. Spans 171 of the 1024
+   entries, which is the same 60.1 degrees as the angle table it replaces. */
+static const s16 rayIdxOffset[60] =
 {
-	-134, -130, -125, -121, -116, -112, -107, -103, -98, -94,
-	-89, -85, -80, -75, -71, -66, -62, -57, -53, -48,
-	-44, -39, -35, -30, -25, -21, -16, -12, -7, -3,
-	2, 6, 11, 15, 20, 24, 29, 34, 38, 43,
-	47, 52, 56, 61, 65, 70, 74, 79, 84, 88,
-	93, 97, 102, 106, 111, 115, 120, 124, 129, 134
+	-86, -83, -80, -78, -74, -72, -69, -66, -63, -60,
+	-57, -55, -51, -48, -46, -43, -40, -37, -34, -31,
+	-29, -25, -23, -20, -16, -14, -11, -8, -5, -2,
+	1, 3, 7, 9, 12, 15, 18, 21, 24, 27,
+	29, 33, 35, 38, 41, 44, 47, 50, 53, 56,
+	59, 61, 64, 67, 70, 73, 76, 78, 82, 85
 };
+
+/* rayDelta() of every sincos_tab entry. Ray directions are always table
+   entries, so the divide is hoisted out of the frame entirely. */
+static f16 recipTab[TRIG_TABLE_LEN];
+static u8 recipReady = FALSE;
 
 static f16 rayDelta(const f16 f_dir)
 {
@@ -133,6 +146,17 @@ void draw()
 	f16 f_wallDepth[60];
 	const f16 f_viewCos = fpcos(player.pos.angle);
 	const f16 f_viewSin = fpsin(player.pos.angle);
+	const s16 baseIdx = trigidx(player.pos.angle);
+
+	if(!recipReady)
+	{
+		u16 k;
+
+		for(k = 0; k < TRIG_TABLE_LEN; k++)
+			recipTab[k] = rayDelta(sincos_tab[k]);
+
+		recipReady = TRUE;
+	}
 
 	for(i = 0; i < 60; i++)
 	{
@@ -148,13 +172,15 @@ void draw()
 		
 		u16 solid, hits;
 	
-		const f16 f_ra = player.pos.angle + rayAngleOffset[i];
+		const s16 rayIdx = baseIdx + rayIdxOffset[i];
+		const u16 cosIdx = (u16)((rayIdx + TRIG_COS_OFFSET) & TRIG_TABLE_MASK);
+		const u16 sinIdx = (u16)(rayIdx & TRIG_TABLE_MASK);
 
-		const f16 f_dx = fpcos(f_ra);
-		const f16 f_dy = fpsin(f_ra);
+		const f16 f_dx = sincos_tab[cosIdx];
+		const f16 f_dy = sincos_tab[sinIdx];
 
-		const f16 f_deltax = rayDelta(f_dx);
-		const f16 f_deltay = rayDelta(f_dy);
+		const f16 f_deltax = recipTab[cosIdx];
+		const f16 f_deltay = recipTab[sinIdx];
 
 		f_wallDepth[i] = FP_MAX;
 
@@ -198,20 +224,17 @@ void draw()
 					f_sidedx = f_sidedx + f_deltax;
 					mapx += stepx;
 					side = 0;
-
-					hitcell = mapCell(mapx, mapy);
-					hit = isWall(hitcell);
 				}
 				else
 				{
 					f_sidedy = f_sidedy + f_deltay;
 					mapy += stepy;
 					side = 1;
-
-					hitcell = mapCell(mapx, mapy);
-					hit = isWall(hitcell);
 				}
-				
+
+				hitcell = mapCell(mapx, mapy);
+				hit = isWall(hitcell);
+
 				if(hit == 0)
 				{
 					if(isSprite(hitcell) && !isMarked(hitcell) &&
@@ -258,18 +281,30 @@ void draw()
 			wallhits[hits].cell = hitcell;
 			wallhits[hits].side = side;
 
+			/* The side distance was advanced past the boundary just crossed, so
+			   subtracting one delta recovers the distance to it, without the
+			   bit-serial 32 bit divide the old fpdiv needed. Near axis-parallel
+			   rays keep the divide: their delta is large enough that the s16
+			   accumulator can wrap inside the map, and the subtraction would
+			   then return a near-zero distance and paint a full height column. */
 			if(side == 0)
 			{
-				f_dist = fpdiv((int2fp(mapx) - player.pos.x) + int2fp(((1-stepx)>>1)), f_dx);
+				f_dist = (f_deltax < DDA_SAFE_DELTA)
+					? (f16)(f_sidedx - f_deltax)
+					: fpdiv((int2fp(mapx) - player.pos.x) + int2fp(((1-stepx)>>1)), f_dx);
+
 				f_wallx = player.pos.y + fpmul(f_dist, f_dy);
 			}
 			else
 			{
-				f_dist = fpdiv((int2fp(mapy) - player.pos.y) + int2fp(((1-stepy)>>1)), f_dy);
+				f_dist = (f_deltay < DDA_SAFE_DELTA)
+					? (f16)(f_sidedy - f_deltay)
+					: fpdiv((int2fp(mapy) - player.pos.y) + int2fp(((1-stepy)>>1)), f_dy);
+
 				f_wallx = player.pos.x + fpmul(f_dist, f_dx);
 			}
 
-			if(f_dist == 0)
+			if(f_dist <= 0)
 				f_dist = 1;
 
 			wallhits[hits].wallHeight = WALL_HEIGHT_NUM / f_dist;
@@ -284,7 +319,7 @@ void draw()
 		while(hits > 0)
 		{
 			hits--;
-			
+
 			if(drawWall(i << 2, &wallhits[hits]))
 				f_wallDepth[i] = wallhits[hits].f_wallDist;
 		}
@@ -298,7 +333,7 @@ void draw()
 	while(spritesHit > 0)
 	{
 		spritesHit--;
-		
+
 		if(spriteHits[spritesHit].f_spriteDist < f_wallDepth[spriteHits[spritesHit].spanX])
 			drawProjectedSprite(&spriteHits[spritesHit]);
 	}

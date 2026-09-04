@@ -45,7 +45,7 @@ static void depthWall(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
 	s16 depth = fp2int(hit->f_wallDist);
 
-	if(depth >= 6)
+	if(depth >= WALL_DETAIL_DEPTH)
 	{
 		bmFillRect4(x, y, h, blackBm);
 		return;
@@ -63,7 +63,7 @@ static u16 drawWallX(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
 	depthWall(x, y, w, h, hit);
 
-	if(fp2int(hit->f_wallDist) < 6)
+	if(fp2int(hit->f_wallDist) < WALL_DETAIL_DEPTH)
 		brickPattern(x, y, w, h, hit, MODE_FILL);
 
 	return TRUE;
@@ -126,7 +126,7 @@ static u16 drawWallP(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
 	bmFillRect4(x, y, h, blackBm);
 
-	if(fp2int(hit->f_wallDist) < 6)
+	if(fp2int(hit->f_wallDist) < WALL_DETAIL_DEPTH)
 		brickPattern(x, y, w, h, hit, MODE_CLEAR);
 
 	return TRUE;

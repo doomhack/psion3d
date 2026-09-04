@@ -9,7 +9,7 @@ static void labDepthWall(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
 	s16 depth = fp2int(hit->f_wallDist);
 
-	if(depth >= 6)
+	if(depth >= WALL_DETAIL_DEPTH)
 	{
 		bmFillRect4(x, y, h, blackBm);
 		return;
@@ -49,7 +49,7 @@ static u16 drawBrickPanels(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	s16 wallheight8 = (hit->wallHeight >> 3);
 	s16 wallheight16 = wallheight8 >> 1;
 
-	if(depth >= 6)
+	if(depth >= WALL_DETAIL_DEPTH)
 	{
 		bmFillRect4(x, y, h, blackBm);
 
@@ -64,11 +64,17 @@ static u16 drawBrickPanels(s16 x, s16 y, s16 h, const wallhit_t* hit)
 		bmFillPattern4(x, y, h, greyBm);
 	}
 
-	bmFillPattern4(x, bottom - wallheight16, wallheight16, blackBm);
-
+	/* Band at the horizon first: it is always on screen and the widest, so it
+	   is the one to keep when BRICK_BAND_COUNT is reduced. */
+#if BRICK_BAND_COUNT >= 1
 	bmFillPattern4(x, 80-wallheight8, wallheight8, blackBm);
-
+#endif
+#if BRICK_BAND_COUNT >= 2
 	bmFillPattern4(x, y + wallheight8, wallheight8, blackBm);
+#endif
+#if BRICK_BAND_COUNT >= 3
+	bmFillPattern4(x, bottom - wallheight16, wallheight16, blackBm);
+#endif
 
 	return TRUE;
 }
@@ -77,7 +83,7 @@ static u16 drawSecretPanel(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
 	labDepthWall(x, y, h, hit);
 
-	if(fp2int(hit->f_wallDist) < 6)
+	if(fp2int(hit->f_wallDist) < WALL_DETAIL_DEPTH)
 		panelSeams(x, y, h, hit);
 
 	return TRUE;
