@@ -44,9 +44,10 @@ static void panelSeams(s16 x, s16 y, s16 h, const wallhit_t* hit)
 static u16 drawBrickPanels(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
 	s16 depth = fp2int(hit->f_wallDist);
-	s16 top = 80 - (hit->wallHeight >> 1);
+	/* y is already 80 - (wallHeight >> 1) for this wall type. */
 	s16 bottom = 80 + (hit->wallHeight >> 1);
 	s16 wallheight8 = (hit->wallHeight >> 3);
+	s16 wallheight16 = wallheight8 >> 1;
 
 	if(depth >= 6)
 	{
@@ -63,11 +64,11 @@ static u16 drawBrickPanels(s16 x, s16 y, s16 h, const wallhit_t* hit)
 		bmFillPattern4(x, y, h, greyBm);
 	}
 
-	bmFillPattern4(x, bottom - (wallheight8 >> 1), wallheight8 >> 1, blackBm);
+	bmFillPattern4(x, bottom - wallheight16, wallheight16, blackBm);
 
 	bmFillPattern4(x, 80-wallheight8, wallheight8, blackBm);
 
-	bmFillPattern4(x, top + wallheight8, wallheight8, blackBm);
+	bmFillPattern4(x, y + wallheight8, wallheight8, blackBm);
 
 	return TRUE;
 }
@@ -165,6 +166,20 @@ static u16 drawServiceGrille(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	s16 openingH = h - (capHeight << 1);
 	s16 wallx = (hit->f_wallX >> 3);
 	s16 bottom = y + hit->wallHeight;
+	s16 quarter = h >> 2;
+	s16 bottomCapY = bottom - quarter;
+
+	/* Grille bar columns end up filled black over the full height, which covers
+	   every black plane span the cap detail would have drawn. Only the grey
+	   plane writes still matter, so skip the rest. */
+	if(wallx < 2 || wallx > 29 || wallx == 10 || wallx == 20)
+	{
+		bmFillRect4(x, y, capHeight, greyBm);
+		bmFillRect4(x, bottomCapY, quarter, greyBm);
+		bmFillRect4(x, y, h, blackBm);
+
+		return FALSE;
+	}
 
 	//Top cap
 	bmClearRect4(x, y, capHeight, blackBm);
@@ -176,20 +191,11 @@ static u16 drawServiceGrille(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	bmFillPattern4(x, y + capHeight, h >> 1, blackBm);
 
 	//Bottom cap
-	bmClearRect4(x, bottom - (h >> 2), h >> 2, blackBm);
-	bmFillRect4(x, bottom - (h >> 2), h >> 2, greyBm);
+	bmClearRect4(x, bottomCapY, quarter, blackBm);
+	bmFillRect4(x, bottomCapY, quarter, greyBm);
 
-	bmFillRect4(x, bottom - (h >> 2), capHeight >> 3, blackBm);
+	bmFillRect4(x, bottomCapY, capHeight >> 3, blackBm);
 	bmFillRect4(x, bottom - (capHeight >> 3), capHeight >> 3, blackBm);
-
-	if(wallx < 2 || wallx > 29)
-	{
-		bmFillRect4(x, y, h, blackBm);
-	}
-	else if(wallx == 10 || wallx == 20)
-	{
-		bmFillRect4(x, y, h, blackBm);
-	}
 
 	return FALSE;
 }

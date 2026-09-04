@@ -171,7 +171,6 @@ static u16 drawWallV(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 
 u16 drawWallDefault(u16 x, wallhit_t* hit)
 {
-	u16 updateZ = TRUE;
 	s16 y;
 	s16 w = 4;
 	s16 h = hit->wallHeight;
@@ -179,43 +178,37 @@ u16 drawWallDefault(u16 x, wallhit_t* hit)
 
 	y = 80 - (h >> 1);
 
+	/* One dispatch on wall_type, with the per type adjustments folded in. */
 	switch(wall_type)
 	{
-		case WALL_TYPE_WINDOW:
-			hit->side = 0;
-			break;
+		case WALL_TYPE_BRICK:
+			return drawWallX(x, y, w, h, hit);
+
 		case WALL_TYPE_SECRET:
 			y += 2;
 			h -= 4;
 			hit->side = 1 - hit->side;
-			break;
-	}
+			return drawWallX(x, y, w, h, hit);
 
-	switch(wall_type)
-	{
-		case WALL_TYPE_BRICK:
-		case WALL_TYPE_SECRET:
-			updateZ = drawWallX(x, y, w, h, hit);
-			break;
 		case WALL_TYPE_ARCH:
-			updateZ = drawWallA(x, y, w, h, hit);
-			break;
+			return drawWallA(x, y, w, h, hit);
+
 		case WALL_TYPE_UNLOCKED_DOOR:
-			updateZ = drawWallD(x, y, w, h, hit);
-			break;
+			return drawWallD(x, y, w, h, hit);
+
 		case WALL_TYPE_DARK:
-			updateZ = drawWallP(x, y, w, h, hit);
-			break;
+			return drawWallP(x, y, w, h, hit);
+
 		case WALL_TYPE_BARS:
-			updateZ = drawWallB(x, y, w, h, hit);
-			break;
+			return drawWallB(x, y, w, h, hit);
+
 		case WALL_TYPE_WINDOW:
-			updateZ = drawWallW(x, y, w, h, hit);
-			break;
+			hit->side = 0;
+			return drawWallW(x, y, w, h, hit);
+
 		case WALL_TYPE_VOID:
-			updateZ = drawWallV(x, y, w, h, hit);
-			break;
+			return drawWallV(x, y, w, h, hit);
 	}
 
-	return updateZ;
+	return TRUE;
 }

@@ -25,6 +25,7 @@
 #define ENEMY_DYING_DELAY fpSecondsToTicks(flt2fp(0.5f))
 
 #define ENEMY_COLLISION_RADIUS flt2fp(0.75f)
+#define ENEMY_COLLISION_RADIUS_SQ ((s32)ENEMY_COLLISION_RADIUS * ENEMY_COLLISION_RADIUS)
 
 const enemystats_t enemyStats[] =
 {
@@ -34,6 +35,11 @@ const enemystats_t enemyStats[] =
 	{flt2fp(1.0),  16,  250,  25, 25, SPRITE_SLOT_HVY}  //Heavy
 };
 
+
+#define ENEMY_TYPE_COUNT 4
+
+/* Derived once per map load from enemyStats[].moveSpeed. */
+static u8 enemyMoveTickTable[ENEMY_TYPE_COUNT];
 
 enemy_t enemyList[MAX_ENEMIES];
 
@@ -95,24 +101,39 @@ static void enemyUpdateMapCell(const u16 id, enemy_t* enemy)
     enemy->cellY = newY;
 }
 
+/* The view sin/cos are the same for every enemy in a tick, and the angle only
+   changes in updatePlayer, so cache them rather than recomputing per enemy. */
+static f16 f_viewTrigAngle = 0;
+static f16 f_viewSin = 0;
+static f16 f_viewCos = 0;
+static u8 viewTrigValid = FALSE;
+
+static void enemyUpdateViewTrig()
+{
+    if(viewTrigValid && f_viewTrigAngle == player.pos.angle)
+        return;
+
+    f_viewTrigAngle = player.pos.angle;
+    f_viewSin = fpsin(f_viewTrigAngle);
+    f_viewCos = fpcos(f_viewTrigAngle);
+    viewTrigValid = TRUE;
+}
+
 static void enemySetWalkFrame(enemy_t* enemy)
 {
     f16 f_dx = enemy->moveTargetX - enemy->x;
     f16 f_dy = enemy->moveTargetY - enemy->y;
-    f16 f_side =
-        -fpmul(f_dx, fpsin(player.pos.angle)) +
-         fpmul(f_dy, fpcos(player.pos.angle));
+    f16 f_side;
 
-    if(f_side > 0)
-    {
-        enemy->spriteFrame = (enemy->stateCounter & 1) ? ENEMY_FRAME_WALK_R1 : ENEMY_FRAME_WALK_R2;
-        enemy->spriteMirrored = FALSE;
-    }
-    else
-    {
-        enemy->spriteFrame = (enemy->stateCounter & 1) ? ENEMY_FRAME_WALK_R1 : ENEMY_FRAME_WALK_R2;
-        enemy->spriteMirrored = TRUE;
-    }
+    enemyUpdateViewTrig();
+
+    f_side =
+        -fpmul(f_dx, f_viewSin) +
+         fpmul(f_dy, f_viewCos);
+
+    /* Both cases pick the same frame; only the mirroring differs. */
+    enemy->spriteFrame = (enemy->stateCounter & 1) ? ENEMY_FRAME_WALK_R1 : ENEMY_FRAME_WALK_R2;
+    enemy->spriteMirrored = (f_side > 0) ? FALSE : TRUE;
 }
 
 static void enemyMoveTick(const u16 id, enemy_t* enemy)
@@ -185,7 +206,7 @@ static u8 enemyRandomChance(const u8 chance)
 
 static u8 enemyMoveTicks(const enemy_t* enemy)
 {
-    return fpMetersPerSecondToCellTicks(enemy->enemyStats->moveSpeed);
+    return enemyMoveTickTable[enemy->type];
 }
 
 static void enemyShootPlayer(const enemy_t* enemy)
@@ -352,7 +373,14 @@ static void enemySetTargetToPlayer(enemy_t* enemy)
 
 void resetEnemy()
 {
+    u8 type;
+
     enemyCount = 0;
+    viewTrigValid = FALSE;
+
+    /* moveSpeed is a constant per type, so the tick count only needs deriving once. */
+    for(type = 0; type < ENEMY_TYPE_COUNT; type++)
+        enemyMoveTickTable[type] = fpMetersPerSecondToCellTicks(enemyStats[type].moveSpeed);
 }
 
 u16 getEnemyCell(u16 x, u16 y, s8 cell)
@@ -425,25 +453,28 @@ enemy_t* getEnemy(u16 id)
 u16 enemyBlocksPosition(f16 x, f16 y)
 {
     u16 id;
-    s32 radiusSquared = (s32)ENEMY_COLLISION_RADIUS * ENEMY_COLLISION_RADIUS;
 
     for(id = 0; id < enemyCount; id++)
     {
         const enemy_t* enemy = &enemyList[id];
-        s32 dx;
-        s32 dy;
+        s16 dx;
+        s16 dy;
 
         if(enemy->state == ENEMY_STATE_DEAD)
             continue;
 
-        dx = (s32)x - enemy->x;
-        dy = (s32)y - enemy->y;
+        /* Map positions are at most MAP_X << FP_BITS, so the difference of two
+           f16 always fits in 16 bits. Rejecting in 16 bit keeps the common case
+           off the 32 bit helper path. */
+        dx = x - enemy->x;
+        dy = y - enemy->y;
 
         if(dx > ENEMY_COLLISION_RADIUS || dx < -ENEMY_COLLISION_RADIUS ||
             dy > ENEMY_COLLISION_RADIUS || dy < -ENEMY_COLLISION_RADIUS)
             continue;
 
-        if(dx * dx + dy * dy <= radiusSquared)
+        /* Only survivors of the box test need the widened distance check. */
+        if((((s32)dx * dx) + ((s32)dy * dy)) <= ENEMY_COLLISION_RADIUS_SQ)
             return TRUE;
     }
 

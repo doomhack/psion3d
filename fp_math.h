@@ -15,7 +15,13 @@ extern const f16 sincos_tab[TRIG_TABLE_LEN];
 
 static s16 trigidx(const f16 rad)
 {
-	return (s16)(((s32)rad * TRIG_RAD_TO_INDEX) >> TRIG_RAD_TO_INDEX_SHIFT);
+	/* Word split avoids the called N$LngShr loop. See fp_types.h. */
+	fpsplit_t r;
+
+	r.l = (s32)rad * TRIG_RAD_TO_INDEX;
+
+	return (s16)((r.w.lo >> TRIG_RAD_TO_INDEX_SHIFT) |
+		(r.w.hi << TRIG_RAD_TO_INDEX_SHIFT));
 }
 
 static f16 fpsin(const f16 rad)

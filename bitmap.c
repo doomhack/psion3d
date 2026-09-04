@@ -207,12 +207,25 @@ void bmDrawRect(s16 x, s16 y, s16 w, s16 h, u8* bm)
 	if(h <= 2)
 		return;
 
-	for(yy = y + 1; yy < bottom; yy++)
+	/* The two vertical edges sit at fixed x, so the byte offsets and bit masks
+	   are the same on every row. Walk the rows with a pointer instead of
+	   recomputing the address and a variable shift per pixel. */
 	{
-		setPixel(x, yy, bm);
+		u8* col = bm + ((y + 1) << 5) + (x >> 3);
+		u8 leftBit = (u8)(1 << (x & 7));
+		u8 rightBit = (u8)(1 << (right & 7));
+		s16 rightOffset = (right >> 3) - (x >> 3);
+		u16 twoEdges = (right != x);
 
-		if(right != x)
-			setPixel(right, yy, bm);
+		for(yy = y + 1; yy < bottom; yy++)
+		{
+			col[0] |= leftBit;
+
+			if(twoEdges)
+				col[rightOffset] |= rightBit;
+
+			col += BM_ROW_BYTES;
+		}
 	}
 }
 

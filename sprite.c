@@ -44,6 +44,7 @@ typedef struct sprite_cache_entry_t
 {
 	u8 spriteId;
 	u8 valid;
+	u16 lastUse;
 } sprite_cache_entry_t;
 
 typedef struct sprite_bounds_t
@@ -67,7 +68,7 @@ static u8 spriteBlackMask[256];
 static u8 spriteGreyMask[256];
 static sprite_cache_entry_t spriteCacheEntries[SPRITE_CACHE_FRAMES];
 static sprite_bounds_t testPatternBounds;
-static u16 spriteCacheRand = 0xace1;
+static u16 spriteCacheClock = 0;
 static u8 testPatternCached = FALSE;
 static u8 spriteMasksReady = FALSE;
 
@@ -200,24 +201,43 @@ static void prepareSpriteFrame(const u8* source, u8* dest, sprite_bounds_t* boun
 	bounds->bottom = maxY;
 }
 
-static u8 randomCacheSlot()
+static u16 spriteCacheTouch()
 {
-	spriteCacheRand = (u16)(spriteCacheRand * 17 + 43);
+	if(++spriteCacheClock == 0)
+	{
+		u8 slot;
 
-	return (u8)((spriteCacheRand >> 8) & (SPRITE_CACHE_FRAMES - 1));
+		/* Clock wrapped. Flatten the ages so ordering stays meaningful. */
+		for(slot = 0; slot < SPRITE_CACHE_FRAMES; slot++)
+			spriteCacheEntries[slot].lastUse = 0;
+
+		spriteCacheClock = 1;
+	}
+
+	return spriteCacheClock;
 }
 
+/* Least recently used. Random eviction thrashed here: a frame can need more
+   distinct frames than there are slots, and every miss costs a 1KB segment copy. */
 static u8 chooseCacheSlot()
 {
 	u8 slot;
+	u8 oldest = 0;
+	u16 oldestUse = 0xffff;
 
 	for(slot = 0; slot < SPRITE_CACHE_FRAMES; slot++)
 	{
 		if(!spriteCacheEntries[slot].valid)
 			return slot;
+
+		if(spriteCacheEntries[slot].lastUse < oldestUse)
+		{
+			oldestUse = spriteCacheEntries[slot].lastUse;
+			oldest = slot;
+		}
 	}
 
-	return randomCacheSlot();
+	return oldest;
 }
 
 static u8* cacheFramePtr(const u8 slot)
@@ -270,7 +290,10 @@ static const u8* getSpriteFrame(const u8 spriteId, sprite_bounds_t* bounds)
 	for(slot = 0; slot < SPRITE_CACHE_FRAMES; slot++)
 	{
 		if(spriteCacheEntries[slot].valid && spriteCacheEntries[slot].spriteId == cacheSpriteId)
+		{
+			spriteCacheEntries[slot].lastUse = spriteCacheTouch();
 			return cacheFramePtr(slot);
+		}
 	}
 
 	slot = chooseCacheSlot();
@@ -278,6 +301,7 @@ static const u8* getSpriteFrame(const u8 spriteId, sprite_bounds_t* bounds)
 
 	spriteCacheEntries[slot].spriteId = cacheSpriteId;
 	spriteCacheEntries[slot].valid = TRUE;
+	spriteCacheEntries[slot].lastUse = spriteCacheTouch();
 
 	return cacheFramePtr(slot);
 }
@@ -447,6 +471,74 @@ u16 projectSprite(const f16 x, const f16 y, spritehit_t* hit, const f16 f_viewCo
 	return TRUE;
 }
 
+/* Scratch for drawProjectedSprite. The source column a destination column maps
+   to is the same on every row of a sprite, so the mapping is built once. Rows
+   are decoded into mask bytes once per distinct source row - when a sprite is
+   drawn taller than SPRITE_SIZE most destination rows repeat the previous
+   source row, which is exactly the close-up case that costs the most. */
+static u8 spriteColByte[SCREEN_WIDTH];
+static u8 spriteColShift[SCREEN_WIDTH];
+static u8 spriteRowOpaque[SCREEN_WIDTH / 8];
+static u8 spriteRowBlack[SCREEN_WIDTH / 8];
+static u8 spriteRowGrey[SCREEN_WIDTH / 8];
+
+/* Ceiling of (value << SPRITE_SCALE_BITS) / step. Both operands fit in 16 bits:
+   value is at most SPRITE_SIZE and step at most SPRITE_SIZE << SPRITE_SCALE_BITS,
+   so this stays a native 16 bit divide instead of a called 32 bit one. */
+static s16 scaleBound(const u16 value, const u16 step)
+{
+	return (s16)((u16)((value << SPRITE_SCALE_BITS) + step - 1) / step);
+}
+
+static void buildSpriteRowMasks(const u8* sourceRow, const s16 rowXStart, const s16 rowXEnd)
+{
+	s16 x = rowXStart;
+	u16 b = (u16)(x >> 3);
+	u8 mask = (u8)(1 << (x & 7));
+	u8 opaqueMask = 0;
+	u8 blackMask = 0;
+	u8 greyMask = 0;
+
+	while(x < rowXEnd)
+	{
+		u8 pix = (sourceRow[spriteColByte[x]] >> spriteColShift[x]) & 3;
+
+		if(pix != SPR_TRANSPARENT)
+		{
+			opaqueMask |= mask;
+
+			if(pix == SPR_BLACK)
+				blackMask |= mask;
+			else if(pix == SPR_GREY)
+				greyMask |= mask;
+		}
+
+		x++;
+		mask <<= 1;
+
+		if(mask == 0)
+		{
+			spriteRowOpaque[b] = opaqueMask;
+			spriteRowBlack[b] = blackMask;
+			spriteRowGrey[b] = greyMask;
+
+			opaqueMask = 0;
+			blackMask = 0;
+			greyMask = 0;
+			mask = 1;
+			b++;
+		}
+	}
+
+	/* Flush the trailing partial byte. */
+	if(mask != 1)
+	{
+		spriteRowOpaque[b] = opaqueMask;
+		spriteRowBlack[b] = blackMask;
+		spriteRowGrey[b] = greyMask;
+	}
+}
+
 void drawProjectedSprite(const spritehit_t* spriteHit)
 {
 	s16 height = spriteHit->spriteHeight;
@@ -463,6 +555,7 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 	s16 yEnd;
 	s16 sourceXStep;
 	s16 sourceXAdvance;
+	s16 sourceXAcc;
 	s16 sourceYStep;
 	s16 sourceYAcc;
 	s16 boundOffset;
@@ -470,6 +563,9 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 	s16 bandXEnd[8];
 	const u8* spriteData;
 	sprite_bounds_t bounds;
+	u16 prevSourceY;
+	u8 firstBand;
+	u8 lastBand;
 	u8 band;
 
 	if(height <= 0)
@@ -525,30 +621,35 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 	if(sourceYStep < 1)
 		sourceYStep = 1;
 
-	boundOffset = (s16)((((s32)bounds.left << SPRITE_SCALE_BITS) +
-		sourceXStep - 1) / sourceXStep);
+	boundOffset = scaleBound(bounds.left, (u16)sourceXStep);
 	if(xStart < left + boundOffset)
 		xStart = left + boundOffset;
 
-	boundOffset = (s16)((((s32)bounds.right << SPRITE_SCALE_BITS) +
-		sourceXStep - 1) / sourceXStep);
+	boundOffset = scaleBound(bounds.right, (u16)sourceXStep);
 	if(xEnd > left + boundOffset)
 		xEnd = left + boundOffset;
 
-	boundOffset = (s16)((((s32)bounds.top << SPRITE_SCALE_BITS) +
-		sourceYStep - 1) / sourceYStep);
+	boundOffset = scaleBound(bounds.top, (u16)sourceYStep);
 	if(yStart < top + boundOffset)
 		yStart = top + boundOffset;
 
-	boundOffset = (s16)((((s32)bounds.bottom << SPRITE_SCALE_BITS) +
-		sourceYStep - 1) / sourceYStep);
+	boundOffset = scaleBound(bounds.bottom, (u16)sourceYStep);
 	if(yEnd > top + boundOffset)
 		yEnd = top + boundOffset;
 
 	if(xStart >= xEnd || yStart >= yEnd)
 		return;
 
-	for(band = 0; band < 8; band++)
+	/* (yStart - top) is less than height and sourceYStep is
+	   (SPRITE_SIZE << SPRITE_SCALE_BITS) / height, so the product always fits in
+	   16 bits and needs no 32 bit multiply. The same holds on the x axis. */
+	sourceYAcc = (s16)((yStart - top) * sourceYStep);
+
+	/* Only the bands the clipped row range actually touches are needed. */
+	firstBand = (u8)((sourceYAcc >> SPRITE_SCALE_BITS) >> 3);
+	lastBand = (u8)((((s16)((yEnd - 1 - top) * sourceYStep)) >> SPRITE_SCALE_BITS) >> 3);
+
+	for(band = firstBand; band <= lastBand; band++)
 	{
 		u8 bandBounds = bounds.bands[band];
 		u8 bandLeft = bandBounds >> 4;
@@ -561,77 +662,64 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 			continue;
 		}
 
-		boundOffset = (s16)((((s32)(bandLeft << 2) << SPRITE_SCALE_BITS) +
-			sourceXStep - 1) / sourceXStep);
+		boundOffset = scaleBound((u16)(bandLeft << 2), (u16)sourceXStep);
 		bandXStart[band] = left + boundOffset;
 		if(bandXStart[band] < xStart)
 			bandXStart[band] = xStart;
 
-		boundOffset = (s16)((((s32)((bandRight + 1) << 2) << SPRITE_SCALE_BITS) +
-			sourceXStep - 1) / sourceXStep);
+		boundOffset = scaleBound((u16)((bandRight + 1) << 2), (u16)sourceXStep);
 		bandXEnd[band] = left + boundOffset;
 		if(bandXEnd[band] > xEnd)
 			bandXEnd[band] = xEnd;
 	}
 
+	/* Build the destination column to source pixel mapping once for the sprite. */
 	sourceXAdvance = spriteHit->mirrored ? -sourceXStep : sourceXStep;
+	sourceXAcc = (s16)((xStart - left) * sourceXStep);
 
-	sourceYAcc = (s16)((s32)(yStart - top) * sourceYStep);
+	if(spriteHit->mirrored)
+		sourceXAcc = ((SPRITE_SIZE << SPRITE_SCALE_BITS) - 1) - sourceXAcc;
+
+	for(x = xStart; x < xEnd; x++)
+	{
+		u16 sourceX = (u16)(sourceXAcc >> SPRITE_SCALE_BITS);
+
+		spriteColByte[x] = (u8)(sourceX >> 2);
+		spriteColShift[x] = (u8)((sourceX & 3) << 1);
+
+		sourceXAcc += sourceXAdvance;
+	}
+
+	prevSourceY = 0xffff;
 
 	for(y = yStart; y < yEnd; y++)
 	{
-		u16 sourceY = sourceYAcc >> SPRITE_SCALE_BITS;
-		const u8* sourceRow = spriteData + (sourceY << 4);
+		u16 sourceY = (u16)(sourceYAcc >> SPRITE_SCALE_BITS);
+		s16 rowXStart = bandXStart[sourceY >> 3];
 		s16 rowXEnd = bandXEnd[sourceY >> 3];
-		s16 sourceXAcc;
-		u16 offset;
 
-		x = bandXStart[sourceY >> 3];
-		sourceXAcc = (s16)((s32)(x - left) * sourceXStep);
-
-		if(spriteHit->mirrored)
-			sourceXAcc = ((SPRITE_SIZE << SPRITE_SCALE_BITS) - 1) - sourceXAcc;
-
-		offset = (y << 5) + (x >> 3);
-
-		while(x < rowXEnd)
+		if(rowXStart < rowXEnd)
 		{
-			u8 opaqueMask = 0;
-			u8 blackMask = 0;
-			u8 greyMask = 0;
-			u8 count = 8 - (x & 7);
-			u8 i;
+			u16 b = (u16)(rowXStart >> 3);
+			u16 lastByte = (u16)((rowXEnd - 1) >> 3);
+			u16 offset = (u16)((y << 5) + b);
 
-			if(count > rowXEnd - x)
-				count = rowXEnd - x;
-
-			for(i = 0; i < count; i++)
+			if(sourceY != prevSourceY)
 			{
-				u16 sourceX = sourceXAcc >> SPRITE_SCALE_BITS;
-				u8 packed;
-				u8 pix;
-				u8 mask = 1 << ((x + i) & 7);
-
-				packed = sourceRow[sourceX >> 2];
-				pix = (packed >> ((sourceX & 3) << 1)) & 3;
-
-				if(pix != SPR_TRANSPARENT)
-				{
-					opaqueMask |= mask;
-
-					if(pix == SPR_BLACK)
-						blackMask |= mask;
-					else if(pix == SPR_GREY)
-						greyMask |= mask;
-				}
-
-				sourceXAcc += sourceXAdvance;
+				buildSpriteRowMasks(spriteData + (sourceY << 4), rowXStart, rowXEnd);
+				prevSourceY = sourceY;
 			}
 
-			blackBm[offset] = (blackBm[offset] & ~opaqueMask) | blackMask;
-			greyBm[offset] = (greyBm[offset] & ~opaqueMask) | greyMask;
-			x += count;
-			offset++;
+			for(; b <= lastByte; b++, offset++)
+			{
+				u8 opaqueMask = spriteRowOpaque[b];
+
+				if(opaqueMask)
+				{
+					blackBm[offset] = (blackBm[offset] & ~opaqueMask) | spriteRowBlack[b];
+					greyBm[offset] = (greyBm[offset] & ~opaqueMask) | spriteRowGrey[b];
+				}
+			}
 		}
 
 		sourceYAcc += sourceYStep;

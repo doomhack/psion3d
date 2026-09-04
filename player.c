@@ -183,10 +183,15 @@ void updatePlayer(u8 keys)
 
 	player.pos.angle += f_turnVel;
 
-	dx = fpmul(fpcos(player.pos.angle), f_moveVel);
-	dy = fpmul(fpsin(player.pos.angle), f_moveVel);
+	/* With no velocity dx and dy are both zero and tryMove cannot change the
+	   position, so skip it along with its two enemy list scans. */
+	if(f_moveVel != 0)
+	{
+		dx = fpmul(fpcos(player.pos.angle), f_moveVel);
+		dy = fpmul(fpsin(player.pos.angle), f_moveVel);
 
-	tryMove(dx, dy);
+		tryMove(dx, dy);
+	}
 
 	updatePlayerWeapon(keys);
 }

@@ -84,9 +84,12 @@ static u16 runTicks(u16 gameTime)
 {
 	u16 realTime = p_returntickcount();
 
+	/* The physical key state cannot change between catch-up ticks, so one
+	   p_getscancodes per frame is enough rather than one per tick. */
+	updateKeys();
+
 	while(tickDelta(realTime, gameTime) > 0)
 	{
-		updateKeys();
 		updatePlayer(keys);
 		runAI();
 
