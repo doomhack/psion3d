@@ -15,6 +15,9 @@ void loadMapData(const u8 mapId)
 	/* Select the complete wall style for this level here. */
 	switch(mapId)
 	{
+		case 1:
+			drawWall = drawWallLab;
+			break;
 		default:
 			drawWall = drawWallDefault;
 			break;

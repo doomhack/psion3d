@@ -6,6 +6,7 @@
 #compile player
 #compile draw
 #compile walls
+#compile labwall
 #compile sprite
 #compile debug
 #compile game_map

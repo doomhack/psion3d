@@ -17,5 +17,6 @@ typedef u16 (*wall_draw_fn)(u16 x, wallhit_t* hit);
 extern wall_draw_fn drawWall;
 
 u16 drawWallDefault(u16 x, wallhit_t* hit);
+u16 drawWallLab(u16 x, wallhit_t* hit);
 
 #endif
