@@ -20,7 +20,19 @@ A Wolfenstein-style raycaster for the Psion 3a/3c/3mx (SIBO), written in C89 aga
 
 There is no automated test suite and no lint step. Verification means building, running `PSION3D.IMG` in an emulator or on device, and eyeballing rendering, movement, sprite occlusion, and map boundaries.
 
-**The toolchain is 16-bit DOS and will not run on a modern 64-bit host**, so changes usually ship unbuilt for the user to compile. Verify logic by simulation first — PowerShell works well for fixed-point and blitter maths: implement the old and new versions and compare bit patterns over the full input range. Confirm the new path actually executed in the simulation; a test that silently skips the new branch proves nothing.
+**The toolchain is 16-bit DOS**, so it runs under DOSBox (installed at `C:\Program Files (x86)\DOSBox-0.74-3`). Its configured mounts are `C:` = `E:\dosroot` (SIBOSDK + TopSpeed) and `D:` = this repo, so a headless build is:
+
+```
+"C:\Program Files (x86)\DOSBox-0.74-3\DOSBox.exe" -c "D:" -c "tsc /m unnamed.pr /smain=psion3d /v0 /zq > D:\build.log" -c "exit"
+```
+
+That takes about 5 seconds. Three things matter:
+
+- `/zq` (quiet mode) makes `tsc` write to stdout, so warnings and errors can be redirected to a file. Without it the output goes straight to video memory and the log is empty.
+- The trailing `-c "exit"` is what closes DOSBox. To go through `make.bat` instead of `tsc`, use `-c "call make.bat psion3d"` - without `call` the batch never returns, the `exit` never runs, and DOSBox hangs forever.
+- Do not pass `-c "config -set cycles max"`; the conf already sets `cycles=max` and the override stalls the build.
+
+On an error `tsc` deletes the offending `.OBJ` and `PSION3D.EXE`, so an unchanged `PSION3D.IMG` timestamp is a second failure signal. Running the result still needs an emulator or the device. Verify logic by simulation where you can — PowerShell works well for fixed-point and blitter maths: implement the old and new versions and compare bit patterns over the full input range. Confirm the new path actually executed in the simulation; a test that silently skips the new branch proves nothing.
 
 Working-tree line endings are mixed (git stores LF, some files are CRLF on disk) and the toolchain accepts both. Use `git diff --ignore-cr-at-eol` or the noise buries real changes, and check bytes with PowerShell rather than the bash tool, which translates line endings on read.
 
