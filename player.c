@@ -130,6 +130,9 @@ static void updatePlayerWeapon(u8 keys)
 			player.weaponState.shootFrames = 5;
 			player.weaponState.shotSpan = getShotSpan(player.currentWeapon->accuracy);
 			player.weaponState.shotPending = TRUE;
+
+			//Gunfire gives the player away, whether or not the round hits.
+			alertEnemies((u8)fp2int(player.pos.x), (u8)fp2int(player.pos.y));
 		}
 	}
 }

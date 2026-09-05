@@ -361,6 +361,17 @@ u16 projectSprite(const f16 x, const f16 y, spritehit_t* hit, const f16 f_viewCo
 		-fpmul(f_rx, f_viewSin) +
 		 fpmul(f_ry, f_viewCos);
 
+	/* A sprite is only on screen while |f_side| is under 0.577 of f_depth, so
+	   rejecting at 1.0 discards nothing that could be drawn. What it does do is
+	   hold the ratio below 1.0 before it reaches the fpmul below, which returns
+	   the product's bits 8..23 with no clamp of its own. Past a ratio of about
+	   2.46 that product wraps, and the wrapped span lands back inside the
+	   accepted 0..59 range often enough to draw a sprite that is actually
+	   beside or behind the player at an arbitrary screen column - which reads
+	   as the sprite warping across the screen as you close on it. */
+	if(f_side >= f_depth || f_side <= -f_depth)
+		return FALSE;
+
 	spanx = 30 + fp2int(
 		fpmul(
 			fpdiv(f_side, f_depth),

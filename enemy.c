@@ -9,12 +9,18 @@
 #define ENEMY_ATTACK_DIST_SGR_METERS 6
 #define ENEMY_ATTACK_DIST_HVY_METERS 8
 #define ENEMY_ATTACK_MIN_DIST_METERS 4
+#define ENEMY_CIV_AVOID_DIST_METERS 6
+#define ENEMY_FLEE_SAFE_DIST_METERS 12
+#define ENEMY_ALERT_DIST_METERS 20
 
 #define ENEMY_LEASH_DIST METERS_TO_MAP_CELLS(ENEMY_LEASH_DIST_METERS)
 #define ENEMY_ATTACK_DIST_MER METERS_TO_MAP_CELLS(ENEMY_ATTACK_DIST_MER_METERS)
 #define ENEMY_ATTACK_DIST_SGR METERS_TO_MAP_CELLS(ENEMY_ATTACK_DIST_SGR_METERS)
 #define ENEMY_ATTACK_DIST_HVY METERS_TO_MAP_CELLS(ENEMY_ATTACK_DIST_HVY_METERS)
 #define ENEMY_ATTACK_MIN_DIST METERS_TO_MAP_CELLS(ENEMY_ATTACK_MIN_DIST_METERS)
+#define ENEMY_CIV_AVOID_DIST METERS_TO_MAP_CELLS(ENEMY_CIV_AVOID_DIST_METERS)
+#define ENEMY_FLEE_SAFE_DIST METERS_TO_MAP_CELLS(ENEMY_FLEE_SAFE_DIST_METERS)
+#define ENEMY_ALERT_DIST METERS_TO_MAP_CELLS(ENEMY_ALERT_DIST_METERS)
 
 #define ENEMY_ATTACK_DELAY SECONDS_TO_TICKS(1)
 #define ENEMY_IDLE_DELAY SECONDS_TO_TICKS(1)
@@ -24,15 +30,28 @@
 #define ENEMY_HURT_DELAY fpSecondsToTicks(flt2fp(0.25f))
 #define ENEMY_DYING_DELAY fpSecondsToTicks(flt2fp(0.5f))
 
+//Move periods of flight before a fleeing enemy starts testing whether it is safe.
+#define ENEMY_FLEE_CELLS 6
+
+/* Move periods a search lasts, covering both the walk to the last known
+   position and whatever sweeping is left over once it gets there. */
+#define ENEMY_SEARCH_CELLS 20
+
+//0..255 chance of stopping to idle between wander steps.
+#define ENEMY_WANDER_PAUSE_CHANCE 64
+
+//0..255 chance of turning 90 degrees at a wander step.
+#define ENEMY_WANDER_TURN_CHANCE 48
+
 #define ENEMY_COLLISION_RADIUS flt2fp(0.75f)
 #define ENEMY_COLLISION_RADIUS_SQ ((s32)ENEMY_COLLISION_RADIUS * ENEMY_COLLISION_RADIUS)
 
 const enemystats_t enemyStats[] =
 {
-	{flt2fp(2),    48,  100,  0,  0,  SPRITE_SLOT_CIV}, //Civilian
-	{flt2fp(3),    32, 75,   10, 10, SPRITE_SLOT_MER}, //Mercenary
-	{flt2fp(3.5),  64, 100,  15, 40, SPRITE_SLOT_SGR}, //Soldier
-	{flt2fp(1.0),  16,  250,  25, 25, SPRITE_SLOT_HVY}  //Heavy
+	{flt2fp(1),    48, 240, 100,  0,  0,  SPRITE_SLOT_CIV}, //Civilian
+	{flt2fp(1.5),    32, 16,  75,   10, 10, SPRITE_SLOT_MER}, //Mercenary
+	{flt2fp(2),  64, 8,   100,  15, 40, SPRITE_SLOT_SGR}, //Soldier
+	{flt2fp(0.5),  16, 4,   250,  25, 25, SPRITE_SLOT_HVY}  //Heavy
 };
 
 
@@ -215,9 +234,57 @@ static u8 enemyMoveTicks(const enemy_t* enemy)
     return enemyMoveTickTable[enemy->type];
 }
 
+/* Something loud happened at x, y. Only enemies that are not already dealing
+   with the player care: idle ones go and look, wandering civilians run, and one
+   already searching redirects to the newer noise.
+
+   Deliberately distance only, with no line of sight test - sound goes round
+   corners, and it keeps this off the Bresenham path entirely. */
+void alertEnemies(const u8 x, const u8 y)
+{
+    u16 id;
+
+    for(id = 0; id < enemyCount; id++)
+    {
+        enemy_t* enemy = &enemyList[id];
+
+        if(enemy->state != ENEMY_STATE_IDLE &&
+           enemy->state != ENEMY_STATE_WANDER &&
+           enemy->state != ENEMY_STATE_SEARCHING)
+            continue;
+
+        if((absDiff(fp2int(enemy->x), x) + absDiff(fp2int(enemy->y), y)) > ENEMY_ALERT_DIST)
+            continue;
+
+        enemy->targetX = x;
+        enemy->targetY = y;
+
+        /* Abandons any move in flight. The next step interpolates from wherever
+           the enemy stopped, so this reads as a reaction rather than a jump. */
+        enemy->stateCounter = 0;
+
+        //Civilians run from trouble. Everyone else goes to find it.
+        if(enemy->type == ENEMY_TYPE_CIV)
+        {
+            enemy->state = ENEMY_STATE_FLEEING;
+            enemy->stateCells = ENEMY_FLEE_CELLS;
+        }
+        else
+        {
+            enemy->state = ENEMY_STATE_SEARCHING;
+            enemy->stateCells = ENEMY_SEARCH_CELLS;
+        }
+    }
+}
+
 static void enemyShootPlayer(const enemy_t* enemy)
 {
     u8 damage;
+
+    /* A shot is loud whether or not it connects, and this is what carries the
+       alarm outward - the player's shot wakes the first room, those enemies
+       firing back wake the next one. */
+    alertEnemies((u8)fp2int(enemy->x), (u8)fp2int(enemy->y));
 
     if(!enemyRandomChance(enemy->enemyStats->accuracy) || player.health == 0)
         return;
@@ -282,7 +349,8 @@ static u16 enemyTryMoveTo(const u16 id, enemy_t* enemy, const s16 newX, const s1
     return TRUE;
 }
 
-static void enemyStepToward(const u16 id, enemy_t* enemy, const u8 targetX, const u8 targetY)
+/* Returns FALSE when every candidate was blocked and the enemy did not move. */
+static u16 enemyStepToward(const u16 id, enemy_t* enemy, const u8 targetX, const u8 targetY)
 {
     s16 enemyX = fp2int(enemy->x);
     s16 enemyY = fp2int(enemy->y);
@@ -290,26 +358,58 @@ static void enemyStepToward(const u16 id, enemy_t* enemy, const u8 targetX, cons
     s16 dy = targetY - enemyY;
     s16 stepX = dx < 0 ? -1 : 1;
     s16 stepY = dy < 0 ? -1 : 1;
+    s16 slide;
 
     if(dx == 0 && dy == 0)
-        return;
+        return FALSE;
 
     if(absDiff(enemyX, targetX) >= absDiff(enemyY, targetY))
     {
         if(dx != 0 && enemyTryMoveTo(id, enemy, enemyX + stepX, enemyY))
-            return;
+            return TRUE;
 
-        if(dy != 0)
-            enemyTryMoveTo(id, enemy, enemyX, enemyY + stepY);
+        if(dy != 0 && enemyTryMoveTo(id, enemy, enemyX, enemyY + stepY))
+            return TRUE;
     }
     else
     {
         if(dy != 0 && enemyTryMoveTo(id, enemy, enemyX, enemyY + stepY))
-            return;
+            return TRUE;
 
-        if(dx != 0)
-            enemyTryMoveTo(id, enemy, enemyX + stepX, enemyY);
+        if(dx != 0 && enemyTryMoveTo(id, enemy, enemyX + stepX, enemyY))
+            return TRUE;
     }
+
+    /* Every step that closes on the target is blocked. Without this the enemy
+       stands still and retries the same blocked cell every move period, which
+       stalls indefinitely behind anything that does not move by itself - a
+       corpse, or another enemy sitting in AIMING.
+
+       Only slide when one axis is already lined up, so the sidestep is square
+       to the approach and gives up no ground. When both axes are off the two
+       remaining cells are pure retreats, and taking one only walks back in on
+       the next period, so standing put is the better-looking outcome there.
+
+       Random side, otherwise a group all slides the same way and re-jams. */
+    slide = enemyRandomBit() ? 1 : -1;
+
+    if(dx == 0)
+    {
+        if(enemyTryMoveTo(id, enemy, enemyX + slide, enemyY))
+            return TRUE;
+
+        return enemyTryMoveTo(id, enemy, enemyX - slide, enemyY);
+    }
+
+    if(dy == 0)
+    {
+        if(enemyTryMoveTo(id, enemy, enemyX, enemyY + slide))
+            return TRUE;
+
+        return enemyTryMoveTo(id, enemy, enemyX, enemyY - slide);
+    }
+
+    return FALSE;
 }
 
 static void enemyStepAwayFrom(const u16 id, enemy_t* enemy, const u8 targetX, const u8 targetY)
@@ -371,6 +471,63 @@ static void enemyStepSideways(const u16 id, enemy_t* enemy, const u8 targetX, co
     enemyTryMoveTo(id, enemy, enemyX - stepX, enemyY - stepY);
 }
 
+/* The state an enemy returns to once it has nothing else to react to. Civilians
+   have no combat states, so this is the one place that keeps them out of the
+   chase loop - every path back to "normal" goes through here. */
+static u8 enemyAlertState(const enemy_t* enemy)
+{
+    return (enemy->type == ENEMY_TYPE_CIV) ? ENEMY_STATE_WANDER : ENEMY_STATE_CHASING;
+}
+
+/* Cardinal steps indexed by enemy->wanderDir. Turning is +/-1 modulo 4, so the
+   order has to walk around the compass rather than pair up opposites. */
+static const s8 wanderStepX[4] = {1, 0, -1, 0};
+static const s8 wanderStepY[4] = {0, 1, 0, -1};
+
+static void enemyWanderStep(const u16 id, enemy_t* enemy)
+{
+    s16 enemyX = fp2int(enemy->x);
+    s16 enemyY = fp2int(enemy->y);
+    u8 dir = enemy->wanderDir;
+    u8 d;
+    u8 i;
+
+    /* Mostly carry on in the current heading, so wandering reads as walking
+       somewhere rather than as a drunk random walk. */
+    if(enemyRandomChance(ENEMY_WANDER_TURN_CHANCE))
+        dir = (u8)((dir + (enemyRandomBit() ? 1 : 3)) & 3);
+
+    /* Preferred heading first, then the two turns, then the reverse - so a dead
+       end still turns the enemy around instead of stalling it. */
+    for(i = 0; i < 4; i++)
+    {
+        d = (u8)((dir + i) & 3);
+
+        if(enemyTryMoveTo(id, enemy, enemyX + wanderStepX[d], enemyY + wanderStepY[d]))
+        {
+            enemy->wanderDir = d;
+            return;
+        }
+    }
+}
+
+/* Back off one cell, sliding sideways along a wall when the direct retreat is
+   blocked. Returns FALSE when the enemy is boxed in and could not move at all.
+   The callers only run on the tick stateCounter hits 0, by which point the
+   previous move has snapped exactly onto its target, so comparing position
+   against moveTarget is a reliable "did this set a new move" test. */
+static u16 enemyStepAwayOrSideways(const u16 id, enemy_t* enemy, const u8 targetX, const u8 targetY)
+{
+    enemyStepAwayFrom(id, enemy, targetX, targetY);
+
+    if(enemy->x != enemy->moveTargetX || enemy->y != enemy->moveTargetY)
+        return TRUE;
+
+    enemyStepSideways(id, enemy, targetX, targetY);
+
+    return (enemy->x != enemy->moveTargetX || enemy->y != enemy->moveTargetY);
+}
+
 static void enemySetTargetToPlayer(enemy_t* enemy)
 {
     enemy->targetX = (u8)fp2int(player.pos.x);
@@ -430,6 +587,10 @@ u16 getEnemyCell(u16 x, u16 y, s8 cell)
     enemyList[enemyId].spriteMirrored = FALSE;
 
     enemyList[enemyId].stateCounter = SECONDS_TO_TICKS(5);
+
+    //Vary the start heading so a row of civilians does not set off in lockstep.
+    enemyList[enemyId].wanderDir = (u8)(enemyId & 3);
+    enemyList[enemyId].stateCells = 0;
 
     //Start at centre of cell.
     enemyList[enemyId].x = int2fp(x) + flt2fp(0.5f);
@@ -563,6 +724,14 @@ void runAI()
                 if(enemyCounterTick(id, enemy))
                     break;
 
+                //Civilians have no interest in the player, they just move on.
+                if(enemy->type == ENEMY_TYPE_CIV)
+                {
+                    enemy->state = ENEMY_STATE_WANDER;
+                    enemy->stateCounter = 0;
+                    break;
+                }
+
                 if(!canSee)
                 {
                     enemy->state = ENEMY_STATE_IDLE;
@@ -592,16 +761,36 @@ void runAI()
                     break;
                 }
 
-                enemyX = fp2int(enemy->x);
-                enemyY = fp2int(enemy->y);
-
-                if(enemyX == enemy->targetX && enemyY == enemy->targetY)
+                /* Out of patience. Without this a search never ends: an enemy
+                   that cannot reach the target cell never satisfies the arrival
+                   test and hunts for it forever. */
+                if(enemy->stateCells == 0)
                 {
                     enemy->state = ENEMY_STATE_IDLE;
                     enemy->spriteFrame = ENEMY_FRAME_IDLE;
+                    enemy->stateCounter = ENEMY_IDLE_DELAY;
                     break;
                 }
 
+                enemy->stateCells--;
+
+                enemyX = fp2int(enemy->x);
+                enemyY = fp2int(enemy->y);
+
+                /* Adjacent counts as arrived. Alerts send several enemies to
+                   one cell and only one of them can stand on it, so demanding
+                   an exact match left the rest grinding against the occupant. */
+                if((absDiff(enemyX, enemy->targetX) + absDiff(enemyY, enemy->targetY)) <= 1)
+                {
+                    //Nothing here, so look around instead of giving up on the spot.
+                    enemyWanderStep(id, enemy);
+                    enemySetMoveCounter(enemy, enemyMoveTicks(enemy));
+                    break;
+                }
+
+                /* A failed step just costs this period. Transient blockers are
+                   common now that alerts move groups around, and the patience
+                   budget already handles the case that never clears. */
                 enemyStepToward(id, enemy, enemy->targetX, enemy->targetY);
                 enemySetMoveCounter(enemy, enemyMoveTicks(enemy));
                 break;
@@ -620,9 +809,21 @@ void runAI()
                 if(enemyCounterTick(id, enemy))
                     break;
 
+                /* Civilians must never chase - with no attack state they walk
+                   onto the player and pin them there. Every route into this
+                   case goes through enemyAlertState, so this only catches a
+                   future one that does not. */
+                if(enemy->type == ENEMY_TYPE_CIV)
+                {
+                    enemy->state = ENEMY_STATE_WANDER;
+                    enemy->stateCounter = 0;
+                    break;
+                }
+
                 if(!canSee)
                 {
                     enemy->state = ENEMY_STATE_SEARCHING;
+                    enemy->stateCells = ENEMY_SEARCH_CELLS;
                     enemy->stateCounter = enemyMoveTicks(enemy);
                     break;
                 }
@@ -638,9 +839,14 @@ void runAI()
 
                 if(enemy->type != ENEMY_TYPE_CIV && dist <= enemyAttackDistance(enemy))
                 {
-                    if(dist < ENEMY_ATTACK_MIN_DIST)
+                    /* Too close to shoot comfortably, so give ground - but only
+                       if there is ground to give. Cornered, the retreat fails
+                       every move period and the enemy used to sit there retrying
+                       it forever, never reaching the aim below. Backed into a
+                       dead end it fights instead. */
+                    if(dist < ENEMY_ATTACK_MIN_DIST &&
+                       enemyStepAwayOrSideways(id, enemy, enemy->targetX, enemy->targetY))
                     {
-                        enemyStepAwayFrom(id, enemy, enemy->targetX, enemy->targetY);
                         enemy->state = ENEMY_STATE_CHASING;
                         enemySetMoveCounter(enemy, enemyMoveTicks(enemy));
                         break;
@@ -665,6 +871,7 @@ void runAI()
                 if(!canSee)
                 {
                     enemy->state = ENEMY_STATE_SEARCHING;
+                    enemy->stateCells = ENEMY_SEARCH_CELLS;
                     enemy->stateCounter = enemyMoveTicks(enemy);
                     break;
                 }
@@ -674,12 +881,62 @@ void runAI()
                 enemyShootPlayer(enemy);
                 break;
 
+            case ENEMY_STATE_WANDER:
+                if(enemyCounterTick(id, enemy))
+                    break;
+
+                //Keep out of the player's way before picking anywhere to go.
+                if(canSee && dist <= ENEMY_CIV_AVOID_DIST)
+                {
+                    enemyStepAwayOrSideways(id, enemy, (u8)fp2int(player.pos.x), (u8)fp2int(player.pos.y));
+                    enemySetMoveCounter(enemy, enemyMoveTicks(enemy));
+                    break;
+                }
+
+                if(enemyRandomChance(ENEMY_WANDER_PAUSE_CHANCE))
+                {
+                    enemy->state = ENEMY_STATE_IDLE;
+                    enemy->spriteFrame = ENEMY_FRAME_IDLE;
+                    enemy->stateCounter = ENEMY_IDLE_DELAY;
+                    break;
+                }
+
+                enemyWanderStep(id, enemy);
+                enemySetMoveCounter(enemy, enemyMoveTicks(enemy));
+                break;
+
+            case ENEMY_STATE_FLEEING:
+                if(enemyCounterTick(id, enemy))
+                    break;
+
+                if(enemy->stateCells > 0)
+                    enemy->stateCells--;
+
+                //Run the guaranteed distance first, then until out of danger.
+                if(enemy->stateCells == 0 && (!canSee || dist > ENEMY_FLEE_SAFE_DIST))
+                {
+                    enemy->state = enemyAlertState(enemy);
+                    enemy->stateCounter = 0;
+                    break;
+                }
+
+                //Nowhere left to run, so stop running.
+                if(!enemyStepAwayOrSideways(id, enemy, (u8)fp2int(player.pos.x), (u8)fp2int(player.pos.y)))
+                {
+                    enemy->state = enemyAlertState(enemy);
+                    enemy->stateCounter = 0;
+                    break;
+                }
+
+                enemySetMoveCounter(enemy, enemyMoveTicks(enemy));
+                break;
+
             case ENEMY_STATE_EVADING:
                 if(enemyCounterTick(id, enemy))
                     break;
 
                 enemyStepSideways(id, enemy, (u8)fp2int(player.pos.x), (u8)fp2int(player.pos.y));
-                enemy->state = ENEMY_STATE_CHASING;
+                enemy->state = enemyAlertState(enemy);
                 enemySetMoveCounter(enemy, enemyMoveTicks(enemy));
                 break;
 
@@ -689,6 +946,14 @@ void runAI()
                 if(enemyCounterTick(id, enemy))
                     break;
 
+                if(enemyRandomChance(enemy->enemyStats->fleeChance))
+                {
+                    enemy->state = ENEMY_STATE_FLEEING;
+                    enemy->stateCells = ENEMY_FLEE_CELLS;
+                    enemy->stateCounter = 0;
+                    break;
+                }
+
                 if(enemyRandomChance(enemy->enemyStats->evadeChance))
                 {
                     enemy->state = ENEMY_STATE_EVADING;
@@ -696,7 +961,7 @@ void runAI()
                     break;
                 }
 
-                enemy->state = ENEMY_STATE_CHASING;
+                enemy->state = enemyAlertState(enemy);
                 enemy->stateCounter = 0;
                 break;
 

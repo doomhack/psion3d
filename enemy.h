@@ -33,6 +33,12 @@
 //Enemy is dead and cannot leave this state.
 #define ENEMY_STATE_DEAD 9
 
+//Civilian is wandering the map, avoiding the player.
+#define ENEMY_STATE_WANDER 10
+
+//Enemy is running away from the player.
+#define ENEMY_STATE_FLEEING 11
+
 #define ENEMY_FRAME_IDLE 0
 #define ENEMY_FRAME_WALK_R1 1
 #define ENEMY_FRAME_WALK_R2 2
@@ -54,6 +60,7 @@ typedef struct enemystats_t
 {
     f16 moveSpeed; //Move and sidestep speed meters per second
     u8 evadeChance; //0..255 chance of going into evade state.
+    u8 fleeChance; //0..255 chance of going into flee state after a pain state.
     u8 health; //Starting health.
     u8 damage; //How damage a shot does to the player.
     u8 accuracy; //..255 chance of enemy hitting the player.
@@ -72,6 +79,8 @@ typedef struct enemy_t
     u8 spriteMirrored; //Draw the current frame horizontally mirrored.
     u8 health; //Heath of enemy.
     u8 stateCounter; //Decrements per AI tick. Once 0, choose new state and set new stateCounter.
+    u8 wanderDir; //Current wander heading, 0..3, indexes wanderStepX/wanderStepY.
+    u8 stateCells; //Move periods left in the current activity. FLEEING counts flight, SEARCHING counts patience. Set on entry to either.
     const enemystats_t* enemyStats; //Enemy stats.
 } enemy_t;
 
@@ -81,6 +90,7 @@ u16 getEnemyCell(u16 x, u16 y, s8 cell);
 enemy_t* getEnemy(u16 id);
 u16 enemyBlocksPosition(f16 x, f16 y);
 void damageEnemy(u16 id, u8 damage);
+void alertEnemies(const u8 x, const u8 y);
 void runAI(void);
 void resetEnemy(void);
 
