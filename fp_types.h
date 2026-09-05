@@ -16,7 +16,12 @@ typedef signed long s32;
 //Fixed point math.
 
 #define FP_MAX  ((f16)32767)
-#define FP_MIN  ((f16)-32768)
+
+/* Written as -32767 - 1 rather than -32768 because int is 16 bits here: the
+   literal 32768 does not fit, so the compiler widens it to long and warns at
+   every use. Both halves of this form stay in int, and it is the same value.
+   This is how limits.h spells INT_MIN, for the same reason. */
+#define FP_MIN  ((f16)(-32767 - 1))
 
 #define FP_BITS 8
 typedef s16 f16;

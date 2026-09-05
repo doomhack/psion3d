@@ -168,8 +168,6 @@ static u16 drawHazardBulkhead(s16 x, s16 y, s16 h, const wallhit_t* hit)
 static u16 drawServiceGrille(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
 	s16 capHeight = h >> 3;
-	s16 openingY = y + capHeight;
-	s16 openingH = h - (capHeight << 1);
 	s16 wallx = (hit->f_wallX >> 3);
 	s16 bottom = y + hit->wallHeight;
 	s16 quarter = h >> 2;

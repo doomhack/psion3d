@@ -18,8 +18,9 @@ void setDbgFp(f16 dbg)
 	dtob.type = P_DTOB_GENERAL;
 	dtob.width = 31;
 	dtob.ndec = 0;
-	dtob.point = ".";
-	dtob.triad = ",";
+	//P_DTOB takes single characters, not strings - a string here stored the low byte of its address.
+	dtob.point = '.';
+	dtob.triad = ',';
 	dtob.trilen = 0;
 
 	p_itof(&ddbg, &dbg);
