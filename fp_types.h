@@ -27,24 +27,28 @@ typedef s16 f16;
 
 
 /* The TopSpeed runtime implements 32 bit shifts as a called shift-by-one loop
-   (N$LngShl / N$LngShr), so a >> FP_BITS on an s32 costs a CALL plus eight
-   iterations. Splitting the value into words lets the compiler do the same job
-   with plain 16 bit register moves. Both helpers below assume FP_BITS == 8. */
+   (N$LngShl / N$LngShr), so a << FP_BITS on an s32 costs a CALL plus eight
+   iterations. Splitting the value into words lets fpdiv build the same value
+   with plain 16 bit register moves. Assumes FP_BITS == 8. */
 typedef union
 {
 	s32 l;
 	struct { u16 lo; s16 hi; } w;	/* x86 is little endian. */
 } fpsplit_t;
 
-static f16 fpmul(const f16 a, const f16 b)
-{
-	fpsplit_t r;
+/* Implemented in fpasm.a. The V30 multiplies 16x16 into 32 bits natively in
+   about 25 cycles, but C cannot reach that instruction: (s32)a * b promotes
+   both operands, so TopSpeed emits the generic 32x32 helper N$SgnMol instead.
+   Measured at roughly 190 calls per frame in the ray cast alone, which made it
+   the single most expensive operation in the program. The assembler version
+   returns the same bits, the product's 8..23.
 
-	r.l = (s32)a * b;
-
-	/* Bits 8..23 of the product, which is (r.l >> FP_BITS) truncated to f16. */
-	return (f16)((r.w.lo >> FP_BITS) | (r.w.hi << FP_BITS));
-}
+   The convention is declared rather than assumed: a arrives in AX, b in BX, the
+   result comes back in AX, and the routine touches nothing else. Saying so also
+   stops the compiler spilling registers around every call. */
+#pragma save, call(reg_param=>(ax,bx), reg_saved=>(bx,cx,dx,si,di,es,ds,st1,st2))
+f16 fpmul(const f16 a, const f16 b);
+#pragma restore
 
 LOCAL_C f16 fpdiv(const f16 a, const f16 b)
 {

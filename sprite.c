@@ -789,6 +789,7 @@ void drawSprite(u8 spanX, u8 y, u8 spriteId)
 		s16 rowXStart;
 		s16 rowXEnd;
 		s16 x;
+		s16 srcIdx;
 
 		if(bandLeft > bandRight)
 			continue;
@@ -804,21 +805,52 @@ void drawSprite(u8 spanX, u8 y, u8 spriteId)
 		sourceRow = spriteData + (sourceY << 4);
 		offset = (yPos << 5) + (rowXStart >> 3);
 		x = rowXStart;
+		srcIdx = (rowXStart - left) >> 2;
 
-		while(x < rowXEnd)
+		/* A destination byte holds eight pixels but a source group covers four,
+		   so stepping four at a time read-modify-writes the same byte twice.
+		   Fold both groups into one write per plane. Row edges are four pixel
+		   aligned but not always eight, hence the half byte cases either side. */
+		if((x & 4) && x < rowXEnd)
 		{
-			u8 packed = sourceRow[(x - left) >> 2];
-			u8 shift = x & 4;
-			u8 opaqueMask = spriteOpaqueMask[packed] << shift;
-			u8 blackMask = spriteBlackMask[packed] << shift;
-			u8 greyMask = spriteGreyMask[packed] << shift;
+			u8 packed = sourceRow[srcIdx];
+			u8 opaqueMask = (u8)(spriteOpaqueMask[packed] << 4);
+			u8 blackMask = (u8)(spriteBlackMask[packed] << 4);
+			u8 greyMask = (u8)(spriteGreyMask[packed] << 4);
 
 			blackBm[offset] = (blackBm[offset] & ~opaqueMask) | blackMask;
 			greyBm[offset] = (greyBm[offset] & ~opaqueMask) | greyMask;
-			x += 4;
 
-			if(!(x & 7))
-				offset++;
+			offset++;
+			srcIdx++;
+			x += 4;
+		}
+
+		while(x + 8 <= rowXEnd)
+		{
+			u8 p0 = sourceRow[srcIdx];
+			u8 p1 = sourceRow[srcIdx + 1];
+			u8 opaqueMask = (u8)(spriteOpaqueMask[p0] | (spriteOpaqueMask[p1] << 4));
+			u8 blackMask = (u8)(spriteBlackMask[p0] | (spriteBlackMask[p1] << 4));
+			u8 greyMask = (u8)(spriteGreyMask[p0] | (spriteGreyMask[p1] << 4));
+
+			blackBm[offset] = (blackBm[offset] & ~opaqueMask) | blackMask;
+			greyBm[offset] = (greyBm[offset] & ~opaqueMask) | greyMask;
+
+			offset++;
+			srcIdx += 2;
+			x += 8;
+		}
+
+		if(x < rowXEnd)
+		{
+			u8 packed = sourceRow[srcIdx];
+			u8 opaqueMask = spriteOpaqueMask[packed];
+			u8 blackMask = spriteBlackMask[packed];
+			u8 greyMask = spriteGreyMask[packed];
+
+			blackBm[offset] = (blackBm[offset] & ~opaqueMask) | blackMask;
+			greyBm[offset] = (greyBm[offset] & ~opaqueMask) | greyMask;
 		}
 	}
 }

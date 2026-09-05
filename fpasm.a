@@ -1,0 +1,13 @@
+module fpasm
+
+segment _TEXT(CODE,48H)
+
+public _fpmul:
+	push  dx
+	imul  bx
+	mov   al,ah
+	mov   ah,dl
+	pop   dx
+	ret 0
+
+end

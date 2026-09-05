@@ -151,8 +151,14 @@ static void enemyMoveTick(const u16 id, enemy_t* enemy)
         return;
     }
 
-    enemy->x += fpdiv(enemy->moveTargetX - enemy->x, int2fp(enemy->stateCounter));
-    enemy->y += fpdiv(enemy->moveTargetY - enemy->y, int2fp(enemy->stateCounter));
+    /* This was fpdiv(a, int2fp(n)), which is (a << 8) / (n << 8) - the shifts
+       cancel, so it is only a / n. Written directly it is a native 16 bit
+       divide instead of the called bit-serial 32 bit one, and it drops a latent
+       bug: int2fp(n) overflows f16 once n passes 127, so the old form went
+       negative for any enemy slower than 1 m/s. stateCounter is non-zero here,
+       checked just above. */
+    enemy->x += (enemy->moveTargetX - enemy->x) / enemy->stateCounter;
+    enemy->y += (enemy->moveTargetY - enemy->y) / enemy->stateCounter;
     enemyUpdateMapCell(id, enemy);
 }
 
