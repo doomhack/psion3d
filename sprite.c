@@ -37,7 +37,6 @@
 #define SPRITE_FILE_NAME_LEN 64
 #define SPRITE_SEG_NAME_LEN 16
 
-#include "tst_spr.h"
 
 
 typedef struct sprite_cache_entry_t
@@ -62,14 +61,11 @@ static HANDLE spriteSegs[SPRITE_SLOT_CAPACITY];
 static u8 spriteFrameCounts[SPRITE_SLOT_CAPACITY];
 static sprite_bounds_t spriteFrameBounds[SPRITE_SLOT_CAPACITY][SPRITE_MAX_FRAMES];
 static u8 spriteCache[SPRITE_CACHE_FRAMES * SPRITE_BYTES];
-static u8 testPatternCache[SPRITE_BYTES];
 static u8 spriteOpaqueMask[256];
 static u8 spriteBlackMask[256];
 static u8 spriteGreyMask[256];
 static sprite_cache_entry_t spriteCacheEntries[SPRITE_CACHE_FRAMES];
-static sprite_bounds_t testPatternBounds;
 static u16 spriteCacheClock = 0;
-static u8 testPatternCached = FALSE;
 static u8 spriteMasksReady = FALSE;
 
 static void mirrorSpriteBounds(sprite_bounds_t* bounds)
@@ -115,90 +111,6 @@ static void prepareSpriteMasks()
 	}
 
 	spriteMasksReady = TRUE;
-}
-
-/* Prepare the built-in legacy test pattern in the render-ready format. */
-static void prepareSpriteFrame(const u8* source, u8* dest, sprite_bounds_t* bounds)
-{
-	u16 y;
-	u8 minX = SPRITE_SIZE;
-	u8 minY = SPRITE_SIZE;
-	u8 maxX = 0;
-	u8 maxY = 0;
-	u8 band;
-
-	for(band = 0; band < 8; band++)
-		bounds->bands[band] = 0xf0;
-
-	if(!spriteMasksReady)
-		prepareSpriteMasks();
-
-	for(y = 0; y < SPRITE_SIZE; y++)
-	{
-		u16 x;
-		u16 destOffset = y << 4;
-
-		for(x = 0; x < SPRITE_SIZE; x += 4)
-		{
-			u8 packed = 0;
-			u8 i;
-
-			for(i = 0; i < 4; i++)
-			{
-				const u8* sourceCol = source + ((x + i) << 4);
-				u8 pix = (sourceCol[y >> 2] >> ((y & 3) << 1)) & 3;
-
-				packed |= pix << (i << 1);
-			}
-
-			dest[destOffset + (x >> 2)] = packed;
-
-			if(packed != 0)
-			{
-				u8 leftGroup = bounds->bands[y >> 3] >> 4;
-				u8 rightGroup = bounds->bands[y >> 3] & 0x0f;
-				u8 group = x >> 2;
-
-				if(leftGroup > rightGroup)
-				{
-					leftGroup = group;
-					rightGroup = group;
-				}
-				else
-				{
-					if(group < leftGroup)
-						leftGroup = group;
-					if(group > rightGroup)
-						rightGroup = group;
-				}
-
-				bounds->bands[y >> 3] = (leftGroup << 4) | rightGroup;
-
-				if(x < minX)
-					minX = x;
-				if(x + 4 > maxX)
-					maxX = x + 4;
-				if(y < minY)
-					minY = y;
-				if(y + 1 > maxY)
-					maxY = y + 1;
-			}
-		}
-	}
-
-	if(minX == SPRITE_SIZE)
-	{
-		bounds->left = 0;
-		bounds->top = 0;
-		bounds->right = 0;
-		bounds->bottom = 0;
-		return;
-	}
-
-	bounds->left = minX;
-	bounds->top = minY;
-	bounds->right = maxX;
-	bounds->bottom = maxY;
 }
 
 static u16 spriteCacheTouch()
@@ -271,14 +183,9 @@ static const u8* getSpriteFrame(const u8 spriteId, sprite_bounds_t* bounds)
 
 	if(segHandle <= 0 || frameCount == 0)
 	{
-		if(!testPatternCached)
-		{
-			prepareSpriteFrame(&testPatternSprite[0], &testPatternCache[0], &testPatternBounds);
-			testPatternCached = TRUE;
-		}
-
-		*bounds = testPatternBounds;
-		return &testPatternCache[0];
+		/* Slot never loaded. Signal an empty frame; both callers bail on this. */
+		bounds->right = 0;
+		return NULL;
 	}
 
 	while(frameNum >= frameCount)
