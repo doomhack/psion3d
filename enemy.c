@@ -208,11 +208,18 @@ static void enemySetMoveTarget(enemy_t* enemy, const s16 x, const s16 y)
     enemy->moveTargetY = int2fp(y) + flt2fp(0.5f);
 }
 
-static void enemyFinishMove(const u16 id, enemy_t* enemy)
+/* Stop where the enemy currently stands, mid cell if need be.
+
+   enemyMoveTick covers the *remaining* distance in whatever stateCounter now
+   holds, so anything that shortens the counter part way through a move silently
+   speeds that move up. damageEnemy setting the 8 tick hurt delay over a 128 tick
+   heavy stride made it finish the cell 16 times too fast, which reads as the
+   enemy warping. Dropping the target instead leaves it standing where it was
+   hit, and the map cell already tracks this position from the last move tick. */
+static void enemyCancelMove(enemy_t* enemy)
 {
-    enemy->x = enemy->moveTargetX;
-    enemy->y = enemy->moveTargetY;
-    enemyUpdateMapCell(id, enemy);
+    enemy->moveTargetX = enemy->x;
+    enemy->moveTargetY = enemy->y;
 }
 
 static u8 enemyRandomBit()
@@ -655,6 +662,12 @@ void damageEnemy(u16 id, u8 damage)
     if(!enemy || enemy->state == ENEMY_STATE_DYING || enemy->state == ENEMY_STATE_DEAD)
         return;
 
+    /* Called from shot resolution, so this lands at an arbitrary point in the
+       enemy's stride rather than on a state boundary. Both paths below rewrite
+       stateCounter, so the move has to be dropped first or the rest of the
+       stride gets compressed into the new, much shorter counter. */
+    enemyCancelMove(enemy);
+
     if(damage >= enemy->health)
     {
         enemy->health = 0;
@@ -704,7 +717,7 @@ void runAI()
 
         if(dist > ENEMY_LEASH_DIST)
         {
-            enemyFinishMove(id, enemy);
+            enemyCancelMove(enemy);
             enemy->state = ENEMY_STATE_IDLE;
             enemy->spriteFrame = ENEMY_FRAME_IDLE;
             enemy->stateCounter = 0;
