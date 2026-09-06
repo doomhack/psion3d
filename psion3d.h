@@ -16,11 +16,22 @@ static const P_RECT gameWinRect = {{0,0}, {240,160}};
 static const P_RECT gameBitmapRect = {{0,0}, {256,320}};
 
 
-#define KEY_UP 1
-#define KEY_DOWN 2
-#define KEY_LEFT 4
-#define KEY_RIGHT 8
-#define KEY_FIRE 16
+#define KEY_UP          (1)
+#define KEY_DOWN        (1 << 1)
+#define KEY_LEFT        (1 << 2)
+#define KEY_RIGHT       (1 << 3)
+#define KEY_FIRE        (1 << 4)
+#define KEY_WEAPON_1    (1 << 5)
+#define KEY_WEAPON_2    (1 << 6)
+#define KEY_WEAPON_3    (1 << 7)
+#define KEY_WEAPON_4    (1 << 8)
+#define KEY_10          (1 << 9)
+#define KEY_11          (1 << 10)
+#define KEY_12          (1 << 11)
+#define KEY_13          (1 << 12)
+#define KEY_14          (1 << 13)
+#define KEY_15          (1 << 14)
+#define KEY_16          (1 << 15)
 
 extern f16 dbgval;
 

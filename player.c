@@ -107,7 +107,7 @@ static f16 dampMomentum(const f16 value)
 	return damped;
 }
 
-static void updatePlayerWeapon(u8 keys)
+static void updatePlayerWeapon(u16 keys)
 {
 	if(player.weaponState.shootCooldown > 0)
 	{
@@ -135,6 +135,33 @@ static void updatePlayerWeapon(u8 keys)
 			alertEnemies((u8)fp2int(player.pos.x), (u8)fp2int(player.pos.y));
 		}
 	}
+
+	if(keys & KEY_WEAPON_1)
+	{
+		//Player always owns weapon 1.
+		player.currentWeapon = &weapons[0];
+	}
+	else if(keys & KEY_WEAPON_2)
+	{
+		if(player.weaponsOwned & 2)
+		{
+			player.currentWeapon = &weapons[1];
+		}
+	}
+	else if(keys & KEY_WEAPON_3)
+	{
+		if(player.weaponsOwned & 4)
+		{
+			player.currentWeapon = &weapons[2];
+		}
+	}
+	else if(keys & KEY_WEAPON_4)
+	{
+		if(player.weaponsOwned & 8)
+		{
+			player.currentWeapon = &weapons[3];
+		}
+	}
 }
 
 void initPlayer()
@@ -147,6 +174,7 @@ void initPlayer()
 	f_moveVel = 0;
 	f_turnVel = 0;
 
+	player.weaponsOwned = 0xff;
 	player.currentWeapon = &weapons[0];
 	player.weaponState.shootCooldown = 0;
 	player.weaponState.shotPending = FALSE;
@@ -154,7 +182,7 @@ void initPlayer()
 	player.weaponState.weaponSpriteId = (player.currentWeapon->weaponSprite << 3);
 }
 
-void updatePlayer(u8 keys)
+void updatePlayer(u16 keys)
 {
 	f16 dx, dy;
 

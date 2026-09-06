@@ -19,7 +19,7 @@ static UINT wgc[2]  = {0};
 const INT DEBUG_WIN = 1;
 const INT GAME_WIN = 2;
 
-u8 keys = 0;
+u16 keys = 0;
 
 #define DIRECT_VIDEO_MEM_ACCESS
 
@@ -68,6 +68,18 @@ static void updateKeys()
 
 	if(kbScan[0] & 0x2)
 		keys |= KEY_RIGHT;
+
+	if(kbScan[7] & 0x2)
+		keys |= KEY_WEAPON_1;
+	
+	if(kbScan[7] & 0x4)
+		keys |= KEY_WEAPON_2;
+
+	if(kbScan[5] & 0x40)
+		keys |= KEY_WEAPON_3;
+
+	if(kbScan[4] & 0x4)
+		keys |= KEY_WEAPON_4;
 }
 
 static s16 tickDelta(const u16 later, const u16 earlier)

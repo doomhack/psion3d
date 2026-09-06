@@ -50,6 +50,6 @@ typedef struct player_t
 extern player_t player;
 
 void initPlayer(void);
-void updatePlayer(u8 keys);
+void updatePlayer(u16 keys);
 
 #endif

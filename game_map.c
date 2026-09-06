@@ -29,7 +29,10 @@ void loadMapData(const u8 mapId)
 	loadSprite("hvy", SPRITE_SLOT_HVY);
 	loadSprite("hit", SPRITE_SLOT_PARTICLES);
 
-	loadSprite("ppk", SPRITE_SLOT_PISTOL);
+	loadSprite("ppk2", SPRITE_SLOT_PISTOL);
+	loadSprite("mp5", SPRITE_SLOT_SMG);
+	loadSprite("ak", SPRITE_SLOT_AR);
+	loadSprite("m249", SPRITE_SLOT_LMG);
 }
 
 u16 getCellEncoding(u16 x, u16 y, s8 cell)
