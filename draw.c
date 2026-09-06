@@ -25,8 +25,51 @@ typedef struct markedsprite_t
 #define IMPACT_FAR_DEPTH ((f16)512)
 #define MAX_VISIBLE_SPRITES 8
 
-static u16 resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHit,
-	const f16* f_wallDepth, spritehit_t* wallImpact)
+/* Frames an impact stays on screen. One frame is 50ms at 20fps, which is too
+   brief to register, so the hit is held in world space and redrawn. */
+#define IMPACT_FRAMES 3
+#define IMPACT_FRAME_WALL 0
+#define IMPACT_FRAME_ENEMY 1
+
+/* Lifts a wall impact off the surface it hit so it depth tests in front of
+   that wall rather than tying with it. */
+#define IMPACT_WALL_LIFT ((f16)24)
+
+/* Held in world coordinates rather than as a screen column, so it stays on
+   the thing that was hit while the player turns during those frames. */
+typedef struct impact_t
+{
+	f16 x, y;
+	u8 framesLeft;
+	u8 frame;
+} impact_t;
+
+static impact_t impact = {0};
+
+static void setImpact(const f16 x, const f16 y, const u8 frame)
+{
+	impact.x = x;
+	impact.y = y;
+	impact.frame = frame;
+	impact.framesLeft = IMPACT_FRAMES;
+}
+
+/* 60 degree FOV, 60 rays, 4 pixels each. Held as sincos_tab index offsets
+   rather than as angles, so a ray direction is one add onto the player's table
+   index instead of a trigidx() conversion per ray. Spans 171 of the 1024
+   entries, which is the same 60.1 degrees as the angle table it replaces. */
+static const s16 rayIdxOffset[60] =
+{
+	-86, -83, -80, -78, -74, -72, -69, -66, -63, -60,
+	-57, -55, -51, -48, -46, -43, -40, -37, -34, -31,
+	-29, -25, -23, -20, -16, -14, -11, -8, -5, -2,
+	1, 3, 7, 9, 12, 15, 18, 21, 24, 27,
+	29, 33, 35, 38, 41, 44, 47, 50, 53, 56,
+	59, 61, 64, 67, 70, 73, 76, 78, 82, 85
+};
+
+static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHit,
+	const f16* f_wallDepth, const s16 baseIdx)
 {
 	u16 i;
 	u8 aimSpan;
@@ -35,7 +78,7 @@ static u16 resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHit
 	u8 targetId = SPRITE_NO_ENEMY;
 
 	if(!player.weaponState.shotPending)
-		return FALSE;
+		return;
 
 	aimSpan = player.weaponState.shotSpan;
 	aimX = (aimSpan << 2) + 2;
@@ -67,50 +110,69 @@ static u16 resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHit
 		f_targetDepth = hit->f_spriteDist;
 	}
 
+	player.weaponState.shotPending = FALSE;
+
 	if(targetId != SPRITE_NO_ENEMY)
 	{
+		/* Read the position before damaging, so a killing blow still marks
+		   where the enemy was standing. */
+		const enemy_t* enemy = getEnemy(targetId);
+
+		if(enemy)
+			setImpact(enemy->x, enemy->y, IMPACT_FRAME_ENEMY);
+
 		damageEnemy(targetId, player.currentWeapon->damage);
-		player.weaponState.shotPending = FALSE;
-		return FALSE;
+		return;
 	}
 
 	if(f_wallDepth[aimSpan] != FP_MAX)
 	{
-		f16 f_impactDepth = f_wallDepth[aimSpan];
+		/* The ray this shot travelled down, rebuilt from the same table the
+		   cast used, so the hit can be placed in the world. There is no
+		   fisheye correction, so f_wallDepth is distance along that ray. */
+		const s16 rayIdx = baseIdx + rayIdxOffset[aimSpan];
+		const f16 f_dx = sincos_tab[(rayIdx + TRIG_COS_OFFSET) & TRIG_TABLE_MASK];
+		const f16 f_dy = sincos_tab[rayIdx & TRIG_TABLE_MASK];
 
-		if(f_impactDepth > IMPACT_FAR_DEPTH)
-			f_impactDepth = IMPACT_FAR_DEPTH;
+		f16 f_impactDepth = f_wallDepth[aimSpan] - IMPACT_WALL_LIFT;
 
 		if(f_impactDepth < IMPACT_NEAR_DEPTH)
 			f_impactDepth = IMPACT_NEAR_DEPTH;
 
-		wallImpact->spriteHeight = IMPACT_HEIGHT_NUM / f_impactDepth;
-		wallImpact->f_spriteDist = f_wallDepth[aimSpan];
-		wallImpact->spanX = aimSpan;
-		wallImpact->spriteId = SPRITE_SLOT_PARTICLES << 3;
-		wallImpact->mirrored = FALSE;
-		wallImpact->enemyId = SPRITE_NO_ENEMY;
-		player.weaponState.shotPending = FALSE;
-		return TRUE;
+		setImpact(player.pos.x + fpmul(f_dx, f_impactDepth),
+			player.pos.y + fpmul(f_dy, f_impactDepth),
+			IMPACT_FRAME_WALL);
 	}
-
-	player.weaponState.shotPending = FALSE;
-	return FALSE;
 }
 
-/* 60 degree FOV, 60 rays, 4 pixels each. Held as sincos_tab index offsets
-   rather than as angles, so a ray direction is one add onto the player's table
-   index instead of a trigidx() conversion per ray. Spans 171 of the 1024
-   entries, which is the same 60.1 degrees as the angle table it replaces. */
-static const s16 rayIdxOffset[60] =
+/* Drawn after the enemies so a hit marker sits on top of the target rather
+   than being painted over by it. */
+static void drawImpact(const f16* f_wallDepth, const f16 f_viewCos, const f16 f_viewSin)
 {
-	-86, -83, -80, -78, -74, -72, -69, -66, -63, -60,
-	-57, -55, -51, -48, -46, -43, -40, -37, -34, -31,
-	-29, -25, -23, -20, -16, -14, -11, -8, -5, -2,
-	1, 3, 7, 9, 12, 15, 18, 21, 24, 27,
-	29, 33, 35, 38, 41, 44, 47, 50, 53, 56,
-	59, 61, 64, 67, 70, 73, 76, 78, 82, 85
-};
+	spritehit_t hit;
+
+	if(impact.framesLeft == 0)
+		return;
+
+	impact.framesLeft--;
+
+	if(!projectSprite(impact.x, impact.y, &hit, f_viewCos, f_viewSin))
+		return;
+
+	if(hit.f_spriteDist >= f_wallDepth[hit.spanX])
+		return;
+
+	/* Distant impacts would otherwise shrink to a couple of pixels, so hold a
+	   floor on the apparent size the way the original wall impact did. */
+	if(hit.f_spriteDist > IMPACT_FAR_DEPTH)
+		hit.spriteHeight = IMPACT_HEIGHT_NUM / IMPACT_FAR_DEPTH;
+
+	hit.spriteId = (u8)((SPRITE_SLOT_PARTICLES << 3) | impact.frame);
+	hit.mirrored = FALSE;
+	hit.enemyId = SPRITE_NO_ENEMY;
+
+	drawProjectedSprite(&hit);
+}
 
 /* rayDelta() of every sincos_tab entry. Ray directions are always table
    entries, so the divide is hoisted out of the frame entirely. */
@@ -139,10 +201,8 @@ void draw()
 	u16 i;
 	u16 spritesMarked = 0;
 	u16 spritesHit = 0;
-	u16 drawWallImpact;
 	markedsprite_t markedSprites[MAX_VISIBLE_SPRITES];
 	spritehit_t spriteHits[MAX_VISIBLE_SPRITES];
-	spritehit_t wallImpact;
 	f16 f_wallDepth[60];
 	const f16 f_viewCos = fpcos(player.pos.angle);
 	const f16 f_viewSin = fpsin(player.pos.angle);
@@ -325,10 +385,7 @@ void draw()
 		}
 	}
 	
-	drawWallImpact = resolvePlayerShot(spriteHits, spritesHit, f_wallDepth, &wallImpact);
-
-	if(drawWallImpact)
-		drawProjectedSprite(&wallImpact);
+	resolvePlayerShot(spriteHits, spritesHit, f_wallDepth, baseIdx);
 
 	while(spritesHit > 0)
 	{
@@ -337,6 +394,8 @@ void draw()
 		if(spriteHits[spritesHit].f_spriteDist < f_wallDepth[spriteHits[spritesHit].spanX])
 			drawProjectedSprite(&spriteHits[spritesHit]);
 	}
+
+	drawImpact(f_wallDepth, f_viewCos, f_viewSin);
 	
 	while(spritesMarked > 0)
 	{

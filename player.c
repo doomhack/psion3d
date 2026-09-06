@@ -12,10 +12,10 @@ player_t player = {0};
 
 const weapon_t weapons[] = 
 {
-	{24, 40, 225, 0, SPRITE_SLOT_PISTOL, 35, 96}, //Pistol
-	{6, 10, 128, 0, SPRITE_SLOT_SMG, 35, 96}, //SMG
-	{10, 20, 160, 1, SPRITE_SLOT_AR, 35, 96}, //AR
-	{12, 25, 150, 2, SPRITE_SLOT_LMG, 35, 96}, //LMG
+	{24, 40, 240, 0, SPRITE_SLOT_PISTOL, 35, 96}, //Pistol
+	{6, 10, 160, 0, SPRITE_SLOT_SMG, 35, 96}, //SMG
+	{10, 20, 224, 1, SPRITE_SLOT_AR, 35, 96}, //AR
+	{12, 25, 192, 2, SPRITE_SLOT_LMG, 35, 96}, //LMG
 };
 
 
