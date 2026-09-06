@@ -8,6 +8,12 @@
 #define WEAPON_AR 2
 #define WEAPON_LMG 3
 
+/* Weapon switch animation phases. The old weapon lowers out of view, the
+   sprite is swapped while it is off screen, then the new one is raised. */
+#define WEAPON_SWITCH_NONE 0
+#define WEAPON_SWITCH_LOWERING 1
+#define WEAPON_SWITCH_RAISING 2
+
 typedef struct weapon_t
 {
 	u8 fireDelay; //Ticks between sucessive fire rounds.
@@ -28,6 +34,10 @@ typedef struct weapon_state_t
 	u8 shootFrames; //Show firing frame time.
 	u8 shotPending; //A fired round waiting for the current frame's visibility data.
 	u8 shotSpan; //Horizontal ray span selected by weapon accuracy.
+	u8 switchPhase; //WEAPON_SWITCH_* state of the raise/lower animation.
+	u8 switchOffset; //Rows the weapon sprite is currently lowered by.
+	u8 pendingWeapon; //Weapon index to raise once the old one is out of view.
+	u8 recoilOffset; //Rows the weapon sprite is kicked down by after firing.
 } weapon_state_t;
 
 typedef struct position_t

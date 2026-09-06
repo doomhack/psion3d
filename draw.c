@@ -345,8 +345,11 @@ void draw()
 		unmarkSprite(markedSprites[spritesMarked].x, markedSprites[spritesMarked].y);
 	}
 
-	//Draw player weapon.
-	drawSprite(player.currentWeapon->spanX, player.currentWeapon->y, player.weaponState.weaponSpriteId);
+	//Draw player weapon, lowered by the switch animation and the firing recoil.
+	drawSprite(player.currentWeapon->spanX,
+		(u8)(player.currentWeapon->y + player.weaponState.switchOffset
+			+ player.weaponState.recoilOffset),
+		player.weaponState.weaponSpriteId);
 
 	//Add rect around screen.
 	bmDrawRect(0, 0, 240, 160, blackBm);

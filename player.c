@@ -30,6 +30,15 @@ const weapon_t weapons[] =
 #define PLAYER_AIM_SPAN 30
 #define PLAYER_MAX_SPREAD_SPANS 15
 
+/* Sprites are 64 rows tall and every weapon sits at y 96, so lowering by a
+   full sprite height puts the top edge on the bottom of the screen and
+   drawSprite clips the whole thing away. */
+#define WEAPON_SWITCH_TRAVEL 64
+#define WEAPON_SWITCH_STEP 8 //Rows per tick, so eight ticks each way.
+
+#define WEAPON_RECOIL_KICK 8 //Rows the sprite drops on firing.
+#define WEAPON_RECOIL_STEP 2 //Rows recovered per tick, so four ticks to settle.
+
 static f16 f_moveVel = 0;
 static f16 f_turnVel = 0;
 static u16 shotRand = 0x6d2b;
@@ -107,8 +116,79 @@ static f16 dampMomentum(const f16 value)
 	return damped;
 }
 
+/* Begin lowering the current weapon so that index can be raised in its place.
+   Retargeting part way through simply changes what comes back up. */
+static void selectWeapon(const u8 index)
+{
+	//Weapon 1 is always owned, the rest need a pickup.
+	if(index != WEAPON_PISTOL && !(player.weaponsOwned & (1 << index)))
+		return;
+
+	if(player.weaponState.switchPhase == WEAPON_SWITCH_NONE)
+	{
+		//Keys are level triggered, so holding one must not restart the slide.
+		if(player.currentWeapon == &weapons[index])
+			return;
+	}
+	else if(player.weaponState.pendingWeapon == index)
+	{
+		return;
+	}
+
+	player.weaponState.pendingWeapon = index;
+	player.weaponState.switchPhase = WEAPON_SWITCH_LOWERING;
+}
+
+static void updateWeaponSwitch(void)
+{
+	if(player.weaponState.switchPhase == WEAPON_SWITCH_LOWERING)
+	{
+		player.weaponState.switchOffset += WEAPON_SWITCH_STEP;
+
+		if(player.weaponState.switchOffset >= WEAPON_SWITCH_TRAVEL)
+		{
+			player.weaponState.switchOffset = WEAPON_SWITCH_TRAVEL;
+
+			/* Out of sight, so this is the moment to swap the sprite. Doing it
+			   here also keeps a shot fired this tick on the old weapon. */
+			player.currentWeapon = &weapons[player.weaponState.pendingWeapon];
+			player.weaponState.weaponSpriteId = (u8)(player.currentWeapon->weaponSprite << 3);
+			player.weaponState.shootFrames = 0;
+			player.weaponState.recoilOffset = 0; //The new weapon comes up settled.
+			player.weaponState.switchPhase = WEAPON_SWITCH_RAISING;
+		}
+	}
+	else if(player.weaponState.switchPhase == WEAPON_SWITCH_RAISING)
+	{
+		if(player.weaponState.switchOffset > WEAPON_SWITCH_STEP)
+		{
+			player.weaponState.switchOffset -= WEAPON_SWITCH_STEP;
+		}
+		else
+		{
+			player.weaponState.switchOffset = 0;
+			player.weaponState.switchPhase = WEAPON_SWITCH_NONE;
+		}
+	}
+}
+
+static void updateWeaponRecoil(void)
+{
+	if(player.weaponState.recoilOffset == 0)
+		return;
+
+	if(player.weaponState.recoilOffset > WEAPON_RECOIL_STEP)
+		player.weaponState.recoilOffset -= WEAPON_RECOIL_STEP;
+	else
+		player.weaponState.recoilOffset = 0;
+}
+
 static void updatePlayerWeapon(u16 keys)
 {
+	/* Recovery runs before the trigger so that a shot fired this tick still
+	   renders at the full kick. Several ticks can pass between frames. */
+	updateWeaponRecoil();
+
 	if(player.weaponState.shootCooldown > 0)
 	{
 		player.weaponState.shootCooldown--;
@@ -121,8 +201,9 @@ static void updatePlayerWeapon(u16 keys)
 				player.weaponState.weaponSpriteId = (player.currentWeapon->weaponSprite << 3) | 0;
 		}
 	}
-	else
+	else if(player.weaponState.switchPhase == WEAPON_SWITCH_NONE)
 	{
+		//No firing while the weapon is off screen being swapped.
 		if(keys & KEY_FIRE)
 		{
 			player.weaponState.shootCooldown = player.currentWeapon->fireDelay;
@@ -130,6 +211,7 @@ static void updatePlayerWeapon(u16 keys)
 			player.weaponState.shootFrames = 5;
 			player.weaponState.shotSpan = getShotSpan(player.currentWeapon->accuracy);
 			player.weaponState.shotPending = TRUE;
+			player.weaponState.recoilOffset = WEAPON_RECOIL_KICK;
 
 			//Gunfire gives the player away, whether or not the round hits.
 			alertEnemies((u8)fp2int(player.pos.x), (u8)fp2int(player.pos.y));
@@ -137,31 +219,15 @@ static void updatePlayerWeapon(u16 keys)
 	}
 
 	if(keys & KEY_WEAPON_1)
-	{
-		//Player always owns weapon 1.
-		player.currentWeapon = &weapons[0];
-	}
+		selectWeapon(WEAPON_PISTOL);
 	else if(keys & KEY_WEAPON_2)
-	{
-		if(player.weaponsOwned & 2)
-		{
-			player.currentWeapon = &weapons[1];
-		}
-	}
+		selectWeapon(WEAPON_SMG);
 	else if(keys & KEY_WEAPON_3)
-	{
-		if(player.weaponsOwned & 4)
-		{
-			player.currentWeapon = &weapons[2];
-		}
-	}
+		selectWeapon(WEAPON_AR);
 	else if(keys & KEY_WEAPON_4)
-	{
-		if(player.weaponsOwned & 8)
-		{
-			player.currentWeapon = &weapons[3];
-		}
-	}
+		selectWeapon(WEAPON_LMG);
+
+	updateWeaponSwitch();
 }
 
 void initPlayer()
@@ -175,11 +241,16 @@ void initPlayer()
 	f_turnVel = 0;
 
 	player.weaponsOwned = 0xff;
-	player.currentWeapon = &weapons[0];
+	player.currentWeapon = &weapons[WEAPON_PISTOL];
 	player.weaponState.shootCooldown = 0;
+	player.weaponState.shootFrames = 0;
 	player.weaponState.shotPending = FALSE;
 	player.weaponState.shotSpan = PLAYER_AIM_SPAN;
 	player.weaponState.weaponSpriteId = (player.currentWeapon->weaponSprite << 3);
+	player.weaponState.switchPhase = WEAPON_SWITCH_NONE;
+	player.weaponState.switchOffset = 0;
+	player.weaponState.pendingWeapon = WEAPON_PISTOL;
+	player.weaponState.recoilOffset = 0;
 }
 
 void updatePlayer(u16 keys)
