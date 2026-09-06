@@ -8,6 +8,7 @@
 #include "game_map.h"
 #include "enemy.h"
 #include "walls.h"
+#include "draw.h"
 
 typedef struct markedsprite_t
 {
@@ -52,6 +53,99 @@ static void setImpact(const f16 x, const f16 y, const u8 frame)
 	impact.y = y;
 	impact.frame = frame;
 	impact.framesLeft = IMPACT_FRAMES;
+}
+
+#define TRACER_SLOTS 4
+#define TRACER_FRAMES 2
+
+/* Sprites are centred on row 80, so that is the shooter's midpoint at any
+   distance. The round converges near the bottom of the view rather than on
+   the centre of it: the camera is the player, so an enemy dead ahead sits
+   within a couple of pixels of the centre and a line drawn there would have
+   no length at all. */
+#define TRACER_START_Y 80
+#define TRACER_END_X 120
+#define TRACER_END_Y 152
+#define TRACER_MISS_OFFSET 32
+
+typedef struct tracer_t
+{
+	u8 enemyId;
+	u8 framesLeft;
+	u8 aim;
+} tracer_t;
+
+static tracer_t tracers[TRACER_SLOTS] = {0};
+
+void addEnemyTracer(u8 enemyId, u8 aim)
+{
+	u16 i;
+	u16 slot = TRACER_SLOTS;
+
+	for(i = 0; i < TRACER_SLOTS; i++)
+	{
+		/* A second shot from the same enemy refreshes its streak rather than
+		   taking a second slot. */
+		if(tracers[i].framesLeft > 0 && tracers[i].enemyId == enemyId)
+		{
+			tracers[i].aim = aim;
+			tracers[i].framesLeft = TRACER_FRAMES;
+			return;
+		}
+
+		if(tracers[i].framesLeft == 0 && slot == TRACER_SLOTS)
+			slot = i;
+	}
+
+	if(slot < TRACER_SLOTS)
+	{
+		tracers[slot].enemyId = enemyId;
+		tracers[slot].aim = aim;
+		tracers[slot].framesLeft = TRACER_FRAMES;
+	}
+}
+
+/* Drawn over the enemy sprites, since the round leaves the shooter and travels
+   toward the player. The shooter's screen position is taken from the
+   projection the sprite pass already did rather than projecting a second time. */
+static void drawEnemyTracers(const spritehit_t* spriteHits, const u16 spritesHit,
+	const f16* f_wallDepth)
+{
+	u16 i;
+
+	for(i = 0; i < TRACER_SLOTS; i++)
+	{
+		u16 j;
+
+		if(tracers[i].framesLeft == 0)
+			continue;
+
+		/* Aged whether or not it can be drawn, so a shooter that steps out of
+		   view leaves no stale entry behind. */
+		tracers[i].framesLeft--;
+
+		for(j = 0; j < spritesHit; j++)
+		{
+			s16 endX;
+
+			if(spriteHits[j].enemyId != tracers[i].enemyId)
+				continue;
+
+			if(spriteHits[j].f_spriteDist >= f_wallDepth[spriteHits[j].spanX])
+				break;
+
+			endX = TRACER_END_X;
+
+			if(tracers[i].aim == TRACER_AIM_WIDE_L)
+				endX -= TRACER_MISS_OFFSET;
+			else if(tracers[i].aim == TRACER_AIM_WIDE_R)
+				endX += TRACER_MISS_OFFSET;
+
+			bmXorLine((s16)((spriteHits[j].spanX << 2) + 2), TRACER_START_Y,
+				endX, TRACER_END_Y, blackBm);
+			break;
+		}
+	}
 }
 
 /* 60 degree FOV, 60 rays, 4 pixels each. Held as sincos_tab index offsets
@@ -201,6 +295,7 @@ void draw()
 	u16 i;
 	u16 spritesMarked = 0;
 	u16 spritesHit = 0;
+	u16 visibleSprites;
 	markedsprite_t markedSprites[MAX_VISIBLE_SPRITES];
 	spritehit_t spriteHits[MAX_VISIBLE_SPRITES];
 	f16 f_wallDepth[60];
@@ -387,6 +482,8 @@ void draw()
 	
 	resolvePlayerShot(spriteHits, spritesHit, f_wallDepth, baseIdx);
 
+	visibleSprites = spritesHit;
+
 	while(spritesHit > 0)
 	{
 		spritesHit--;
@@ -396,6 +493,7 @@ void draw()
 	}
 
 	drawImpact(f_wallDepth, f_viewCos, f_viewSin);
+	drawEnemyTracers(spriteHits, visibleSprites, f_wallDepth);
 	
 	while(spritesMarked > 0)
 	{

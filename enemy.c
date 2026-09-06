@@ -3,6 +3,7 @@
 #include "game_map.h"
 #include "psion3d.h"
 #include "units.h"
+#include "draw.h"
 
 #define ENEMY_LEASH_DIST_METERS 28
 #define ENEMY_ATTACK_DIST_MER_METERS 4
@@ -284,16 +285,24 @@ void alertEnemies(const u8 x, const u8 y)
     }
 }
 
-static void enemyShootPlayer(const enemy_t* enemy)
+static void enemyShootPlayer(const u16 id, const enemy_t* enemy)
 {
     u8 damage;
+    u8 onTarget;
 
     /* A shot is loud whether or not it connects, and this is what carries the
        alarm outward - the player's shot wakes the first room, those enemies
        firing back wake the next one. */
     alertEnemies((u8)fp2int(enemy->x), (u8)fp2int(enemy->y));
 
-    if(!enemyRandomChance(enemy->enemyStats->accuracy) || player.health == 0)
+    onTarget = enemyRandomChance(enemy->enemyStats->accuracy) && player.health > 0;
+
+    /* Every round leaves a streak, so a near miss reads as a near miss rather
+       than as nothing having happened. */
+    addEnemyTracer((u8)id, onTarget ? TRACER_AIM_HIT :
+        (enemyRandomBit() ? TRACER_AIM_WIDE_L : TRACER_AIM_WIDE_R));
+
+    if(!onTarget)
         return;
 
     damage = enemy->enemyStats->damage;
@@ -891,7 +900,7 @@ void runAI()
 
                 enemy->state = ENEMY_STATE_ATTACKING;
                 enemy->stateCounter = ENEMY_ATTACK_DELAY;
-                enemyShootPlayer(enemy);
+                enemyShootPlayer(id, enemy);
                 break;
 
             case ENEMY_STATE_WANDER:

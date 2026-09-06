@@ -52,6 +52,11 @@ static void setPixel(s16 x, s16 y, u8* bm)
 	bm[(y << 5) + (x >> 3)] |= (1 << (x & 7));
 }
 
+static void xorPixel(s16 x, s16 y, u8* bm)
+{
+	bm[(y << 5) + (x >> 3)] ^= (1 << (x & 7));
+}
+
 static void fillSpan(s16 x, s16 y, s16 w, u8* bm, u8 value)
 {
 	u8* row = bm + (y << 5);
@@ -329,6 +334,42 @@ void bmDrawLine(s16 start_x, s16 start_y, s16 end_x, s16 end_y, u8* bm)
 	{
 		if(start_x >= 0 && start_x < BM_WIDTH && start_y >= 0 && start_y < BM_HEIGHT)
 			setPixel(start_x, start_y, bm);
+
+		if(start_x == end_x && start_y == end_y)
+			break;
+
+		e2 = err + err;
+
+		if(e2 > -dy)
+		{
+			err -= dy;
+			start_x += sx;
+		}
+
+		if(e2 < dx)
+		{
+			err += dx;
+			start_y += sy;
+		}
+	}
+}
+
+/* As bmDrawLine, but flipping each pixel rather than setting it. Against the
+   black plane that turns white to black and black back to white, and shifts
+   either grey one level, so the line stays visible whatever it crosses. */
+void bmXorLine(s16 start_x, s16 start_y, s16 end_x, s16 end_y, u8* bm)
+{
+	s16 dx = end_x > start_x ? end_x - start_x : start_x - end_x;
+	s16 dy = end_y > start_y ? end_y - start_y : start_y - end_y;
+	s16 sx = start_x < end_x ? 1 : -1;
+	s16 sy = start_y < end_y ? 1 : -1;
+	s16 err = dx - dy;
+	s16 e2;
+
+	while(TRUE)
+	{
+		if(start_x >= 0 && start_x < BM_WIDTH && start_y >= 0 && start_y < BM_HEIGHT)
+			xorPixel(start_x, start_y, bm);
 
 		if(start_x == end_x && start_y == end_y)
 			break;
