@@ -4,3 +4,4 @@
 *.dasm
 *.LOG
 pc/build/
+*.user
