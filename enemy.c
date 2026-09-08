@@ -30,7 +30,7 @@
 #define ENEMY_AIM_DELAY fpSecondsToTicks(flt2fp(0.5f))
 #define ENEMY_EVADE_DELAY fpSecondsToTicks(flt2fp(0.4f))
 #define ENEMY_HURT_DELAY fpSecondsToTicks(flt2fp(0.25f))
-#define ENEMY_DYING_DELAY fpSecondsToTicks(flt2fp(0.5f))
+#define ENEMY_DYING_DELAY fpSecondsToTicks(flt2fp(0.3f))
 
 //How long the corpse lies there before the weapon it carried takes its place.
 #define ENEMY_DROP_DELAY SECONDS_TO_TICKS(1)
