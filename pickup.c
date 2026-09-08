@@ -1,0 +1,129 @@
+#include "fp_types.h"
+#include "pickup.h"
+#include "game_map.h"
+#include "player.h"
+
+/* Grant a weapon the player does not already carry. Raising it only on the
+   first one of its kind means a second MP5 lying in a corridor tops up the
+   ownership bit without yanking a better gun out of the player's hands. */
+static void giveWeapon(const u8 index)
+{
+	if(player.weaponsOwned & (1 << index))
+		return;
+
+	player.weaponsOwned |= (1 << index);
+
+	selectWeapon(index);
+}
+
+/* The keycard is not checked at the door. Every locked door on the level is
+   rewritten to the unlocked encoding, which is what 'D' produces, so both the
+   MAP_MASK_WALK that lets the player through and the open-on-approach airlock
+   drawing follow with no further test in the hot paths. */
+static void giveKeycard(void)
+{
+	u16 x, y;
+	u16 cell;
+
+	player.items |= PLAYER_ITEM_KEYCARD;
+
+	for(y = 0; y < MAP_Y; y++)
+	{
+		for(x = 0; x < MAP_X; x++)
+		{
+			cell = mapCell(x, y);
+
+			/* Enemy cells carry type values 0..3 as well, so the wall bit is
+			   what makes this a door rather than a sprite. */
+			if(!isWall(cell) || mapCellType(cell) != WALL_TYPE_LOCKED_DOOR)
+				continue;
+
+			updateCell(x, y, (MAP_MASK_WALL | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_UNLOCKED_DOOR)));
+		}
+	}
+}
+
+void collectPickup(const u8 type)
+{
+	switch(type)
+	{
+		case PICKUP_TYPE_MP5:
+			giveWeapon(WEAPON_SMG);
+			break;
+
+		case PICKUP_TYPE_AK47:
+			giveWeapon(WEAPON_AR);
+			break;
+
+		case PICKUP_TYPE_M249:
+			giveWeapon(WEAPON_LMG);
+			break;
+
+		case PICKUP_TYPE_KEYCARD:
+			giveKeycard();
+			break;
+	}
+}
+
+void checkPickup(void)
+{
+	u16 x = (u16)fp2int(player.pos.x);
+	u16 y = (u16)fp2int(player.pos.y);
+	u16 cell = mapCell(x, y);
+
+	/* Enemies share the sprite bit, and the player cannot stand in one. */
+	if(!isSprite(cell) || isEnemy(cell))
+		return;
+
+	/* Clear the cell before the effect runs, so an effect that rewrites the
+	   map cannot be undone by the removal. */
+	updateCell(x, y, MAP_MASK_WALK);
+
+	collectPickup(mapCellType(cell));
+}
+
+/* Mirrors getEnemyCell. x and y are unused for now but kept in the signature
+   so a pickup that needs to register world state has the same hook. */
+u16 getPickupCell(u16 x, u16 y, s8 cell)
+{
+	u16 pickupType;
+
+	switch(cell)
+	{
+		case 'I':
+			pickupType = PICKUP_TYPE_AK47;
+			break;
+
+		case 'J':
+			pickupType = PICKUP_TYPE_M249;
+			break;
+
+		case 'K':
+			pickupType = PICKUP_TYPE_KEYCARD;
+			break;
+
+		case 'L':
+			pickupType = 4;
+			break;
+
+		case 'M':
+			pickupType = 5;
+			break;
+
+		case 'N':
+			pickupType = 6;
+			break;
+
+		case 'O':
+			pickupType = 7;
+			break;
+
+		default: //'H', the MP5.
+			pickupType = PICKUP_TYPE_MP5;
+			break;
+	}
+
+	/* No wall bit: the ray cast only collects sprites from cells it can see
+	   through, and the walk bit is what lets the player step on it. */
+	return (MAP_MASK_SPRITE | MAP_MASK_WALK | SET_CELL_TYPE_ID(pickupType));
+}

@@ -4,6 +4,7 @@
 #include "sprslot.h"
 #include "debug.h"
 #include "enemy.h"
+#include "pickup.h"
 #include "walls.h"
 
 #define MAP_FILE_NAME_LEN 64
@@ -89,7 +90,7 @@ u16 getCellEncoding(u16 x, u16 y, s8 cell)
 	case 'M':
 	case 'N':
 	case 'O':
-		return 0; //TODO: GetPickup Cell.
+		return getPickupCell(x, y, cell);
 
 	}
 

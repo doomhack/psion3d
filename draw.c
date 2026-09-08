@@ -502,8 +502,9 @@ void draw()
 							if(spritesHit < MAX_VISIBLE_SPRITES &&
 								projectSprite(int2fp(mapx) + flt2fp(0.5f), int2fp(mapy) + flt2fp(0.5f), &spriteHits[spritesHit], f_viewCos, f_viewSin))
 							{
-								//TODO: Impliment sprite selection here. For now 0..3 are populated
-								spriteHits[spritesHit].spriteId = 0;
+								/* The only non enemy sprite cell is a pickup, and its type
+								   nibble is also the frame index within the pickup slot. */
+								spriteHits[spritesHit].spriteId = (u8)((SPRITE_SLOT_PICKUPS << 3) | GET_CELL_TYPE_ID(hitcell));
 								spriteHits[spritesHit].mirrored = FALSE;
 								spriteHits[spritesHit].enemyId = SPRITE_NO_ENEMY;
 								spritesHit++;

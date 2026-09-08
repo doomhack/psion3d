@@ -7,6 +7,7 @@
 #include "enemy.h"
 #include "units.h"
 #include "psion3d.h"
+#include "pickup.h"
 
 player_t player = {0};
 
@@ -118,7 +119,7 @@ static f16 dampMomentum(const f16 value)
 
 /* Begin lowering the current weapon so that index can be raised in its place.
    Retargeting part way through simply changes what comes back up. */
-static void selectWeapon(const u8 index)
+void selectWeapon(const u8 index)
 {
 	//Weapon 1 is always owned, the rest need a pickup.
 	if(index != WEAPON_PISTOL && !(player.weaponsOwned & (1 << index)))
@@ -240,7 +241,8 @@ void initPlayer()
 	f_moveVel = 0;
 	f_turnVel = 0;
 
-	player.weaponsOwned = 0xff;
+	player.weaponsOwned = 0; //Only the pistol is free; the rest are pickups.
+	player.items = 0;
 	player.currentWeapon = &weapons[WEAPON_PISTOL];
 	player.weaponState.shootCooldown = 0;
 	player.weaponState.shootFrames = 0;
@@ -293,6 +295,10 @@ void updatePlayer(u16 keys)
 		dy = fpmul(fpsin(player.pos.angle), f_moveVel);
 
 		tryMove(dx, dy);
+
+		/* Standing on a pickup needs a move to reach it, so this rides the
+		   same guard as tryMove rather than costing an idle tick. */
+		checkPickup();
 	}
 
 	updatePlayerWeapon(keys);

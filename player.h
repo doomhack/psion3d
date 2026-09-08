@@ -8,6 +8,9 @@
 #define WEAPON_AR 2
 #define WEAPON_LMG 3
 
+/* Inventory bits held in player_t.items. */
+#define PLAYER_ITEM_KEYCARD 0x01
+
 /* Weapon switch animation phases. The old weapon lowers out of view, the
    sprite is swapped while it is off screen, then the new one is raised. */
 #define WEAPON_SWITCH_NONE 0
@@ -53,6 +56,7 @@ typedef struct player_t
 	const weapon_t* currentWeapon;
 	weapon_state_t weaponState;
 	u8 weaponsOwned; //bitmask of weapons owned.
+	u8 items; //bitmask of PLAYER_ITEM_* held.
 
 } player_t;
 
@@ -61,5 +65,6 @@ extern player_t player;
 
 void initPlayer(void);
 void updatePlayer(u16 keys);
+void selectWeapon(const u8 index);
 
 #endif

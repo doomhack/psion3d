@@ -10,6 +10,7 @@
 #compile sprite
 #compile debug
 #compile game_map
+#compile pickup
 #compile fp_math
 #compile videomem
 #compile fpasm
