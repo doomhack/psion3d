@@ -108,6 +108,39 @@ static u16 drawLabPassage(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	return TRUE;
 }
 
+static u16 drawLockedAirlockDoor(s16 x, s16 y, s16 h, const wallhit_t* hit)
+{
+	s16 dleft, dright;
+	s16 wallx = (hit->f_wallX >> 4);
+
+	dleft = 8;
+	dright = 8;
+
+	if(wallx == dleft || wallx == dright)
+		bmFillRect4(x, y, h, blackBm);
+	else if(wallx < dleft || wallx > dright)
+	{
+		if((wallx < (dleft - 2) && wallx >= (dleft - 5)) ||
+			(wallx > (dright + 2) && wallx <= (dright + 5)))
+		{
+			bmFillRect4(x, y, h, greyBm);
+			bmClearRect4(x, y, (h >> 2), blackBm);
+			bmClearRect4(x, y + (h >> 1), (h >> 1), blackBm);
+		}
+		else
+		{
+			bmClearRect4(x, y, h, blackBm);
+			bmFillRect4(x, y, h, greyBm);
+		}
+
+		bmFillPattern4(x, y + h - (h >> 3), h >> 3, blackBm);
+	}
+	else
+		return FALSE;
+
+	return TRUE;
+}
+
 static u16 drawAirlockDoor(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
 	s16 doorgap, dleft, dright;
@@ -258,6 +291,8 @@ u16 drawWallLab(u16 x, wallhit_t* hit)
 			return drawLabPassage(x, y, h, hit);
 		case WALL_TYPE_UNLOCKED_DOOR:
 			return drawAirlockDoor(x, y, h, hit);
+		case WALL_TYPE_LOCKED_DOOR:
+			return drawLockedAirlockDoor(x, y, h, hit);
 		case WALL_TYPE_DARK:
 			return drawHazardBulkhead(x, y, h, hit);
 		case WALL_TYPE_BARS:

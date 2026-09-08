@@ -8,6 +8,8 @@ typedef struct spritehit_t
 	s16 spriteHeight;
 	f16 f_spriteDist;
 	u16 spanX;
+	s16 offsetX; //Pixels to shift the drawn sprite by, 0 for a centred one.
+	s16 offsetY;
 	u8 spriteId;
 	u8 mirrored;
 	u8 enemyId;

@@ -17,10 +17,10 @@ typedef struct markedsprite_t
 
 #define WALL_HEIGHT_NUM ((s16)30720)
 
-/* Largest per cell step the s16 side distance accumulator can take and still
-   not wrap over the map's ~90 cell diagonal. A ray with a bigger delta is
-   within about a degree of axis-parallel; those take the fpdiv path below. */
-#define DDA_SAFE_DELTA ((f16)9728)
+/* Side distance for an axis the ray runs exactly parallel to, and so never
+   crosses. Bigger than any real side distance: those are u16 and bounded by
+   the hit distance plus one delta, at most 23168 + 32767 over this map. */
+#define DDA_NEVER ((u16)0xffff)
 #define IMPACT_HEIGHT_NUM ((s16)30720)
 #define IMPACT_NEAR_DEPTH ((f16)32)
 #define IMPACT_FAR_DEPTH ((f16)512)
@@ -36,22 +36,56 @@ typedef struct markedsprite_t
    that wall rather than tying with it. */
 #define IMPACT_WALL_LIFT ((f16)24)
 
+/* Vertical scatter of a hit, in sixty-fourths of the target's height. The
+   floor keeps even the most accurate weapon from stamping every round on the
+   same row; the ceiling keeps hits on the torso, since row 80 is eye level. */
+#define IMPACT_VSPREAD_MIN 5
+#define IMPACT_VSPREAD_MAX 12
+
 /* Held in world coordinates rather than as a screen column, so it stays on
-   the thing that was hit while the player turns during those frames. */
+   the thing that was hit while the player turns during those frames. The
+   offsets are fractions of the target's height rather than pixels, so the
+   mark keeps its place on the target as its apparent size changes. */
 typedef struct impact_t
 {
 	f16 x, y;
+	s8 fracX, fracY;
 	u8 framesLeft;
 	u8 frame;
 } impact_t;
 
 static impact_t impact = {0};
+static u16 impactRand = 0xb15f;
 
-static void setImpact(const f16 x, const f16 y, const u8 frame)
+static u8 impactVSpread(const u8 accuracy)
+{
+	u16 band = IMPACT_VSPREAD_MIN + ((255 - accuracy) >> 4);
+
+	if(band > IMPACT_VSPREAD_MAX)
+		band = IMPACT_VSPREAD_MAX;
+
+	return (u8)band;
+}
+
+/* A shot carries no vertical component - the ray is level with the player's
+   eye - so how far up or down a round lands has to be invented. */
+static s8 impactFracY(const u8 accuracy)
+{
+	u8 band = impactVSpread(accuracy);
+
+	impactRand = (u16)(impactRand * 25173 + 13849);
+
+	return (s8)((s16)(impactRand % ((band << 1) + 1)) - band);
+}
+
+static void setImpact(const f16 x, const f16 y, const u8 frame,
+	const s8 fracX, const s8 fracY)
 {
 	impact.x = x;
 	impact.y = y;
 	impact.frame = frame;
+	impact.fracX = fracX;
+	impact.fracY = fracY;
 	impact.framesLeft = IMPACT_FRAMES;
 }
 
@@ -170,6 +204,8 @@ static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHi
 	s16 aimX;
 	f16 f_targetDepth;
 	u8 targetId = SPRITE_NO_ENEMY;
+	s16 targetWidth = 1;
+	s16 targetCentreX = 0;
 
 	if(!player.weaponState.shotPending)
 		return;
@@ -202,6 +238,8 @@ static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHi
 
 		targetId = hit->enemyId;
 		f_targetDepth = hit->f_spriteDist;
+		targetWidth = width;
+		targetCentreX = (hit->spanX << 2) + 2;
 	}
 
 	player.weaponState.shotPending = FALSE;
@@ -213,7 +251,16 @@ static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHi
 		const enemy_t* enemy = getEnemy(targetId);
 
 		if(enemy)
-			setImpact(enemy->x, enemy->y, IMPACT_FRAME_ENEMY);
+		{
+			/* Where the round actually crossed the silhouette. The hit test
+			   above already proved aimX lies within the target, so this is at
+			   most half a width either side and the shift stays inside s16. */
+			const s16 offsetPx = aimX - targetCentreX;
+
+			setImpact(enemy->x, enemy->y, IMPACT_FRAME_ENEMY,
+				(s8)((offsetPx << 6) / targetWidth),
+				impactFracY(player.currentWeapon->accuracy));
+		}
 
 		damageEnemy(targetId, player.currentWeapon->damage);
 		return;
@@ -233,9 +280,12 @@ static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHi
 		if(f_impactDepth < IMPACT_NEAR_DEPTH)
 			f_impactDepth = IMPACT_NEAR_DEPTH;
 
+		/* Horizontally this is already on the real ray, so only the vertical
+		   needs scattering - without it every wall hit sits on the horizon. */
 		setImpact(player.pos.x + fpmul(f_dx, f_impactDepth),
 			player.pos.y + fpmul(f_dy, f_impactDepth),
-			IMPACT_FRAME_WALL);
+			IMPACT_FRAME_WALL, 0,
+			impactFracY(player.currentWeapon->accuracy));
 	}
 }
 
@@ -244,6 +294,7 @@ static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHi
 static void drawImpact(const f16* f_wallDepth, const f16 f_viewCos, const f16 f_viewSin)
 {
 	spritehit_t hit;
+	s16 targetHeight;
 
 	if(impact.framesLeft == 0)
 		return;
@@ -256,10 +307,22 @@ static void drawImpact(const f16* f_wallDepth, const f16 f_viewCos, const f16 f_
 	if(hit.f_spriteDist >= f_wallDepth[hit.spanX])
 		return;
 
+	/* What the thing that was hit measures on screen, read before the clamp
+	   below inflates the mark itself. Scaling the offsets by the clamped size
+	   would throw them off a distant target - a far wall may be ten rows tall
+	   while the mark is held at sixty. */
+	targetHeight = hit.spriteHeight;
+
 	/* Distant impacts would otherwise shrink to a couple of pixels, so hold a
 	   floor on the apparent size the way the original wall impact did. */
 	if(hit.f_spriteDist > IMPACT_FAR_DEPTH)
 		hit.spriteHeight = IMPACT_HEIGHT_NUM / IMPACT_FAR_DEPTH;
+
+	/* Both products stay within s16: the fractions reach 32 and targetHeight
+	   960, since projectSprite rejects anything nearer than SPRITE_NEAR_DEPTH.
+	   Widening to s32 here would pull in TopSpeed's 32 bit multiply helper. */
+	hit.offsetX = (s16)((impact.fracX * targetHeight) >> 6);
+	hit.offsetY = (s16)((impact.fracY * targetHeight) >> 6);
 
 	hit.spriteId = (u8)((SPRITE_SLOT_PARTICLES << 3) | impact.frame);
 	hit.mirrored = FALSE;
@@ -270,13 +333,13 @@ static void drawImpact(const f16* f_wallDepth, const f16 f_viewCos, const f16 f_
 
 /* rayDelta() of every sincos_tab entry. Ray directions are always table
    entries, so the divide is hoisted out of the frame entirely. */
-static f16 recipTab[TRIG_TABLE_LEN];
+static u16 recipTab[TRIG_TABLE_LEN];
 static u8 recipReady = FALSE;
 
-static f16 rayDelta(const f16 f_dir)
+static u16 rayDelta(const f16 f_dir)
 {
 	u16 dir = f_dir < 0 ? -f_dir : f_dir;
-	f16 delta;
+	u16 delta;
 
 	if(dir <= 2)
 		return FP_MAX;
@@ -321,7 +384,13 @@ void draw()
 		s16 mapy = fp2int(player.pos.y);
 
 		s16 stepx, stepy;
-		f16 f_sidedx, f_sidedy;
+
+		/* Unsigned so the accumulators cannot wrap. A near axis-parallel ray
+		   has a delta of up to FP_MAX, which overflows s16 the first time it
+		   is added to a side distance the ray has already carried across the
+		   map; the wrapped value then stays below the other axis for the rest
+		   of the cast and the ray runs off sideways. */
+		u16 sidedx, sidedy;
 		
 		u16 side;
 		
@@ -334,8 +403,8 @@ void draw()
 		const f16 f_dx = sincos_tab[cosIdx];
 		const f16 f_dy = sincos_tab[sinIdx];
 
-		const f16 f_deltax = recipTab[cosIdx];
-		const f16 f_deltay = recipTab[sinIdx];
+		const u16 deltax = recipTab[cosIdx];
+		const u16 deltay = recipTab[sinIdx];
 
 		f_wallDepth[i] = FP_MAX;
 
@@ -343,24 +412,37 @@ void draw()
 		if(f_dx < 0)
 		{
 			stepx = -1;
-			f_sidedx = fpmul(player.pos.x - int2fp(mapx), f_deltax);
+			sidedx = fpmul(player.pos.x - int2fp(mapx), (f16)deltax);
 		}
 		else
 		{
 			stepx = 1;
-			f_sidedx = fpmul(int2fp(mapx + 1) - player.pos.x, f_deltax);
+			sidedx = fpmul(int2fp(mapx + 1) - player.pos.x, (f16)deltax);
 		}
 
 		if(f_dy < 0)
 		{
 			stepy = -1;
-			f_sidedy = fpmul(player.pos.y - int2fp(mapy), f_deltay);
+			sidedy = fpmul(player.pos.y - int2fp(mapy), (f16)deltay);
 		}
 		else
 		{
 			stepy = 1;
-			f_sidedy = fpmul(int2fp(mapy + 1) - player.pos.y, f_deltay);
+			sidedy = fpmul(int2fp(mapy + 1) - player.pos.y, (f16)deltay);
 		}
+
+		/* A ray straight down an axis never crosses a boundary on the other one,
+		   but rayDelta() has no infinity to return and caps the delta at FP_MAX
+		   instead - and fpmul above then scales that cap down by the player's
+		   distance to the grid line. Standing a 256th of a cell from it turns
+		   "never" into 127, near enough that the DDA steps sideways off the ray.
+		   Say never directly. Kept out of the branches above so their code
+		   generation, and the register pressure around fpmul, is untouched. */
+		if(f_dx == 0)
+			sidedx = DDA_NEVER;
+
+		if(f_dy == 0)
+			sidedy = DDA_NEVER;
 		
 		solid = 0;
 		hits = 0;
@@ -374,15 +456,15 @@ void draw()
 			
 			do
 			{
-				if(f_sidedx < f_sidedy)
+				if(sidedx < sidedy)
 				{
-					f_sidedx = f_sidedx + f_deltax;
+					sidedx = sidedx + deltax;
 					mapx += stepx;
 					side = 0;
 				}
 				else
 				{
-					f_sidedy = f_sidedy + f_deltay;
+					sidedy = sidedy + deltay;
 					mapy += stepy;
 					side = 1;
 				}
@@ -438,23 +520,19 @@ void draw()
 
 			/* The side distance was advanced past the boundary just crossed, so
 			   subtracting one delta recovers the distance to it, without the
-			   bit-serial 32 bit divide the old fpdiv needed. Near axis-parallel
-			   rays keep the divide: their delta is large enough that the s16
-			   accumulator can wrap inside the map, and the subtraction would
-			   then return a near-zero distance and paint a full height column. */
+			   bit-serial 32 bit divide the old fpdiv needed. Exact for every ray
+			   now that the accumulators are unsigned: the difference is the
+			   distance the ray has actually travelled, so it fits f16 whatever
+			   the delta was. */
 			if(side == 0)
 			{
-				f_dist = (f_deltax < DDA_SAFE_DELTA)
-					? (f16)(f_sidedx - f_deltax)
-					: fpdiv((int2fp(mapx) - player.pos.x) + int2fp(((1-stepx)>>1)), f_dx);
+				f_dist = (f16)(sidedx - deltax);
 
 				f_wallx = player.pos.y + fpmul(f_dist, f_dy);
 			}
 			else
 			{
-				f_dist = (f_deltay < DDA_SAFE_DELTA)
-					? (f16)(f_sidedy - f_deltay)
-					: fpdiv((int2fp(mapy) - player.pos.y) + int2fp(((1-stepy)>>1)), f_dy);
+				f_dist = (f16)(sidedy - deltay);
 
 				f_wallx = player.pos.x + fpmul(f_dist, f_dx);
 			}

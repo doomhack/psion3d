@@ -386,6 +386,11 @@ u16 projectSprite(const f16 x, const f16 y, spritehit_t* hit, const f16 f_viewCo
 	hit->f_spriteDist = f_depth;
 	hit->spanX = spanx;
 
+	/* Centred unless the caller says otherwise, so only the impact marker has
+	   to think about this. */
+	hit->offsetX = 0;
+	hit->offsetY = 0;
+
 	return TRUE;
 }
 
@@ -494,7 +499,7 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 	if(width < 1)
 		width = 1;
 
-	left = (spriteHit->spanX << 2) + 2 - (width >> 1);
+	left = (spriteHit->spanX << 2) + 2 - (width >> 1) + spriteHit->offsetX;
 	right = left + width;
 	xStart = left;
 	xEnd = right;
@@ -508,7 +513,7 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 	if(xStart >= xEnd)
 		return;
 
-	top = 80 - (height >> 1);
+	top = 80 - (height >> 1) + spriteHit->offsetY;
 	bottom = top + height;
 	yStart = top;
 	yEnd = bottom;

@@ -13,14 +13,14 @@ u16 map[MAP_Y][MAP_X];
 void loadMapData(const u8 mapId)
 {
 	/* Select the complete wall style for this level here. */
-	switch(mapId)
+	switch (mapId)
 	{
-		case 1:
-			drawWall = drawWallLab;
-			break;
-		default:
-			drawWall = drawWallDefault;
-			break;
+	case 1:
+		drawWall = drawWallLab;
+		break;
+	default:
+		drawWall = drawWallDefault;
+		break;
 	}
 
 	loadSprite("sci", SPRITE_SLOT_CIV);
@@ -33,55 +33,74 @@ void loadMapData(const u8 mapId)
 	loadSprite("mp5", SPRITE_SLOT_SMG);
 	loadSprite("ak", SPRITE_SLOT_AR);
 	loadSprite("m249", SPRITE_SLOT_LMG);
+
+	loadSprite("pup", SPRITE_SLOT_PICKUPS);
+
 }
 
 u16 getCellEncoding(u16 x, u16 y, s8 cell)
 {
 	switch (cell)
 	{
-		case '0': //Open space
-			return (MAP_MASK_WALK);
+	case '0': // Open space
+		return (MAP_MASK_WALK);
 
-		//Walls
-		case 'X': //Brick wall
-			return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_BRICK));
+	// Walls
+	case 'X': // Brick wall
+		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_BRICK));
 
-		case 'P': //Dark brick wall
-			return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_DARK));
+	case 'P': // Dark brick wall
+		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_DARK));
 
-		case 'W': //Window
-			return (MAP_MASK_WALL | SET_CELL_TYPE_ID(WALL_TYPE_WINDOW));
+	case 'W': // Window
+		return (MAP_MASK_WALL | SET_CELL_TYPE_ID(WALL_TYPE_WINDOW));
 
-		case 'A': //Archway
-			return (MAP_MASK_WALL | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_ARCH));
+	case 'A': // Archway
+		return (MAP_MASK_WALL | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_ARCH));
 
-		case 'D': //Unlocked Door
-			return (MAP_MASK_WALL | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_UNLOCKED_DOOR));
+	case 'D': // Unlocked Door
+		return (MAP_MASK_WALL | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_UNLOCKED_DOOR));
 
-		case 'S': //Secret wall
-			return (MAP_MASK_WALL | MAP_MASK_SOLID | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_SECRET));
+	case 'T': // Locked Door
+		return (MAP_MASK_WALL | SET_CELL_TYPE_ID(WALL_TYPE_LOCKED_DOOR));
 
-		case 'B': //Iron Bars
-			return (MAP_MASK_WALL | SET_CELL_TYPE_ID(WALL_TYPE_BARS));
+	case 'S': // Secret wall
+		return (MAP_MASK_WALL | MAP_MASK_SOLID | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_SECRET));
 
-		case 'V': //The void
-			return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_VOID));
+	case 'B': // Iron Bars
+		return (MAP_MASK_WALL | SET_CELL_TYPE_ID(WALL_TYPE_BARS));
 
-		case 'C':
-		case 'E':
-		case 'F':
-		case 'G':
-			return getEnemyCell(x, y, cell);
+	case 'V': // The void
+		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_VOID));
+
+	case 'C':
+	case 'E':
+	case 'F':
+	case 'G':
+		return getEnemyCell(x, y, cell);
+
+
+
+	case 'H':
+	case 'I':
+	case 'J':
+	case 'K':
+	case 'L':
+	case 'M':
+	case 'N':
+	case 'O':
+		return 0; //TODO: GetPickup Cell.
+
 	}
 
-	//Unknown type. Return void.
+	// Unknown type. Return void.
 	return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(7));
 }
 
 u16 loadMap(const u8 mapId)
 {
 	TEXT fileName[MAP_FILE_NAME_LEN];
-	VOID* fileHandle;
+	VOID *fileHandle;
 	u16 x = 0;
 	u16 y = 0;
 	INT bytesRead;
@@ -91,26 +110,26 @@ u16 loadMap(const u8 mapId)
 
 	p_atos(&fileName[0], "LOC::M:\\IMG\\MAP\\map%d.map", mapId);
 
-	if(p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
+	if (p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
 		return FALSE;
 
-	while(TRUE)
+	while (TRUE)
 	{
 		bytesRead = p_read(fileHandle, &c, 1);
 
-		if(bytesRead == E_FILE_EOF)
+		if (bytesRead == E_FILE_EOF)
 			break;
 
-		if(bytesRead != 1)
+		if (bytesRead != 1)
 		{
 			p_close(fileHandle);
 			return FALSE;
 		}
 
-		if(c == '\r' || c == '\n')
+		if (c == '\r' || c == '\n')
 			continue;
 
-		if(y >= MAP_Y)
+		if (y >= MAP_Y)
 		{
 			p_close(fileHandle);
 			return FALSE;
@@ -119,7 +138,7 @@ u16 loadMap(const u8 mapId)
 		map[y][x] = getCellEncoding(x, y, c);
 		x++;
 
-		if(x >= MAP_X)
+		if (x >= MAP_X)
 		{
 			x = 0;
 			y++;
@@ -128,11 +147,10 @@ u16 loadMap(const u8 mapId)
 
 	p_close(fileHandle);
 
-	if(y != MAP_Y || x != 0)
+	if (y != MAP_Y || x != 0)
 	{
 		return FALSE;
 	}
-
 
 	loadMapData(mapId);
 

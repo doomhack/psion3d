@@ -38,6 +38,7 @@
 #define WALL_TYPE_SECRET 5
 #define WALL_TYPE_BARS 6
 #define WALL_TYPE_VOID 7
+#define WALL_TYPE_LOCKED_DOOR 8
 
 
 
