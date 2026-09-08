@@ -4,6 +4,7 @@
 #include "psion3d.h"
 #include "units.h"
 #include "draw.h"
+#include "pickup.h"
 
 #define ENEMY_LEASH_DIST_METERS 28
 #define ENEMY_ATTACK_DIST_MER_METERS 4
@@ -30,6 +31,9 @@
 #define ENEMY_EVADE_DELAY fpSecondsToTicks(flt2fp(0.4f))
 #define ENEMY_HURT_DELAY fpSecondsToTicks(flt2fp(0.25f))
 #define ENEMY_DYING_DELAY fpSecondsToTicks(flt2fp(0.5f))
+
+//How long the corpse lies there before the weapon it carried takes its place.
+#define ENEMY_DROP_DELAY SECONDS_TO_TICKS(1)
 
 //Move periods of flight before a fleeing enemy starts testing whether it is safe.
 #define ENEMY_FLEE_CELLS 6
@@ -119,6 +123,41 @@ static void enemyUpdateMapCell(const u16 id, enemy_t* enemy)
 
     enemy->cellX = newX;
     enemy->cellY = newY;
+}
+
+/* The corpse is drawn from its map cell, so writing a pickup over that cell is
+   what both removes the body and puts the weapon it carried in its place. */
+static void enemyDropPickup(const u16 id, const enemy_t* enemy)
+{
+    u16 cell;
+    u8 pickupType;
+
+    switch(enemy->type)
+    {
+        case ENEMY_TYPE_MER:
+            pickupType = PICKUP_TYPE_MP5;
+            break;
+
+        case ENEMY_TYPE_SGR:
+            pickupType = PICKUP_TYPE_AK47;
+            break;
+
+        case ENEMY_TYPE_HVY:
+            pickupType = PICKUP_TYPE_M249;
+            break;
+
+        default: //Civilians carry nothing, so their body simply stays.
+            return;
+    }
+
+    /* Nothing writes a dead enemy's cell today, but the drop must never land
+       on a cell that has stopped being this corpse. */
+    cell = mapCell(enemy->cellX, enemy->cellY);
+
+    if(!isEnemy(cell) || GET_CELL_ID(cell) != id)
+        return;
+
+    updateCell(enemy->cellX, enemy->cellY, makePickupCell(pickupType));
 }
 
 /* The view sin/cos are the same for every enemy in a tick, and the angle only
@@ -711,7 +750,10 @@ void runAI()
             if(enemy->stateCounter > 0)
                 enemy->stateCounter--;
             else
+            {
                 enemy->state = ENEMY_STATE_DEAD;
+                enemy->stateCounter = ENEMY_DROP_DELAY;
+            }
 
             continue;
         }
@@ -719,6 +761,17 @@ void runAI()
         if(enemy->state == ENEMY_STATE_DEAD)
         {
             enemy->spriteFrame = ENEMY_FRAME_DEATH;
+
+            /* Runs down once and stays at zero, so the drop fires on the single
+               tick the counter expires and never again. */
+            if(enemy->stateCounter > 0)
+            {
+                enemy->stateCounter--;
+
+                if(enemy->stateCounter == 0)
+                    enemyDropPickup(id, enemy);
+            }
+
             continue;
         }
 

@@ -12,6 +12,7 @@
 
 /* Types 4 through 7 are reserved for map characters 'L'..'O'. */
 
+u16 makePickupCell(const u8 type);
 u16 getPickupCell(u16 x, u16 y, s8 cell);
 void checkPickup(void);
 void collectPickup(const u8 type);

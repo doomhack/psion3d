@@ -82,6 +82,14 @@ void checkPickup(void)
 	collectPickup(mapCellType(cell));
 }
 
+/* No wall bit: the ray cast only collects sprites from cells it can see
+   through, and the walk bit is what lets the player step on it. Shared with
+   enemy.c, which writes one of these over a corpse. */
+u16 makePickupCell(const u8 type)
+{
+	return (MAP_MASK_SPRITE | MAP_MASK_WALK | SET_CELL_TYPE_ID(type));
+}
+
 /* Mirrors getEnemyCell. x and y are unused for now but kept in the signature
    so a pickup that needs to register world state has the same hook. */
 u16 getPickupCell(u16 x, u16 y, s8 cell)
@@ -123,7 +131,5 @@ u16 getPickupCell(u16 x, u16 y, s8 cell)
 			break;
 	}
 
-	/* No wall bit: the ray cast only collects sprites from cells it can see
-	   through, and the walk bit is what lets the player step on it. */
-	return (MAP_MASK_SPRITE | MAP_MASK_WALK | SET_CELL_TYPE_ID(pickupType));
+	return makePickupCell(pickupType);
 }
