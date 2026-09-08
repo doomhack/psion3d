@@ -1,7 +1,7 @@
 
  Start  Stop   Length Name               Class              Group
 
- 00000H 04611H 04611H _TEXT              CODE               (none)
+ 00000H 0461FH 0461FH _TEXT              CODE               (none)
  04620H 05620H 01000H STACK              STACK              (none)
  05620H 06620H 01000H _MAGIC             MAGIC              DGROUP 
  06620H 06622H 00002H _INIT              DATA               DGROUP 
@@ -57,63 +57,66 @@
  0000:3F51       _checkPickup
  0000:3F99       _makePickupCell
  0000:3FA5       _getPickupCell
- 0000:3FF6       _disableMemProtection
- 0000:3FFB       _enableMemProtection
- 0000:4000       _blitVideoMem
- 0000:4056       _fpmul
- 0000:42FE       _main
- 0000:4365       _p_atob
- 0000:436A       _p_atos
- 0000:4388       _p_close
- 0000:4390       _p_setirpowerlevel
- 0000:4395       _p_returntickcount
- 0000:439A       _p_open
- 0000:43A8       _p_read
- 0000:43B0       _p_getscancodes
- 0000:43B5       _p_sgclose
- 0000:43BF       _p_sgcopyfr
- 0000:43C9       _p_sgcopyto
- 0000:43D3       _p_sgcreate
- 0000:43DB       _p_slen
- 0000:43DE       _wConnect
- 0000:43E3       _wInvalidateWin
- 0000:43E8       _wValidateWin
- 0000:43ED       _wEndRedraw
- 0000:43F2       _wCreateWindow
- 0000:43F7       _wInitialiseWindowTree
- 0000:43FC       _gPrintText
- 0000:4401       _gCreateGC
- 0000:4406       _wGetEventSpecial
- 0000:440B       _wGetEventWait
- 0000:4418       _wFlush
- 0000:441D       _wBeginRedrawWinGC0
- 0000:4424       _gCreateGC0
- 0000:442B       _wCompatibilityMode
- 0000:4433       __FatalErrorPos
- 0000:443C       __FatalError
- 0000:4440       _ExtCatTable
- 0000:4440       _ClassTable
- 0000:4442       N$StdRet
- 0000:444C       N$UnsMol
- 0000:444C       N$SgnMol
- 0000:44AB       N$SgnDiv
- 0000:4564       N$UnsMul
- 0000:45A8       N$LngShl
- 0000:45B3       N$CnsStk
- 0000:45B9       N$CnsPtr
- 0000:45BF       N$CnsIdx
- 0000:45C5       N$CnsOvr
- 0000:45CB       N$CnsRng
- 0000:45D1       N$CnsRet
- 0000:45D7       N$CnsCase
- 0000:45DD       N$CnsDiv
- 0000:45E3       N$CnsPVC
- 0000:460D       __FloatInit
- 0000:4610       __FloatJmpRestore
- 0000:4610       __FloatFinish
- 0000:4610       __FloatJmpSave
- 0000:4610       __FloatMathExcepDos
- 0000:4610       __FloatInitInstance
+ 0000:3FF5       _tickDelta
+ 0000:3FF8       _tickElapsed
+ 0000:3FFB       _gameRunTicks
+ 0000:4026       _disableMemProtection
+ 0000:402B       _enableMemProtection
+ 0000:4030       _blitVideoMem
+ 0000:4086       _fpmul
+ 0000:430C       _main
+ 0000:4373       _p_atob
+ 0000:4378       _p_atos
+ 0000:4396       _p_close
+ 0000:439E       _p_setirpowerlevel
+ 0000:43A3       _p_returntickcount
+ 0000:43A8       _p_open
+ 0000:43B6       _p_read
+ 0000:43BE       _p_getscancodes
+ 0000:43C3       _p_sgclose
+ 0000:43CD       _p_sgcopyfr
+ 0000:43D7       _p_sgcopyto
+ 0000:43E1       _p_sgcreate
+ 0000:43E9       _p_slen
+ 0000:43EC       _wConnect
+ 0000:43F1       _wInvalidateWin
+ 0000:43F6       _wValidateWin
+ 0000:43FB       _wEndRedraw
+ 0000:4400       _wCreateWindow
+ 0000:4405       _wInitialiseWindowTree
+ 0000:440A       _gPrintText
+ 0000:440F       _gCreateGC
+ 0000:4414       _wGetEventSpecial
+ 0000:4419       _wGetEventWait
+ 0000:4426       _wFlush
+ 0000:442B       _wBeginRedrawWinGC0
+ 0000:4432       _gCreateGC0
+ 0000:4439       _wCompatibilityMode
+ 0000:4441       __FatalErrorPos
+ 0000:444A       __FatalError
+ 0000:444E       _ExtCatTable
+ 0000:444E       _ClassTable
+ 0000:4450       N$StdRet
+ 0000:445A       N$UnsMol
+ 0000:445A       N$SgnMol
+ 0000:44B9       N$SgnDiv
+ 0000:4572       N$UnsMul
+ 0000:45B6       N$LngShl
+ 0000:45C1       N$CnsStk
+ 0000:45C7       N$CnsPtr
+ 0000:45CD       N$CnsIdx
+ 0000:45D3       N$CnsOvr
+ 0000:45D9       N$CnsRng
+ 0000:45DF       N$CnsRet
+ 0000:45E5       N$CnsCase
+ 0000:45EB       N$CnsDiv
+ 0000:45F1       N$CnsPVC
+ 0000:461B       __FloatInit
+ 0000:461E       __FloatJmpRestore
+ 0000:461E       __FloatFinish
+ 0000:461E       __FloatJmpSave
+ 0000:461E       __FloatMathExcepDos
+ 0000:461E       __FloatInitInstance
  0562:0000       _DatWordDead
  0562:0002       _DatHandNext
  0562:0004       _DatHandPrev
@@ -161,7 +164,7 @@
  0562:1977       _greyBm
  0562:1989       _enemyCount
  0562:1994       _player
- 0562:19DE       _keys
+ 0562:19C8       _keys
  0562:19E0       __bss_start
  0562:19E0       __SH_sword
  0562:19E2       @InitCount

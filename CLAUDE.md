@@ -16,7 +16,9 @@ A Wolfenstein-style raycaster for the Psion 3a/3c/3mx (SIBO), written in C89 aga
 
 `make.bat` calls `checkvid` then `tsc /m <project>.pr /smain=<name> /%jpivid%`, so the SIBO SDK tools must be on `PATH`. It uses `<name>.pr` if that file exists, otherwise `unnamed.pr`. Outputs `PSION3D.EXE` / `PSION3D.IMG` plus `*.OBJ` beside the sources (all gitignored).
 
-**Adding a `.c` file requires adding a `#compile <name>` line to `unnamed.pr`** — the project file, not a wildcard, drives the build.
+**Adding a `.c` file requires adding a `#compile <name>` line to `unnamed.pr`** — the project file, not a wildcard, drives the build. If the file is portable, add it to `GAME_SOURCES` in `pc/CMakeLists.txt` too; both lists are explicit, and the CMake one must never be a glob or it will sweep `psion3d.c` back in.
+
+There is also a native development build — see `pc/README.md`. It compiles the portable modules against replacement SDK headers and hosts them in a Qt window, so the renderer can be debugged with breakpoints instead of an emulator. It does not replace on-device testing, and its frame rate means nothing: performance is still measured on hardware.
 
 There is no automated test suite and no lint step. Verification means building, running `PSION3D.IMG` in an emulator or on device, and eyeballing rendering, movement, sprite occlusion, and map boundaries.
 
@@ -32,7 +34,9 @@ That takes about 5 seconds. Three things matter:
 - The trailing `-c "exit"` is what closes DOSBox. To go through `make.bat` instead of `tsc`, use `-c "call make.bat psion3d"` - without `call` the batch never returns, the `exit` never runs, and DOSBox hangs forever.
 - Do not pass `-c "config -set cycles max"`; the conf already sets `cycles=max` and the override stalls the build.
 
-On an error `tsc` deletes the offending `.OBJ` and `PSION3D.EXE`, so an unchanged `PSION3D.IMG` timestamp is a second failure signal. Running the result still needs an emulator or the device. Verify logic by simulation where you can — PowerShell works well for fixed-point and blitter maths: implement the old and new versions and compare bit patterns over the full input range. Confirm the new path actually executed in the simulation; a test that silently skips the new branch proves nothing.
+On an error `tsc` deletes the offending `.OBJ` and `PSION3D.EXE`, so an unchanged `PSION3D.IMG` timestamp is a second failure signal.
+
+To check a refactor changed no code, hash `PSION3D.IMG`, **not** `PSION3D.EXE`. The `.EXE` embeds a build timestamp at offset 30-33, so two builds of identical sources differ in those four bytes and nothing else. The `.IMG` is byte-reproducible and is the deployed artifact. Running the result still needs an emulator or the device. Verify logic by simulation where you can — PowerShell works well for fixed-point and blitter maths: implement the old and new versions and compare bit patterns over the full input range. Confirm the new path actually executed in the simulation; a test that silently skips the new branch proves nothing.
 
 Working-tree line endings are mixed (git stores LF, some files are CRLF on disk) and the toolchain accepts both. Use `git diff --ignore-cr-at-eol` or the noise buries real changes, and check bytes with PowerShell rather than the bash tool, which translates line endings on read.
 
@@ -69,6 +73,8 @@ grep -aoi "N.\{0,1\}\(SgnMol\|SgnDiv\|LngShr\|LngShl\)" *.OBJ | sort | uniq -c
 **Assembler modules.** `.a` files are JPI/TopSpeed assembler, listed in `unnamed.pr` alongside the C modules. The syntax has traps: `;` comments are a **syntax error**, and displacements concatenate brackets — `mov es:[di][9600],al`, not `[di+9600]`. Arguments arrive in `AX`, `BX`; declare the convention explicitly with `#pragma call(reg_param=>(...), reg_saved=>(...))` on the C prototype rather than relying on the default.
 
 **Two bitplanes in one buffer.** `screenBm` is a single 256x320 1bpp buffer: the top 256x160 half is the black plane, the bottom half is grey. `blackBm` and `greyBm` are pointers *into* `screenBm`, not separate allocations. Rows are 32 bytes wide, so byte addressing is `y << 5` and word addressing `y << 4`. Pixels are **low-bit-first**: pixel `x` uses `1 << (x & 7)`. Reversing that bit order swaps column pairs and produces jagged wall edges.
+
+**The black plane sits on top of the grey plane.** A pixel set in both reads as black, so the display shows three shades — background, grey, black — not four. Most black on screen arrives this way rather than from the black plane alone, so treating "both set" as a separate darker shade visibly mis-renders the majority of it.
 
 **Two blit paths.** `psion3d.c` defines `DIRECT_VIDEO_MEM_ACCESS`, which routes through the assembler `blitVideoMem()` (disables memory protection via port 0x15, `rep movsw` into segment 0x40, re-enables via port 0x14). The `#else` branch is the compatibility path: one `p_sgcopyto()` of the whole buffer to a segment-backed WLIB bitmap, then two `gCopyBit` calls. Keep both working. Outside of `videomem.a`, do not manipulate `DS`/`ES`, `cli`/`sti`, protection ports, or OS handle-table segments from C — past experiments with that crashed the emulator.
 

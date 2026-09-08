@@ -1,6 +1,13 @@
 #ifndef SPRITE_H
 #define SPRITE_H
 
+/*  The SDK is here only for loadSprite's HANDLE and TEXT below, which also
+    pulls it into draw.c. Both taking it out and respelling the signature with
+    s16 and char were tried, and each changed the generated code even though
+    the types are identical widths under TopSpeed. Neither is worth an
+    unverifiable change to the shipping build for a cosmetic gain. */
+#include <plib.h>
+
 #include "fp_types.h"
 
 typedef struct spritehit_t

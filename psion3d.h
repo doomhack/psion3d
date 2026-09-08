@@ -1,8 +1,10 @@
 #ifndef PSION3D_H
 #define PSION3D_H
 
-#include <plib.h>
-#include <wlib.h>
+/*  No SDK header: walls.c, labwall.c, enemy.c, draw.c and player.c all include
+    this, and none of them touch PLIB or WLIB. The window rectangles that used
+    to live here needed P_RECT and were only ever read by psion3d.c, so they
+    moved there. */
 
 #include "fp_types.h"
 #include "fp_math.h"
@@ -11,9 +13,6 @@
 
 static const u16 BM_BLK = 0;
 static const u16 BM_GRY = 1;
-
-static const P_RECT gameWinRect = {{0,0}, {240,160}};
-static const P_RECT gameBitmapRect = {{0,0}, {256,320}};
 
 
 #define KEY_UP          (1)

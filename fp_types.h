@@ -1,7 +1,26 @@
 #ifndef FP_TYPES_H
 #define FP_TYPES_H
 
-#include <plib.h>
+/*  No SDK header here. Everything below is plain C89, so the modules that only
+    need fixed point - the renderer, the AI, the bitmap layer - carry no
+    dependency on PLIB at all. The few files that genuinely call PLIB include
+    <plib.h> for themselves.
+
+    TRUE and FALSE are defined rather than inherited for the same reason. The
+    guards mean it does not matter whether plib.h got there first; plib.h
+    spells them identically. */
+
+#ifndef TRUE
+#define TRUE 1
+#endif
+
+#ifndef FALSE
+#define FALSE 0
+#endif
+
+#ifndef NULL
+#define NULL 0
+#endif
 
 typedef unsigned char u8;
 typedef signed char s8;
@@ -55,7 +74,7 @@ typedef union
 f16 fpmul(const f16 a, const f16 b);
 #pragma restore
 
-LOCAL_C f16 fpdiv(const f16 a, const f16 b)
+static f16 fpdiv(const f16 a, const f16 b)
 {
     s32 aa;
     fpsplit_t n;

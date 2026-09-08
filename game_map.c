@@ -1,3 +1,5 @@
+#include <plib.h>	/* loadMap calls p_open / p_read / p_close directly. */
+
 #include "fp_types.h"
 #include "game_map.h"
 #include "sprite.h"

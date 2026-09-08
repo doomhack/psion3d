@@ -1,3 +1,6 @@
+#include <plib.h>
+#include <wlib.h>
+
 #include "psion3d.h"
 #include "draw.h"
 #include "bitmap.h"
@@ -6,6 +9,11 @@
 #include "player.h"
 #include "units.h"
 #include "videomem.h"
+#include "gameloop.h"
+
+/*  Were in psion3d.h until it was made SDK-free; only this file reads them. */
+static const P_RECT gameWinRect = {{0,0}, {240,160}};
+static const P_RECT gameBitmapRect = {{0,0}, {256,320}};
 
 static WSERV_SPEC wSpec;
 static UINT gameWindowId = 0;
@@ -18,8 +26,6 @@ static UINT wgc[2]  = {0};
 
 const INT DEBUG_WIN = 1;
 const INT GAME_WIN = 2;
-
-u16 keys = 0;
 
 #define DIRECT_VIDEO_MEM_ACCESS
 
@@ -82,16 +88,6 @@ static void updateKeys()
 		keys |= KEY_WEAPON_4;
 }
 
-static s16 tickDelta(const u16 later, const u16 earlier)
-{
-	return (s16)(later - earlier);
-}
-
-static u16 tickElapsed(const u16 later, const u16 earlier)
-{
-	return (u16)(later - earlier);
-}
-
 static u16 runTicks(u16 gameTime)
 {
 	u16 realTime = p_returntickcount();
@@ -100,16 +96,11 @@ static u16 runTicks(u16 gameTime)
 	   p_getscancodes per frame is enough rather than one per tick. */
 	updateKeys();
 
-	while(tickDelta(realTime, gameTime) > 0)
-	{
-		updatePlayer(keys);
-		runAI();
+	/* The catch-up loop and the render live in gameloop.c so that the PC
+	   development build runs exactly the same code. Sampling input and
+	   presenting the bitmap stay here, because both are platform. */
+	gameTime = gameRunTicks(gameTime, realTime);
 
-		gameTime++;
-	}
-	
-	bmClearScreen();
-	draw();	
 	updateScreen();
 
 	return gameTime;

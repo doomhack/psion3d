@@ -3,3 +3,4 @@
 *.IMG
 *.dasm
 *.LOG
+pc/build/

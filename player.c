@@ -1,5 +1,3 @@
-#include <wlib.h>
-
 #include "player.h"
 #include "sprslot.h"
 #include "fp_math.h"

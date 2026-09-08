@@ -1,5 +1,6 @@
 #include "debug.h"
 
+#include <plib.h>
 #include <wlib.h>
 
 static TEXT dbgTxt[32];

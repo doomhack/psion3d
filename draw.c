@@ -1,6 +1,3 @@
-#include <plib.h>
-#include <wlib.h>
-
 #include "psion3d.h"
 #include "bitmap.h"
 #include "sprite.h"

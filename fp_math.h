@@ -1,8 +1,6 @@
 #ifndef FP_MATH_H
 #define FP_MATH_H
 
-#include <plib.h>
-
 #include "fp_types.h"
 
 #define TRIG_TABLE_LEN 1024
