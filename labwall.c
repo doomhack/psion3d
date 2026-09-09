@@ -108,76 +108,141 @@ static u16 drawLabPassage(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	return TRUE;
 }
 
-static u16 drawLockedAirlockDoor(s16 x, s16 y, s16 h, const wallhit_t* hit)
+/* Airlock door. A fixed surround - black outer edge, grey frame, black lip and
+   a grey recess - holds two pale leaves that slide apart into the recess as the
+   player approaches. Leaf detail is placed relative to the leaf's own inner
+   edge, so it travels with the leaf as the door opens. wallX runs 0..255 across
+   the wall face. */
+
+#define DOOR_FRAME_W 38                  /* fixed surround width, each side */
+#define DOOR_TRAVEL (128 - DOOR_FRAME_W) /* leaf width, and its full travel */
+#define DOOR_STILE 7                     /* meeting stile, inward from the seam */
+
+static void airlockFrame(s16 x, s16 y, s16 h, s16 fx, s16 lip)
 {
-	s16 dleft, dright;
-	s16 wallx = (hit->f_wallX >> 4);
-
-	dleft = 8;
-	dright = 8;
-
-	if(wallx == dleft || wallx == dright)
-		bmFillRect4(x, y, h, blackBm);
-	else if(wallx < dleft || wallx > dright)
+	/* Outer edge, and the lip dividing frame from recess, are solid. */
+	if(fx < 6 || (fx >= 26 && fx < 30))
 	{
-		if((wallx < (dleft - 2) && wallx >= (dleft - 5)) ||
-			(wallx > (dright + 2) && wallx <= (dright + 5)))
-		{
-			bmFillRect4(x, y, h, greyBm);
-			bmClearRect4(x, y, (h >> 2), blackBm);
-			bmClearRect4(x, y + (h >> 1), (h >> 1), blackBm);
-		}
-		else
-		{
-			bmClearRect4(x, y, h, blackBm);
-			bmFillRect4(x, y, h, greyBm);
-		}
-
-		bmFillPattern4(x, y + h - (h >> 3), h >> 3, blackBm);
+		bmFillRect4(x, y, h, blackBm);
+		return;
 	}
-	else
+
+	bmClearRect4(x, y, h, blackBm);
+	bmFillRect4(x, y, h, greyBm);
+	bmFillRect4(x, y, lip, blackBm);
+	bmFillRect4(x, y + h - lip, lip, blackBm);
+}
+
+/* Header and sill. They belong to the fixed surround, so they are drawn whether
+   the leaves are shut or wide open, and the edge lips carry the frame's black
+   outline across the opening. The caller owns the black plane clear, because
+   how far it may reach depends on whether the doorway is open. */
+static void airlockSurround(s16 x, s16 y, s16 h, s16 wallx, s16 leafY, s16 footY, s16 lip)
+{
+	s16 headerH = leafY - y;
+
+	bmFillRect4(x, y, headerH, greyBm);
+	bmFillRect4(x, footY, y + h - footY, greyBm);
+	bmFillRect4(x, y, lip, blackBm);
+	bmFillRect4(x, leafY - lip, lip, blackBm);
+	bmFillRect4(x, footY, lip, blackBm);
+	bmFillRect4(x, y + h - lip, lip, blackBm);
+
+	/* Status lamps set into the header. */
+	if((wallx >= 44 && wallx < 62) || (wallx >= 194 && wallx < 212))
+		bmFillRect4(x, y + (headerH >> 1), headerH >> 2, blackBm);
+}
+
+static u16 drawAirlock(s16 x, s16 y, s16 h, const wallhit_t* hit, s16 halfgap)
+{
+	s16 wallx = hit->f_wallX;
+	s16 headerH = h >> 3;
+	s16 footH = h >> 4;
+	s16 lip = h >> 6;
+	s16 leafY, leafH, footY, handleY, handleH, d;
+
+	if(lip < 1)
+		lip = 1;
+
+	if(wallx < DOOR_FRAME_W)
+	{
+		airlockFrame(x, y, h, wallx, lip);
+		return TRUE;
+	}
+
+	if(wallx >= 256 - DOOR_FRAME_W)
+	{
+		airlockFrame(x, y, h, 255 - wallx, lip);
+		return TRUE;
+	}
+
+	leafY = y + headerH;
+	footY = y + h - footH;
+	leafH = footY - leafY;
+
+	if(wallx > 128 - halfgap && wallx < 128 + halfgap)
+	{
+		/* Open doorway. Clear the black plane under the header and sill only:
+		   the wall seen through the gap was drawn into this column first, and a
+		   full height clear would strip it back to its grey plane. */
+		bmClearRect4(x, y, headerH, blackBm);
+		bmClearRect4(x, footY, footH, blackBm);
+		airlockSurround(x, y, h, wallx, leafY, footY, lip);
+
 		return FALSE;
+	}
+
+	/* The leaf is opaque, so the whole column can be cleared in one call. */
+	bmClearRect4(x, y, h, blackBm);
+	airlockSurround(x, y, h, wallx, leafY, footY, lip);
+	bmClearRect4(x, leafY, leafH, greyBm);
+
+	d = (wallx < 128) ? (128 - halfgap - wallx) : (wallx - 128 - halfgap);
+
+	if(d < DOOR_STILE)
+	{
+		bmFillRect4(x, leafY, leafH, blackBm);
+		return TRUE;
+	}
+
+	/* Pale leaf face, dithered vision band across it, dark kick plate below. */
+	bmFillPattern4(x, leafY + (leafH >> 2), leafH >> 3, blackBm);
+	bmFillRect4(x, footY - (leafH >> 3), leafH >> 3, blackBm);
+
+	if(d >= 10 && d < 22)
+	{
+		handleH = leafH >> 3;
+		handleY = leafY + (leafH >> 1);
+
+		bmFillRect4(x, handleY, handleH, greyBm);
+
+		if(d >= 13 && d < 19)
+			bmFillRect4(x, handleY + (handleH >> 2), handleH >> 1, blackBm);
+	}
 
 	return TRUE;
 }
 
+static u16 drawLockedAirlockDoor(s16 x, s16 y, s16 h, const wallhit_t* hit)
+{
+	return drawAirlock(x, y, h, hit, 0);
+}
+
 static u16 drawAirlockDoor(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
-	s16 doorgap, dleft, dright;
 	s16 dist = hit->f_wallDist >> 4;
-	s16 wallx = (hit->f_wallX >> 4);
+	s16 doorgap, halfgap;
 
-	if(dist > 16)
-		doorgap = 0;
-	else
-		doorgap = 16 - dist;
+	if(dist >= 16)
+		return drawAirlock(x, y, h, hit, 0);
 
-	dleft = 8 - (doorgap >> 1);
-	dright = 8 + (doorgap >> 1);
+	doorgap = 16 - dist;
+	halfgap = (doorgap << 2) + (doorgap << 1);
 
-	if(wallx == dleft || wallx == dright)
-		bmFillRect4(x, y, h, blackBm);
-	else if(wallx < dleft || wallx > dright)
-	{
-		if((wallx < (dleft - 2) && wallx >= (dleft - 5)) ||
-			(wallx > (dright + 2) && wallx <= (dright + 5)))
-		{
-			bmFillRect4(x, y, h, greyBm);
-			bmClearRect4(x, y, (h >> 2), blackBm);
-			bmClearRect4(x, y + (h >> 1), (h >> 1), blackBm);
-		}
-		else
-		{
-			bmClearRect4(x, y, h, blackBm);
-			bmFillRect4(x, y, h, greyBm);
-		}
+	if(halfgap > DOOR_TRAVEL)
+		halfgap = DOOR_TRAVEL;
 
-		bmFillPattern4(x, y + h - (h >> 3), h >> 3, blackBm);
-	}
-	else
-		return FALSE;
-
-	return TRUE;
+	return drawAirlock(x, y, h, hit, halfgap);
 }
 
 static u16 drawHazardBulkhead(s16 x, s16 y, s16 h, const wallhit_t* hit)
