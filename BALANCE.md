@@ -7,8 +7,13 @@ changes.
 - Weapons: `weapons[]` in [player.c](player.c)
 - Enemies: `enemyStats[]` in [enemy.c](enemy.c)
 
-Confirmed by feel 2026-09-11. Ammo is not yet implemented (see TASKS.md); when it lands the
-pistol is infinite and the SMG, AK47 and LMG each get their own pool.
+**Weapons** were confirmed by feel 2026-09-11 and are settled. **Enemy numbers are not tuned** —
+the AI state machine had a structural pass the same day (firing bands, stagger, cadence,
+reposition, evade) and the values in `enemyStats[]` are placeholders that preserve prior behaviour
+where they could. Tune them against the archetypes in the Enemies section.
+
+Ammo is not yet implemented (see TASKS.md); when it lands the pistol is infinite and the SMG, AK47
+and LMG each get their own pool.
 
 ## Units
 
@@ -97,25 +102,90 @@ Hits needed ÷ hit chance. The SMG spends 2.5× the pistol's rounds even point-b
 
 ## Enemies
 
-| Type | HP | Dmg/shot | Hit chance | Opens fire at | Drops |
-| --- | --- | --- | --- | --- | --- |
-| Civilian | 100 | — | — | — (flees) | — |
-| Mercenary | 75 | 10 | 4% (10/255) | 2 cells (4 m) | — |
-| Soldier | 150 | 15 | 16% (40/255) | 3 cells (6 m) | AK47 |
-| Heavy | 255 | 25 | 10% (25/255) | 4 cells (8 m) | LMG |
+### Archetypes (the tuning brief)
 
-- Enemy accuracy *is* a hit-chance roll (unlike the player's, which is spread).
-- Firing cadence: aim 0.5s → fire → attack pose 1.0s → 50% back to aim. At most one shot per
-  ~1.5s while chaining. Expected damage per shot: Merc 0.4, Soldier 2.4, Heavy 2.5.
-- Enemies back off if closer than 2 cells (4 m) and give up the chase beyond 14 cells (28 m).
+- **Mercenary — busy idiot.** Medium speed. Shoots *and moves* a lot, poor accuracy. When hurt,
+  occasionally panics into flight, then comes back.
+- **Soldier — professional.** Fast. Very rarely panics. Evades with higher probability after being
+  hit. Good accuracy.
+- **Heavy — tank.** Slow, lots of HP, high damage, medium accuracy. Hard to stun-lock. Very rarely
+  panics; sometimes evades when hurt.
+
+### Current values (placeholders — see header)
+
+| Type | HP | Dmg | Hit chance | Speed | Firing band | Stagger at | Reposition | Evade | Flee | Drops |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Civilian | 100 | — | — | 1.0 m/s | — (flees) | 0 | — | 19% | 94% | — |
+| Mercenary | 75 | 10 | 4% (10/256) | 1.5 m/s | 1–2 cells | 0 | 75% | 13% | 6% | — |
+| Soldier | 150 | 15 | 16% (40/256) | 2.0 m/s | 2–3 cells | 0 | 38% | 25% | 3% | AK47 |
+| Heavy | 255 | 25 | 10% (25/256) | 0.5 m/s | 2–4 cells | 20 | 6% | 6% | 2% | LMG |
+
+- Enemy accuracy *is* a hit-chance roll (unlike the player's, which is spread), so range does not
+  change it.
+- **Firing band** is Manhattan cells. Below the band the enemy gives ground before aiming; above it,
+  it closes. The Merc's lower bound is 1, so it never retreats. Distance can never be 0.
+- **Stagger at** is `staggerDamage`: a hit below it lands but does not interrupt. The Heavy's 20
+  means the pistol (40) and LMG (20) rock it; SMG (15) and AK (16) rounds do not.
 - HP is `u8` — 255 is the ceiling without a type change.
+- Enemies give up the chase beyond 14 cells (28 m).
+
+### Firing cycle
+
+All three types share the shape; `aimTicks` / `attackTicks` are per type in `enemyStats[]` and
+currently 16 / 32 for all.
+
+```
+aim 0.5s → fire → firing pose 1.0s → roll repositionChance
+    hit:  sidestep one cell (0.5s), then aim again
+    miss: aim again on the spot
+```
+
+Unsuppressed, a stationary shooter manages 13 shots in 20s. Repositioning trades shots for
+movement:
+
+| Type | shots / 20s | sidesteps / 20s | expected DPS vs player (untuned accuracy) |
+| --- | --- | --- | --- |
+| Mercenary | 10 | 9 | 0.20 |
+| Soldier | 12 | 4 | 1.41 |
+| Heavy | 13 | 0 | 1.59 |
+
+Those DPS figures are why enemy accuracy/damage is the next tuning target: a lone Merc currently
+needs minutes to kill a 100 HP player.
+
+### Being hit
+
+A hit at or above `staggerDamage` puts the enemy in `HURT` for 0.25s and cancels its move. Two
+rules stop that becoming a lock:
+
+- A hit on an enemy already in `HURT` applies damage but does **not** restart the flinch.
+- On leaving `HURT`, an interrupted aim or firing pose **resumes with its remaining time** rather
+  than restarting. Under sustained fire the enemy still gains ground toward its shot.
+
+Enemy shots fired in 20s while being hit continuously (unsuppressed = 13):
+
+| Enemy | Pistol | SMG | AK47 | LMG |
+| --- | --- | --- | --- | --- |
+| Merc / Soldier (stagger 0) | 8 | 3 | 6 | 1 |
+| Heavy (stagger 20) | 8 | **13** | **13** | 1 |
+
+The Heavy is untouched by SMG and AK fire. The pistol suppresses a Heavy better than the SMG does —
+infinite ammo, engages at the Heavy's range, and staggers it — which is the pistol's anti-Heavy
+niche falling out of the threshold. Before this pass every combination in that table was **0**.
+
+On leaving `HURT` the enemy rolls `fleeChance` (panic: run 6 cells, then return) and then
+`evadeChance` (0.4s pause, then a 0.5s sidestep, then back to the fight — 1.15s total, the same
+for every type). Evade is **only** rolled after a hit; approaches are now the shortest path in.
 
 ## Placement notes
 
-- **Engagement ranges line up with weapon sweet spots.** Mercs close to 2 cells, where the SMG is
-  strongest. Heavies open up at 4 cells, exactly where the SMG has fallen to pistol parity and the
-  AK47 takes over. A room that lets the player hold Heavies at 6+ cells favours the pistol/AK; a
-  tight room forces the SMG against everything.
+- **Engagement ranges line up with weapon sweet spots.** Mercs fight from 1–2 cells and never back
+  off, which is where the SMG is strongest. Heavies open up at 4 cells, exactly where the SMG has
+  fallen to pistol parity and the AK47 takes over — and the pistol is the weapon that staggers them.
+  A room that lets the player hold Heavies at 6+ cells favours the pistol/AK; a tight room forces
+  the SMG against everything, and the SMG cannot stagger a Heavy.
+- **Mercs crowd.** With no minimum range and a 75% reposition rate, a group of Mercs will close to
+  adjacent and shuffle around the player. Give them room to do it or they will pin the player
+  against walls.
 - **Corridor length sets the weapon.** Anything the player can engage from 8 cells is pistol
   territory; anything that starts inside 2 is SMG territory. Rooms of 4–6 cells across are the
   AK47's, which is also the drop the player is most likely to be holding.
