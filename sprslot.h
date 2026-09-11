@@ -8,12 +8,13 @@
 #define SPRITE_SLOT_HVY 3
 #define SPRITE_SLOT_PARTICLES 4
 #define SPRITE_SLOT_PICKUPS 5
+#define SPRITE_SLOT_DECORATIONS 6
 
 /* Player weapon sprites. */
-#define SPRITE_SLOT_PISTOL 6
-#define SPRITE_SLOT_SMG 7
-#define SPRITE_SLOT_AR 8
-#define SPRITE_SLOT_LMG 9
+#define SPRITE_SLOT_PISTOL 7
+#define SPRITE_SLOT_SMG 8
+#define SPRITE_SLOT_AR 9
+#define SPRITE_SLOT_LMG 10
 
 /* Slots 10 through 31 are currently unallocated. */
 #define SPRITE_SLOT_CAPACITY 32

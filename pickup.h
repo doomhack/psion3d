@@ -10,7 +10,8 @@
 #define PICKUP_TYPE_M249 2
 #define PICKUP_TYPE_KEYCARD 3
 
-/* Types 4 through 7 are reserved for map characters 'L'..'O'. */
+/* Types 4 through 7 are reserved for map characters 'L'..'O'. Types 8 and up
+   are decorations, see DECOR_TYPE_BIT in decor.h. */
 
 u16 makePickupCell(const u8 type);
 u16 getPickupCell(u16 x, u16 y, s8 cell);

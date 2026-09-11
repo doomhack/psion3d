@@ -34,6 +34,13 @@ int main(int argc, char **argv)
 	QCommandLineOption framesOpt("frames",
 		"Advance this many game ticks before screenshotting, one per frame. "
 		"Uses the virtual clock, so the result is deterministic.", "n", "0");
+	QCommandLineOption fireOpt("fire",
+		"Hold the fire key down through the --frames loop, so a shot can be "
+		"resolved and its effect on the map seen without opening a window.");
+	QCommandLineOption useOpt("use",
+		"Hold the use key down through the --frames loop, so a switch in reach "
+		"is thrown and its effect on the map is visible in a headless "
+		"--screenshot.");
 	QCommandLineOption verboseOpt({"v", "verbose-io"},
 		"Report every failed file open, including loadSprite's routine probe "
 		"past the last frame of each sprite.");
@@ -44,6 +51,8 @@ int main(int argc, char **argv)
 	parser.addOption(shotOpt);
 	parser.addOption(gutterOpt);
 	parser.addOption(framesOpt);
+	parser.addOption(fireOpt);
+	parser.addOption(useOpt);
 	parser.addOption(verboseOpt);
 	parser.process(app);
 
@@ -72,6 +81,12 @@ int main(int argc, char **argv)
 		std::fprintf(stderr, "hostInit failed.\n");
 		return 1;
 	}
+
+	if(parser.isSet(fireOpt))
+		hostSetKey(HOST_KEY_FIRE, 1);
+
+	if(parser.isSet(useOpt))
+		hostSetKey(HOST_KEY_USE, 1);
 
 	/*  Drive the virtual clock rather than waiting on the real one, so a given
 	    tick count always produces the same frame. */

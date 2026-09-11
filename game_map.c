@@ -7,6 +7,7 @@
 #include "debug.h"
 #include "enemy.h"
 #include "pickup.h"
+#include "decor.h"
 #include "walls.h"
 
 #define MAP_FILE_NAME_LEN 64
@@ -38,7 +39,7 @@ void loadMapData(const u8 mapId)
 	loadSprite("m249", SPRITE_SLOT_LMG);
 
 	loadSprite("pup", SPRITE_SLOT_PICKUPS);
-
+	loadSprite("dec", SPRITE_SLOT_DECORATIONS);
 }
 
 u16 getCellEncoding(u16 x, u16 y, s8 cell)
@@ -50,7 +51,7 @@ u16 getCellEncoding(u16 x, u16 y, s8 cell)
 
 	// Walls
 	case 'X': // Brick wall
-		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_BRICK));
+		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_SOLID));
 
 	case 'P': // Dark brick wall
 		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_DARK));
@@ -67,14 +68,37 @@ u16 getCellEncoding(u16 x, u16 y, s8 cell)
 	case 'T': // Locked Door
 		return (MAP_MASK_WALL | SET_CELL_TYPE_ID(WALL_TYPE_LOCKED_DOOR));
 
-	case 'S': // Secret wall
-		return (MAP_MASK_WALL | MAP_MASK_SOLID | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_SECRET));
+	case 'S': // Shootable wall
+		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_SHOOTABLE));
 
 	case 'B': // Iron Bars
 		return (MAP_MASK_WALL | SET_CELL_TYPE_ID(WALL_TYPE_BARS));
 
 	case 'V': // The void
 		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_VOID));
+
+	case '!': // Sign or wall mounted feature
+		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_SIGN));
+
+	case '*': // Light fitting
+		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_LIGHT));
+
+	case ':': // Pipe and cable runs
+		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_PIPES));
+
+	case '#': // Shelving and racking
+		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_SHELF));
+
+	// Not solid, so the ray runs on past these two and draws what is behind
+	// them first.
+	case 'R': // Low wall. Seen over, but not walked through.
+		return (MAP_MASK_WALL | SET_CELL_TYPE_ID(WALL_TYPE_LOW));
+
+	case '|': // Pillar. Seen past on both sides.
+		return (MAP_MASK_WALL | SET_CELL_TYPE_ID(WALL_TYPE_PILLAR));
+
+	case 'U': // Switch. Thrown by shooting it.
+		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_SWITCH));
 
 	case 'C':
 	case 'E':
@@ -93,6 +117,16 @@ u16 getCellEncoding(u16 x, u16 y, s8 cell)
 	case 'N':
 	case 'O':
 		return getPickupCell(x, y, cell);
+
+	case '1':
+	case '2':
+	case '3':
+	case '4':
+	case '5':
+	case '6':
+	case '7':
+	case '8':
+		return getDecorCell(x, y, cell);
 
 	}
 
@@ -158,4 +192,30 @@ u16 loadMap(const u8 mapId)
 	loadMapData(mapId);
 
 	return TRUE;
+}
+
+/* Open every locked door on the level. The keycard is not checked at the door
+   and neither is the switch: the cells are rewritten to the unlocked encoding,
+   which is what 'D' produces, so both the MAP_MASK_WALK that lets the player
+   through and the open-on-approach door drawing follow with no further test in
+   the hot paths. */
+void unlockDoors(void)
+{
+	u16 x, y;
+	u16 cell;
+
+	for (y = 0; y < MAP_Y; y++)
+	{
+		for (x = 0; x < MAP_X; x++)
+		{
+			cell = mapCell(x, y);
+
+			/* Enemy cells carry type values 0..3 as well, so the wall bit is
+			   what makes this a door rather than a sprite. */
+			if (!isWall(cell) || mapCellType(cell) != WALL_TYPE_LOCKED_DOOR)
+				continue;
+
+			updateCell(x, y, (MAP_MASK_WALL | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_UNLOCKED_DOOR)));
+		}
+	}
 }

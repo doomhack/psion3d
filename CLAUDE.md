@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `AGENTS.md` in the repo root holds the longer-form conventions (style, sprite tooling details, commit/PR guidance). Read it before non-trivial changes; this file is the fast orientation.
 
+`TASKS.md` is the project task list - planned features and their current state. Check it before starting new work, and tick items off there as they land.
+
 ## What this is
 
 A Wolfenstein-style raycaster for the Psion 3a/3c/3mx (SIBO), written in C89 against the PLIB/WLIB SDK and built with the JPI/TopSpeed compiler (`tsc`). Target hardware is a ~27 MHz NEC V30MX with a 240x160 2-bit greyscale LCD. `PROGRAM.OPL` is the original OPL prototype, kept for reference only.

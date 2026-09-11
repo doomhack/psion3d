@@ -147,8 +147,10 @@ int GameView::hostKeyFor(int qtKey)
 		case Qt::Key_A:                         return HOST_KEY_LEFT;
 		case Qt::Key_Right:                     return HOST_KEY_RIGHT;
 		case Qt::Key_D:                         return HOST_KEY_RIGHT;
-		case Qt::Key_Space:                     return HOST_KEY_FIRE;
+		case Qt::Key_Space:                     return HOST_KEY_USE;
+		case Qt::Key_E:                         return HOST_KEY_USE;
 		case Qt::Key_Control:                   return HOST_KEY_FIRE;
+		case Qt::Key_Return:                    return HOST_KEY_FIRE;
 		case Qt::Key_1:                         return HOST_KEY_WEAPON_1;
 		case Qt::Key_2:                         return HOST_KEY_WEAPON_2;
 		case Qt::Key_3:                         return HOST_KEY_WEAPON_3;

@@ -4,6 +4,7 @@
 #include "sprslot.h"
 #include "game_map.h"
 #include "enemy.h"
+#include "decor.h"
 #include "walls.h"
 #include "draw.h"
 
@@ -193,6 +194,51 @@ static const s16 rayIdxOffset[60] =
 	59, 61, 64, 67, 70, 73, 76, 78, 82, 85
 };
 
+/* Which map cell a shot landed on. f_wallDepth holds the distance to the
+   surface that claimed the column, so the cell itself starts a little further
+   along the ray: step past that surface in sixteenths of a cell until a wall
+   turns up. Three steps is enough to cross the boundary at any angle and far
+   too short to tunnel into the cell behind. This runs only when a shot lands on
+   a wall, so it costs nothing per frame. */
+#define SHOT_PROBE_STEP ((f16)16)
+#define SHOT_PROBE_STEPS 3
+
+static void hitWallCell(const f16 f_depth, const f16 f_dx, const f16 f_dy)
+{
+	f16 f_probe = f_depth;
+	u16 i;
+
+	for(i = 0; i < SHOT_PROBE_STEPS; i++)
+	{
+		s16 x, y;
+		u16 cell;
+
+		f_probe += SHOT_PROBE_STEP;
+
+		x = fp2int(player.pos.x + fpmul(f_dx, f_probe));
+		y = fp2int(player.pos.y + fpmul(f_dy, f_probe));
+
+		cell = mapCell((u16)x, (u16)y);
+
+		if(!isWall(cell))
+			continue;
+
+		/* Switches are thrown with the use key, not shot: see tryUse() in
+		   player.c. A round put through one does nothing. */
+		if(mapCellType(cell) == WALL_TYPE_SHOOTABLE)
+		{
+			/* Open floor and nothing else. MAP_MASK_WALK on its own is exactly
+			   what the enemy step test asks for, so a passage shot open is
+			   usable by both sides. */
+			updateCell((u16)x, (u16)y, MAP_MASK_WALK);
+		}
+
+		/* The first wall along the ray is the one that was shot, whatever its
+		   type. Probing on past it would reach through it. */
+		return;
+	}
+}
+
 static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHit,
 	const f16* f_wallDepth, const s16 baseIdx)
 {
@@ -283,6 +329,9 @@ static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHi
 			player.pos.y + fpmul(f_dy, f_impactDepth),
 			IMPACT_FRAME_WALL, 0,
 			impactFracY(player.currentWeapon->accuracy));
+
+		/* And whatever the wall itself does about being shot. */
+		hitWallCell(f_wallDepth[aimSpan], f_dx, f_dy);
 	}
 }
 
@@ -499,9 +548,13 @@ void draw()
 							if(spritesHit < MAX_VISIBLE_SPRITES &&
 								projectSprite(int2fp(mapx) + flt2fp(0.5f), int2fp(mapy) + flt2fp(0.5f), &spriteHits[spritesHit], f_viewCos, f_viewSin))
 							{
-								/* The only non enemy sprite cell is a pickup, and its type
-								   nibble is also the frame index within the pickup slot. */
-								spriteHits[spritesHit].spriteId = (u8)((SPRITE_SLOT_PICKUPS << 3) | GET_CELL_TYPE_ID(hitcell));
+								/* A non enemy sprite cell is a pickup or a decoration. The
+								   low three bits of the type nibble are the frame within the
+								   slot, and DECOR_TYPE_BIT says which slot that is. */
+								const u16 type = GET_CELL_TYPE_ID(hitcell);
+								const u8 slot = (type & DECOR_TYPE_BIT) ? SPRITE_SLOT_DECORATIONS : SPRITE_SLOT_PICKUPS;
+
+								spriteHits[spritesHit].spriteId = (u8)((slot << 3) | (type & 7));
 								spriteHits[spritesHit].mirrored = FALSE;
 								spriteHits[spritesHit].enemyId = SPRITE_NO_ENEMY;
 								spritesHit++;

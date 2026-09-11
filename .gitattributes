@@ -1,0 +1,38 @@
+# Git stores every text file in this repo with LF, but the working tree is a
+# mix of LF and CRLF. The TopSpeed toolchain accepts both, so nothing here
+# tries to force one on the sources; text=auto just normalises on commit so
+# that a CRLF working file stops reporting as a whole-file modification.
+* text=auto
+
+# C / C++ sources and headers
+*.c   text
+*.h   text
+*.cpp text
+
+# JPI/TopSpeed assembler. These are text, NOT static libraries - the usual
+# "*.a binary" rule from generic gitattributes templates would corrupt them.
+*.a   text
+
+# Toolchain and asset inputs
+*.pr   text
+*.OPL  text
+*.md   text
+*.txt  text
+*.json text
+*.ps1  text
+*.user text
+
+# Level data (ASCII grid) and the linker map are both text
+*.map       text
+PSION3D.MAP text
+
+# DOS batch files are run by COMMAND.COM under DOSBox, which wants CRLF
+*.bat text eol=crlf
+
+# Binary assets and build outputs - never normalise these
+*.png       binary
+*.spr       binary
+*.xlsx      binary
+PSION3D.IMG binary
+*.OBJ       binary
+*.EXE       binary

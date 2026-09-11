@@ -16,31 +16,14 @@ static void giveWeapon(const u8 index)
 	selectWeapon(index);
 }
 
-/* The keycard is not checked at the door. Every locked door on the level is
-   rewritten to the unlocked encoding, which is what 'D' produces, so both the
-   MAP_MASK_WALK that lets the player through and the open-on-approach airlock
-   drawing follow with no further test in the hot paths. */
+/* The keycard is not checked at the door: picking it up opens every locked door
+   on the level outright. A wall switch does the same thing, so the rewrite loop
+   lives in game_map.c. */
 static void giveKeycard(void)
 {
-	u16 x, y;
-	u16 cell;
-
 	player.items |= PLAYER_ITEM_KEYCARD;
 
-	for(y = 0; y < MAP_Y; y++)
-	{
-		for(x = 0; x < MAP_X; x++)
-		{
-			cell = mapCell(x, y);
-
-			/* Enemy cells carry type values 0..3 as well, so the wall bit is
-			   what makes this a door rather than a sprite. */
-			if(!isWall(cell) || mapCellType(cell) != WALL_TYPE_LOCKED_DOOR)
-				continue;
-
-			updateCell(x, y, (MAP_MASK_WALL | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_UNLOCKED_DOOR)));
-		}
-	}
+	unlockDoors();
 }
 
 void collectPickup(const u8 type)

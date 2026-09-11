@@ -11,6 +11,10 @@
 #define ENEMY_ATTACK_DIST_SGR_METERS 6
 #define ENEMY_ATTACK_DIST_HVY_METERS 8
 #define ENEMY_ATTACK_MIN_DIST_METERS 4
+/* Mercenaries have no spacing discipline - they close in and fire from
+   wherever they end up. Distance is Manhattan cells and never 0, so one cell
+   here means they never give ground. */
+#define ENEMY_ATTACK_MIN_DIST_MER_METERS 2
 #define ENEMY_CIV_AVOID_DIST_METERS 6
 #define ENEMY_FLEE_SAFE_DIST_METERS 12
 #define ENEMY_ALERT_DIST_METERS 20
@@ -20,15 +24,21 @@
 #define ENEMY_ATTACK_DIST_SGR METERS_TO_MAP_CELLS(ENEMY_ATTACK_DIST_SGR_METERS)
 #define ENEMY_ATTACK_DIST_HVY METERS_TO_MAP_CELLS(ENEMY_ATTACK_DIST_HVY_METERS)
 #define ENEMY_ATTACK_MIN_DIST METERS_TO_MAP_CELLS(ENEMY_ATTACK_MIN_DIST_METERS)
+#define ENEMY_ATTACK_MIN_DIST_MER METERS_TO_MAP_CELLS(ENEMY_ATTACK_MIN_DIST_MER_METERS)
 #define ENEMY_CIV_AVOID_DIST METERS_TO_MAP_CELLS(ENEMY_CIV_AVOID_DIST_METERS)
 #define ENEMY_FLEE_SAFE_DIST METERS_TO_MAP_CELLS(ENEMY_FLEE_SAFE_DIST_METERS)
 #define ENEMY_ALERT_DIST METERS_TO_MAP_CELLS(ENEMY_ALERT_DIST_METERS)
 
-#define ENEMY_ATTACK_DELAY SECONDS_TO_TICKS(1)
+/* Aim and attack timing live in enemyStats[] per type. */
 #define ENEMY_IDLE_DELAY SECONDS_TO_TICKS(1)
 #define ENEMY_SURPRISED_DELAY fpSecondsToTicks(flt2fp(0.5f))
-#define ENEMY_AIM_DELAY fpSecondsToTicks(flt2fp(0.5f))
 #define ENEMY_EVADE_DELAY fpSecondsToTicks(flt2fp(0.4f))
+
+/* A sidestep is a burst, not a walk: the same short glide for every type, so
+   an evade or a shift between shots costs a Heavy the same half second it costs
+   a Merc, not the four seconds of its walking pace. Retreats and flight are
+   walks and keep the per-type move period. */
+#define ENEMY_SIDESTEP_TICKS 16
 #define ENEMY_HURT_DELAY fpSecondsToTicks(flt2fp(0.25f))
 #define ENEMY_DYING_DELAY fpSecondsToTicks(flt2fp(0.3f))
 
@@ -53,10 +63,16 @@
 
 const enemystats_t enemyStats[] =
 {
-	{flt2fp(1),    48, 240, 100,  0,  0,  SPRITE_SLOT_CIV}, //Civilian
-	{flt2fp(1.5),    32, 16,  75,   10, 10, SPRITE_SLOT_MER}, //Mercenary
-	{flt2fp(2),  64, 8,   100,  15, 40, SPRITE_SLOT_SGR}, //Soldier
-	{flt2fp(0.5),  16, 4,   250,  25, 25, SPRITE_SLOT_HVY}  //Heavy
+	/* Stagger: 0 flinches at every hit. The Heavy's 20 lets the pistol (40) and
+	   LMG (20) rock it while SMG (15) and AK (16) rounds land without a flinch.
+	   Cadence is aim 16 + pose 32 ticks (0.5s + 1.0s) for all three until tuned.
+	   Reposition follows the archetypes: a Merc shifts about between shots, a
+	   Heavy plants and fires. */
+	//                 evade flee hp   stag dmg acc aim atk repos
+	{flt2fp(1),    48, 240, 100, 0,  0,  0,  16, 32, 0,   SPRITE_SLOT_CIV}, //Civilian
+	{flt2fp(1.5),  32, 16,  75,  0,  10, 10, 16, 32, 192, SPRITE_SLOT_MER}, //Mercenary
+	{flt2fp(2),    64, 8,   150, 0,  15, 40, 16, 32, 96,  SPRITE_SLOT_SGR}, //Soldier
+	{flt2fp(0.5),  16, 4,   255, 20, 25, 25, 16, 32, 16,  SPRITE_SLOT_HVY}  //Heavy, u8 ceiling
 };
 
 
@@ -103,6 +119,18 @@ static u16 enemyAttackDistance(const enemy_t* enemy)
     }
 
     return ENEMY_ATTACK_DIST_MER;
+}
+
+/* Closer than this an enemy gives ground before aiming, if it can. Paired
+   with enemyAttackDistance it defines the firing band: a Merc's used to be a
+   single cell wide, attack and minimum both at 2, so it spent its time
+   stepping back and re-aiming instead of shooting. */
+static u16 enemyAttackMinDistance(const enemy_t* enemy)
+{
+    if(enemy->type == ENEMY_TYPE_MER)
+        return ENEMY_ATTACK_MIN_DIST_MER;
+
+    return ENEMY_ATTACK_MIN_DIST;
 }
 
 static void enemyUpdateMapCell(const u16 id, enemy_t* enemy)
@@ -711,13 +739,12 @@ void damageEnemy(u16 id, u8 damage)
         return;
 
     /* Called from shot resolution, so this lands at an arbitrary point in the
-       enemy's stride rather than on a state boundary. Both paths below rewrite
-       stateCounter, so the move has to be dropped first or the rest of the
-       stride gets compressed into the new, much shorter counter. */
-    enemyCancelMove(enemy);
-
+       enemy's stride rather than on a state boundary. Both interrupting paths
+       below rewrite stateCounter, so the move has to be dropped first or the
+       rest of the stride gets compressed into the new, much shorter counter. */
     if(damage >= enemy->health)
     {
+        enemyCancelMove(enemy);
         enemy->health = 0;
         enemy->state = ENEMY_STATE_DYING;
         enemy->stateCounter = ENEMY_DYING_DELAY;
@@ -726,6 +753,25 @@ void damageEnemy(u16 id, u8 damage)
     }
 
     enemy->health -= damage;
+
+    /* Below the stagger threshold the round lands but does not interrupt: the
+       enemy keeps moving, keeps aiming and fires on schedule. */
+    if(damage < enemy->enemyStats->staggerDamage)
+        return;
+
+    /* Already flinching: let it run out rather than restart it, or any weapon
+       firing faster than the flinch holds the enemy in HURT indefinitely. */
+    if(enemy->state == ENEMY_STATE_HURT)
+        return;
+
+    enemyCancelMove(enemy);
+
+    /* Remember what was interrupted so that a flinch pauses an aim instead of
+       resetting it. Anything other than an aim or attack resumes as a fresh
+       chase, as it always did. */
+    enemy->hurtResumeState = enemy->state;
+    enemy->hurtResumeCounter = enemy->stateCounter;
+
     enemy->state = ENEMY_STATE_HURT;
     enemy->stateCounter = ENEMY_HURT_DELAY;
     enemy->spriteFrame = ENEMY_FRAME_HURT;
@@ -903,13 +949,10 @@ void runAI()
                     break;
                 }
 
-                if(enemyRandomChance(enemy->enemyStats->evadeChance))
-                {
-                    enemy->state = ENEMY_STATE_EVADING;
-                    enemy->stateCounter = ENEMY_EVADE_DELAY;
-                    break;
-                }
-
+                /* Evading is a reaction to being hit and is rolled on the way
+                   out of HURT. It used to be rolled here too, on every chase
+                   step, so enemies jinked at random on the approach and a Heavy
+                   could stall for four seconds having taken no fire at all. */
                 enemySetTargetToPlayer(enemy);
 
                 if(enemy->type != ENEMY_TYPE_CIV && dist <= enemyAttackDistance(enemy))
@@ -919,7 +962,7 @@ void runAI()
                        every move period and the enemy used to sit there retrying
                        it forever, never reaching the aim below. Backed into a
                        dead end it fights instead. */
-                    if(dist < ENEMY_ATTACK_MIN_DIST &&
+                    if(dist < enemyAttackMinDistance(enemy) &&
                        enemyStepAwayOrSideways(id, enemy, enemy->targetX, enemy->targetY))
                     {
                         enemy->state = ENEMY_STATE_CHASING;
@@ -928,7 +971,7 @@ void runAI()
                     }
 
                     enemy->state = ENEMY_STATE_AIMING;
-                    enemy->stateCounter = ENEMY_AIM_DELAY;
+                    enemy->stateCounter = enemy->enemyStats->aimTicks;
                     enemy->spriteFrame = ENEMY_FRAME_AIM;
                     break;
                 }
@@ -952,7 +995,7 @@ void runAI()
                 }
 
                 enemy->state = ENEMY_STATE_ATTACKING;
-                enemy->stateCounter = ENEMY_ATTACK_DELAY;
+                enemy->stateCounter = enemy->enemyStats->attackTicks;
                 enemyShootPlayer(id, enemy);
                 break;
 
@@ -1012,7 +1055,7 @@ void runAI()
 
                 enemyStepSideways(id, enemy, (u8)fp2int(player.pos.x), (u8)fp2int(player.pos.y));
                 enemy->state = enemyAlertState(enemy);
-                enemySetMoveCounter(enemy, enemyMoveTicks(enemy));
+                enemySetMoveCounter(enemy, ENEMY_SIDESTEP_TICKS);
                 break;
 
             case ENEMY_STATE_HURT:
@@ -1036,6 +1079,17 @@ void runAI()
                     break;
                 }
 
+                /* Pick the aim back up where it was interrupted. Under sustained
+                   fire the enemy still gains ground toward its shot between
+                   flinches instead of restarting from zero every time. */
+                if(enemy->hurtResumeState == ENEMY_STATE_AIMING ||
+                   enemy->hurtResumeState == ENEMY_STATE_ATTACKING)
+                {
+                    enemy->state = enemy->hurtResumeState;
+                    enemy->stateCounter = enemy->hurtResumeCounter;
+                    break;
+                }
+
                 enemy->state = enemyAlertState(enemy);
                 enemy->stateCounter = 0;
                 break;
@@ -1046,16 +1100,22 @@ void runAI()
                 if(enemyCounterTick(id, enemy))
                     break;
 
-                if(enemyRandomBit())
+                /* Shift position between shots rather than fire from the spot.
+                   The step is a short fixed sidestep before the next aim, so it
+                   trades fire rate for being a harder target - a Merc's habit,
+                   not a Heavy's. The old 50/50 went to CHASING with no step, and
+                   CHASING re-aimed on the next tick, so it repositioned nothing. */
+                if(enemyRandomChance(enemy->enemyStats->repositionChance))
                 {
-                    enemy->state = ENEMY_STATE_AIMING;
-                    enemy->stateCounter = ENEMY_AIM_DELAY;
-                    enemy->spriteFrame = ENEMY_FRAME_AIM;
+                    enemyStepSideways(id, enemy, (u8)fp2int(player.pos.x), (u8)fp2int(player.pos.y));
+                    enemy->state = ENEMY_STATE_CHASING;
+                    enemySetMoveCounter(enemy, ENEMY_SIDESTEP_TICKS);
                     break;
                 }
 
-                enemy->state = ENEMY_STATE_CHASING;
-                enemy->stateCounter = 0;
+                enemy->state = ENEMY_STATE_AIMING;
+                enemy->stateCounter = enemy->enemyStats->aimTicks;
+                enemy->spriteFrame = ENEMY_FRAME_AIM;
                 break;
         }
     }

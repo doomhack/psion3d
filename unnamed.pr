@@ -11,6 +11,7 @@
 #compile debug
 #compile game_map
 #compile pickup
+#compile decor
 #compile fp_math
 #compile gameloop
 #compile videomem

@@ -30,15 +30,27 @@
 
 #define GET_CELL_ID(x) ((x & MAP_BLOCK_ID_MASK))
 
-#define WALL_TYPE_BRICK 0
+#define WALL_TYPE_SOLID 0
 #define WALL_TYPE_DARK 1
 #define WALL_TYPE_WINDOW 2
 #define WALL_TYPE_ARCH 3
 #define WALL_TYPE_UNLOCKED_DOOR 4
-#define WALL_TYPE_SECRET 5
+#define WALL_TYPE_SHOOTABLE 5
 #define WALL_TYPE_BARS 6
 #define WALL_TYPE_VOID 7
 #define WALL_TYPE_LOCKED_DOOR 8
+#define WALL_TYPE_SIGN 9
+#define WALL_TYPE_LIGHT 10
+#define WALL_TYPE_PIPES 11
+#define WALL_TYPE_SHELF 12
+#define WALL_TYPE_LOW 13
+#define WALL_TYPE_PILLAR 14
+#define WALL_TYPE_SWITCH 15
+
+/* Switch state. Every wall cell leaves the 6 bit id field at zero, so a thrown
+   switch is recorded there rather than in a table. This is an id value, not a
+   mask. */
+#define WALL_SWITCH_THROWN 1
 
 
 
@@ -46,6 +58,7 @@ extern u16 map[MAP_Y][MAP_X];
 
 void loadMapData(const u8 mapId);
 u16 loadMap(const u8 mapId);
+void unlockDoors(void);
 
 static u16 mapCell(const u16 x, const u16 y)
 {

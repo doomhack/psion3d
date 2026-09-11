@@ -56,9 +56,11 @@ set PATH=C:\Qt\6.9.1\mingw_64\bin;%PATH%
 pc\build\psion3d_pc.exe
 ```
 
-Arrows or WASD move, space fires, 1-4 select weapons, P pauses. Assets are read
-from the working tree's `map/` and `spr/`, so an edited sprite shows up on the
-next run without deploying anything.
+Arrows or WASD move, Ctrl or Return fires, space or E is the use key, 1-4 select
+weapons, P pauses. Space is the use key on the device too (`kbScan[4] & 0x1`),
+which is why it no longer fires here. Assets are read from the working tree's
+`map/` and `spr/`, so an edited sprite shows up on the next run without
+deploying anything.
 
 Useful options:
 
@@ -68,6 +70,8 @@ Useful options:
 | `--assets <dir>` | read `map/` and `spr/` from somewhere else (or set `PSION3D_ASSETS`) |
 | `--screenshot <file>` | render one frame to a PNG at 1:1 and exit, without opening a window |
 | `--frames <n>` | advance *n* ticks on the virtual clock first; deterministic, so it pairs with `--screenshot` |
+| `--fire` | hold the fire key down through the `--frames` loop, so a shot lands and its effect on the map is visible in a headless `--screenshot` |
+| `--use` | hold the use key down through the `--frames` loop, so a switch in reach is thrown and its effect on the map is visible in a headless `--screenshot` |
 | `--gutter` | include backbuffer columns 240-255, which the LCD hides — anything drawn out there is a clipping bug |
 | `--tick-start <n>` | seed the 16-bit tick counter, e.g. `65520`, to hit its wraparound in the first second rather than after 34 minutes |
 | `-v` | report every failed file open, including `loadSprite`'s routine probe past each sprite's last frame |

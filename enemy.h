@@ -62,8 +62,12 @@ typedef struct enemystats_t
     u8 evadeChance; //0..255 chance of going into evade state.
     u8 fleeChance; //0..255 chance of going into flee state after a pain state.
     u8 health; //Starting health.
+    u8 staggerDamage; //Hits below this land but do not interrupt. 0 flinches at everything.
     u8 damage; //How damage a shot does to the player.
     u8 accuracy; //..255 chance of enemy hitting the player.
+    u8 aimTicks; //Ticks spent aiming before a shot. 32 ticks per second.
+    u8 attackTicks; //Ticks held in the firing pose after a shot.
+    u8 repositionChance; //0..255 chance of sidestepping between shots instead of re-aiming on the spot.
     u8 spriteId; //Sprite Slot.
 } enemystats_t;
 
@@ -81,6 +85,8 @@ typedef struct enemy_t
     u8 stateCounter; //Decrements per AI tick. Once 0, choose new state and set new stateCounter.
     u8 wanderDir; //Current wander heading, 0..3, indexes wanderStepX/wanderStepY.
     u8 stateCells; //Move periods left in the current activity. FLEEING counts flight, SEARCHING counts patience. Set on entry to either.
+    u8 hurtResumeState; //State interrupted by HURT, restored on exit if it was an aim or attack.
+    u8 hurtResumeCounter; //stateCounter to restore alongside hurtResumeState.
     const enemystats_t* enemyStats; //Enemy stats.
 } enemy_t;
 

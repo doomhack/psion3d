@@ -66,6 +66,9 @@ static void updateKeys()
 	if(kbScan[2] & 0x80)
 		keys |= KEY_FIRE;
 
+	if(kbScan[4] & 0x1)
+		keys |= KEY_USE;
+
 	if(kbScan[0] & 0x20)
 		keys |= KEY_DOWN;
 
