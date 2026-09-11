@@ -41,6 +41,11 @@
    a Merc, not the four seconds of its walking pace. Retreats and flight are
    walks and keep the per-type move period. */
 #define ENEMY_SIDESTEP_TICKS 16
+
+/* Ticks the firing frame shows after each round of a burst; the aim frame
+   fills the rest of the interval. Without this the whole burst wore the
+   muzzle flash, which on a Heavy meant a flash that never went out. */
+#define ENEMY_FLASH_TICKS 4
 #define ENEMY_HURT_DELAY fpSecondsToTicks(flt2fp(0.25f))
 #define ENEMY_DYING_DELAY fpSecondsToTicks(flt2fp(0.3f))
 
@@ -67,14 +72,16 @@ const enemystats_t enemyStats[] =
 {
 	/* Stagger: 0 flinches at every hit. The Heavy's 20 lets the pistol (40) and
 	   LMG (20) rock it while SMG (15) and AK (16) rounds land without a flinch.
-	   Cadence is aim 16 + pose 32 ticks (0.5s + 1.0s) for all three until tuned.
-	   Reposition follows the archetypes: a Merc shifts about between shots, a
-	   Heavy plants and fires. */
+	   Fire is in bursts: aim is the wind-up, atk the interval between rounds,
+	   and repos the chance each round ends the burst with a sidestep - so it
+	   sets burst length and movement together. Merc: 0.75s wind-up, then
+	   rounds a quarter second apart in bursts of about two. Soldier and Heavy
+	   still carry the pre-burst placeholders. */
 	//                 evade flee hp   stag dmg acc aim atk repos
 	{flt2fp(1),    48, 240, 100, 0,  0,  0,  16, 32, 0,   SPRITE_SLOT_CIV}, //Civilian
-	{flt2fp(1.5),  32, 16,  75,  0,  10, 10, 16, 32, 192, SPRITE_SLOT_MER}, //Mercenary
-	{flt2fp(2),    64, 8,   150, 0,  15, 40, 16, 32, 96,  SPRITE_SLOT_SGR}, //Soldier
-	{flt2fp(0.5),  16, 4,   255, 20, 25, 25, 16, 32, 16,  SPRITE_SLOT_HVY}  //Heavy, u8 ceiling
+	{flt2fp(1.5),  32, 16,  75,  0,  10, 24, 24, 8,  128, SPRITE_SLOT_MER}, //Mercenary
+	{flt2fp(2),    64, 8,   150, 0,  10, 25, 16, 10, 64,  SPRITE_SLOT_SGR}, //Soldier
+	{flt2fp(0.5),  16, 4,   255, 20, 20, 28, 32, 13, 32,  SPRITE_SLOT_HVY}  //Heavy, u8 ceiling
 };
 
 
@@ -1225,16 +1232,39 @@ void runAI()
                 break;
 
             case ENEMY_STATE_ATTACKING:
-                enemy->spriteFrame = ENEMY_FRAME_SHOOT;
+                /* The counter runs down from attackTicks after each round, so
+                   the flash is the top few ticks of it. An interval shorter than
+                   the flash simply stays lit, as a fast gun should. */
+                enemy->spriteFrame =
+                    (enemy->stateCounter + ENEMY_FLASH_TICKS > enemy->enemyStats->attackTicks)
+                        ? ENEMY_FRAME_SHOOT : ENEMY_FRAME_AIM;
 
                 if(enemyCounterTick(id, enemy))
                     break;
 
-                /* Shift position between shots rather than fire from the spot.
-                   The step is a short fixed sidestep before the next aim, so it
-                   trades fire rate for being a harder target - a Merc's habit,
-                   not a Heavy's. The old 50/50 went to CHASING with no step, and
-                   CHASING re-aimed on the next tick, so it repositioned nothing. */
+                /* Shots come in bursts. The aim is the wind-up before a burst;
+                   attackTicks is the interval between rounds within one; and
+                   each round rolls repositionChance to decide whether it was the
+                   last, so that one knob sets burst length and movement together.
+                   A burst only carries on at something still in sight and still
+                   in reach - otherwise it is a search or a chase, and the next
+                   burst starts with a fresh aim. */
+                if(!canSee)
+                {
+                    enemyStartSearch(enemy, enemyMoveTicks(enemy));
+                    break;
+                }
+
+                if(dist > enemyAttackDistance(enemy))
+                {
+                    enemy->state = ENEMY_STATE_CHASING;
+                    enemy->stateCounter = 0;
+                    break;
+                }
+
+                /* Burst over: shift position, then wind up again. The step is a
+                   short fixed sidestep, so it trades fire rate for being a
+                   harder target - a Merc's habit, not a Heavy's. */
                 if(enemyRandomChance(enemy->enemyStats->repositionChance))
                 {
                     enemyStepSideways(id, enemy, (u8)playerCellX, (u8)playerCellY);
@@ -1243,7 +1273,9 @@ void runAI()
                     break;
                 }
 
-                enemyStartAim(enemy);
+                //Next round of the burst, no re-aim.
+                enemy->stateCounter = enemy->enemyStats->attackTicks;
+                enemyShootPlayer(id, enemy);
                 break;
         }
     }

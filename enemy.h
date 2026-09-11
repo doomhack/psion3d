@@ -65,9 +65,9 @@ typedef struct enemystats_t
     u8 staggerDamage; //Hits below this land but do not interrupt. 0 flinches at everything.
     u8 damage; //How damage a shot does to the player.
     u8 accuracy; //..255 chance of enemy hitting the player.
-    u8 aimTicks; //Ticks spent aiming before a shot. 32 ticks per second.
-    u8 attackTicks; //Ticks held in the firing pose after a shot.
-    u8 repositionChance; //0..255 chance of sidestepping between shots instead of re-aiming on the spot.
+    u8 aimTicks; //Wind-up before a burst, and after every reposition. 32 ticks per second.
+    u8 attackTicks; //Interval between rounds within a burst.
+    u8 repositionChance; //0..255 chance each round ends the burst with a sidestep. Sets burst length and movement together.
     u8 spriteId; //Sprite Slot.
 } enemystats_t;
 

@@ -7,10 +7,14 @@ changes.
 - Weapons: `weapons[]` in [player.c](player.c)
 - Enemies: `enemyStats[]` in [enemy.c](enemy.c)
 
-**Weapons** were confirmed by feel 2026-09-11 and are settled. **Enemy numbers are not tuned** —
-the AI state machine had a structural pass the same day (firing bands, stagger, cadence,
-reposition, evade) and the values in `enemyStats[]` are placeholders that preserve prior behaviour
-where they could. Tune them against the archetypes in the Enemies section.
+**Weapons** were confirmed by feel 2026-09-11 and are settled. **Enemy cadence and danger were
+tuned the same day** after a structural pass on the AI (firing bands, stagger, burst fire,
+reposition, evade, mobility through openings). Movement and fire rate for all three combat types
+were confirmed by feel; damage and accuracy were then set to a target time-to-kill per tier. Still
+untouched: `evadeChance` and `fleeChance`, which should be judged in play before moving.
+
+The danger reference is Goldeneye 007 on Agent: one guard takes ~100s to kill a passive player from
+full health, two take ~50s. The Merc is anchored there; the Soldier and Heavy halve it per tier.
 
 Ammo is not yet implemented (see TASKS.md); when it lands the pistol is infinite and the SMG, AK47
 and LMG each get their own pool.
@@ -111,14 +115,19 @@ Hits needed ÷ hit chance. The SMG spends 2.5× the pistol's rounds even point-b
 - **Heavy — tank.** Slow, lots of HP, high damage, medium accuracy. Hard to stun-lock. Very rarely
   panics; sometimes evades when hurt.
 
-### Current values (placeholders — see header)
+### Current values
 
-| Type | HP | Dmg | Hit chance | Speed | Firing band | Stagger at | Reposition | Evade | Flee | Drops |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Civilian | 100 | — | — | 1.0 m/s | — (flees) | 0 | — | 19% | 94% | — |
-| Mercenary | 75 | 10 | 4% (10/256) | 1.5 m/s | 1–2 cells | 0 | 75% | 13% | 6% | — |
-| Soldier | 150 | 15 | 16% (40/256) | 2.0 m/s | 2–3 cells | 0 | 38% | 25% | 3% | AK47 |
-| Heavy | 255 | 25 | 10% (25/256) | 0.5 m/s | 1–4 cells | 20 | 6% | 6% | 2% | LMG |
+| Type | HP | Dmg | Hit chance | Speed | Firing band | Stagger at | Wind-up | Interval | Reposition | Evade | Flee | Drops |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Civilian | 100 | — | — | 1.0 m/s | — (flees) | 0 | — | — | — | 19% | 94% | — |
+| Mercenary | 75 | 10 | 9.4% (24/256) | 1.5 m/s | 1–2 cells | 0 | 0.75s | 0.25s | 50% | 13% | 6% | — |
+| Soldier | 150 | 10 | 9.8% (25/256) | 2.0 m/s | 2–3 cells | 0 | 0.50s | 0.31s | 25% | 25% | 3% | AK47 |
+| Heavy | 255 | 20 | 10.9% (28/256) | 0.5 m/s | 1–4 cells | 20 | 1.00s | 0.41s | 12.5% | 6% | 2% | LMG |
+
+Wind-up is `aimTicks`, interval is `attackTicks`, reposition is `repositionChance` — in ticks
+24/8/128, 16/10/64 and 32/13/32 respectively. All three combat types sit in the same ~10% accuracy
+band on purpose: the tiers are carried by things the player can see — rate of fire, burst length,
+how hard a hit lands — not by whether rounds land.
 
 - Enemy accuracy *is* a hit-chance roll (unlike the player's, which is spread), so range does not
   change it.
@@ -157,26 +166,49 @@ Enemies use the same openings the player does.
 
 ### Firing cycle
 
-All three types share the shape; `aimTicks` / `attackTicks` are per type in `enemyStats[]` and
-currently 16 / 32 for all.
+Fire is in bursts. `aimTicks` is the wind-up before a burst (and after every reposition or
+flinch); `attackTicks` is the interval between rounds within it; and after each round
+`repositionChance` decides whether that was the last — so one knob sets burst length and movement
+together. Mean burst is `1 / repositionChance`, but the length is geometric: a 25% roll gives bursts
+averaging 4 of which a quarter are single shots and one in eight run past 8.
 
 ```
-aim 0.5s → fire → firing pose 1.0s → roll repositionChance
-    hit:  sidestep one cell (0.5s), then aim again
-    miss: aim again on the spot
+aim (wind-up) → fire → interval → still in sight and in range?
+    no:  search / chase, fresh aim next time
+    yes: roll repositionChance
+         hit:  sidestep one cell (0.5s), then wind up again
+         miss: fire again, no re-aim
 ```
 
-Unsuppressed, a stationary shooter manages 13 shots in 20s. Repositioning trades shots for
-movement:
+The muzzle-flash frame shows for `ENEMY_FLASH_TICKS` (4) after each round, aim frame between.
 
-| Type | shots / 20s | sidesteps / 20s | expected DPS vs player (untuned accuracy) |
-| --- | --- | --- | --- |
-| Mercenary | 10 | 9 | 0.20 |
-| Soldier | 12 | 4 | 1.41 |
-| Heavy | 13 | 0 | 1.59 |
+| Type | first shot | shots / s | mean burst | burst lasts | sidesteps / s | time split (aim / burst / move) |
+| --- | --- | --- | --- | --- | --- | --- |
+| Mercenary | 0.75s | 1.08 | 2 | 0.3s | 0.53 | 42 / 29 / 28 |
+| Soldier | 0.50s | 1.71 | ~4 | 1.0s | 0.39 | 21 / 59 / 21 |
+| Heavy | 1.00s | 1.62 | ~8 | 3.1s | 0.19 | 20 / 71 / 10 |
 
-Those DPS figures are why enemy accuracy/damage is the next tuning target: a lone Merc currently
-needs minutes to kill a 100 HP player.
+Read as silhouettes: the Merc winds up, double-taps, moves; the Soldier is quickest on the trigger,
+works the target in short bursts and rarely moves; the Heavy gives a full second of warning, then
+a long stream from where it stands.
+
+### Danger
+
+Player at 100 HP, standing still, one enemy in its band with line of sight. "Hit every" is the
+figure that governs how dangerous an enemy *feels*; time to kill is what governs whether you live.
+
+| Type | expected DPS | hit every | **TTK, one** | two | vs Goldeneye Agent |
+| --- | --- | --- | --- | --- | --- |
+| Mercenary | 1.0 | 9.8s | **~100s** | ~50s | one guard |
+| Soldier | 1.7 | 6.0s | **~60s** | ~30s | |
+| Heavy | 3.5 | 5.7s | **~28s** | ~14s | |
+
+Mixed groups add: a Soldier and two Mercs are ~3.7 DPS, ~27s. Each enemy is an independent shooter,
+so the group figure is just the sum.
+
+Why each is dangerous differs, which is the point of the roster: the Merc through numbers (alone it
+is a nuisance), the Soldier through rate and discipline, the Heavy through weight — 20-damage hits,
+and the two close-range weapons cannot stagger it.
 
 ### Being hit
 
@@ -187,16 +219,20 @@ rules stop that becoming a lock:
 - On leaving `HURT`, an interrupted aim or firing pose **resumes with its remaining time** rather
   than restarting. Under sustained fire the enemy still gains ground toward its shot.
 
-Enemy shots fired in 20s while being hit continuously (unsuppressed = 13):
+Enemy shots fired in 20s while being hit continuously, against the free rate in brackets:
 
-| Enemy | Pistol | SMG | AK47 | LMG |
-| --- | --- | --- | --- | --- |
-| Merc / Soldier (stagger 0) | 8 | 3 | 6 | 1 |
-| Heavy (stagger 20) | 8 | **13** | **13** | 1 |
+| Enemy | free | Pistol | SMG | AK47 | LMG |
+| --- | --- | --- | --- | --- | --- |
+| Mercenary (stagger 0) | 22 | 13 | 6 | 10 | 2 |
+| Soldier (stagger 0) | 34 | 25 | 10 | 16 | 2 |
+| Heavy (stagger 20) | 32 | 17 | **29** | **29** | 2 |
 
-The Heavy is untouched by SMG and AK fire. The pistol suppresses a Heavy better than the SMG does —
-infinite ammo, engages at the Heavy's range, and staggers it — which is the pistol's anti-Heavy
-niche falling out of the threshold. Before this pass every combination in that table was **0**.
+Suppression is real but not total: even under SMG fire a Merc lands a few rounds back, and a flinch
+mid-burst delays the burst rather than resetting it. The Heavy is barely touched by SMG and AK fire.
+**The pistol suppresses a Heavy better than the SMG does** — infinite ammo, engages at the Heavy's
+range, and staggers it — which is the pistol's anti-Heavy niche falling out of the threshold. The
+LMG is the only weapon that genuinely shuts anything down. Before the structural pass every
+combination in that table was **0**.
 
 On leaving `HURT` the enemy rolls `fleeChance` (panic: run 6 cells, then return) and then
 `evadeChance` (0.4s pause, then a 0.5s sidestep, then back to the fight — 1.15s total, the same
@@ -209,9 +245,16 @@ for every type). Evade is **only** rolled after a hit; approaches are now the sh
   fallen to pistol parity and the AK47 takes over — and the pistol is the weapon that staggers them.
   A room that lets the player hold Heavies at 6+ cells favours the pistol/AK; a tight room forces
   the SMG against everything, and the SMG cannot stagger a Heavy.
-- **Mercs crowd.** With no minimum range and a 75% reposition rate, a group of Mercs will close to
-  adjacent and shuffle around the player. Give them room to do it or they will pin the player
-  against walls.
+- **Mercs crowd.** With no minimum range and a sidestep after half their shots, a group of Mercs
+  will close to adjacent and shuffle around the player. Give them room to do it or they will pin
+  the player against walls.
+- **Budget rooms in TTK.** One Merc is ~100s, a Soldier ~60s, a Heavy ~28s, and they sum. A room
+  meant to be survived standing still for ~20s can hold roughly a Soldier plus two Mercs, or one
+  Heavy; anything past that requires the player to move or kill. Mercs on their own never make a
+  room dangerous — they make it loud and busy, which is their job.
+- **The Heavy's wind-up is the counter.** A full second of aim frame before every burst, and only
+  the pistol or LMG can interrupt it. Sightlines that let the player see a Heavy raise its gun from
+  4+ cells reward the switch to the pistol; a Heavy round a corner at 1 cell does not.
 - **Corridor length sets the weapon.** Anything the player can engage from 8 cells is pistol
   territory; anything that starts inside 2 is SMG territory. Rooms of 4–6 cells across are the
   AK47's, which is also the drop the player is most likely to be holding.
