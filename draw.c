@@ -30,6 +30,9 @@ typedef struct markedsprite_t
 #define IMPACT_FRAME_WALL 0
 #define IMPACT_FRAME_ENEMY 1
 
+//Pixels of screen edge painted black while the player's hurt flash is up.
+#define HIT_FLASH_THICKNESS 8
+
 /* Lifts a wall impact off the surface it hit so it depth tests in front of
    that wall rather than tying with it. */
 #define IMPACT_WALL_LIFT ((f16)24)
@@ -642,6 +645,24 @@ void draw()
 		(u8)(player.currentWeapon->y + player.weaponState.switchOffset
 			+ player.weaponState.recoilOffset),
 		player.weaponState.weaponSpriteId);
+
+	/* Hurt flash: a thick black bar on the screen edge nearest the shooter,
+	   over everything, for a few frames. On a white background black is the
+	   loud colour, and the side it lands on says which way to turn. Counted
+	   down here because it is a per frame effect, not a per tick one. */
+	if(player.hitFlash > 0)
+	{
+		player.hitFlash--;
+
+		if(player.hitDir & PLAYER_HIT_FRONT)
+			bmFillRect(0, 0, 240, HIT_FLASH_THICKNESS, blackBm);
+		else if(player.hitDir & PLAYER_HIT_BACK)
+			bmFillRect(0, 160 - HIT_FLASH_THICKNESS, 240, HIT_FLASH_THICKNESS, blackBm);
+		else if(player.hitDir & PLAYER_HIT_LEFT)
+			bmFillRect(0, 0, HIT_FLASH_THICKNESS, 160, blackBm);
+		else if(player.hitDir & PLAYER_HIT_RIGHT)
+			bmFillRect(240 - HIT_FLASH_THICKNESS, 0, HIT_FLASH_THICKNESS, 160, blackBm);
+	}
 
 	//Add rect around screen.
 	bmDrawRect(0, 0, 240, 160, blackBm);

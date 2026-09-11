@@ -481,10 +481,7 @@ static void enemyShootPlayer(const u16 id, const enemy_t* enemy)
 
     damage = enemy->enemyStats->damage;
 
-    if(damage >= player.health)
-        player.health = 0;
-    else
-        player.health -= damage;
+    hurtPlayer(damage, enemy->x, enemy->y);
 }
 
 /* Mirrors what the renderer lets the player see through. A solid wall stops

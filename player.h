@@ -49,6 +49,12 @@ typedef struct position_t
 	f16 angle;
 } position_t;
 
+/* Which screen edge the hurt flash paints: the one nearest the shooter. */
+#define PLAYER_HIT_LEFT 1
+#define PLAYER_HIT_RIGHT 2
+#define PLAYER_HIT_FRONT 4
+#define PLAYER_HIT_BACK 8
+
 typedef struct player_t
 {
 	position_t pos;
@@ -57,6 +63,8 @@ typedef struct player_t
 	weapon_state_t weaponState;
 	u8 weaponsOwned; //bitmask of weapons owned.
 	u8 items; //bitmask of PLAYER_ITEM_* held.
+	u8 hitFlash; //Frames left of the hurt border.
+	u8 hitDir; //PLAYER_HIT_* edge to paint it on.
 
 } player_t;
 
@@ -65,6 +73,10 @@ extern player_t player;
 
 void initPlayer(void);
 void updatePlayer(u16 keys);
+
+/* Apply a hit from a shooter at fromX, fromY: damage, a shove away from
+   them, a jolt to the view, and a flash on the edge of the screen they are on. */
+void hurtPlayer(const u8 damage, const f16 fromX, const f16 fromY);
 void selectWeapon(const u8 index);
 
 #endif

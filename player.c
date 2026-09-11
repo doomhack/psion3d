@@ -43,6 +43,12 @@ const weapon_t weapons[] =
    held, and it clears this many ticks after the last round. */
 #define WEAPON_FLASH_TICKS 5
 
+/* Being hit. The shove rides the normal movement pipeline - impulse, damping,
+   collision - but is allowed past the walking speed cap so a Heavy round moves
+   you further than a step. Both shove and view kick scale with the damage. */
+#define PLAYER_KNOCKBACK_MAX (PLAYER_MOVE_TICK * 4)
+#define PLAYER_HIT_FLASH_FRAMES 3
+
 static f16 f_moveVel = 0;
 static f16 f_turnVel = 0;
 static u16 shotRand = 0x6d2b;
@@ -311,6 +317,47 @@ void initPlayer()
 	player.weaponState.switchOffset = 0;
 	player.weaponState.pendingWeapon = WEAPON_PISTOL;
 	player.weaponState.recoilOffset = 0;
+	player.hitFlash = 0;
+	player.hitDir = 0;
+}
+
+void hurtPlayer(const u8 damage, const f16 fromX, const f16 fromY)
+{
+	/* Shooter relative to the player, in the player's frame: f_along is
+	   positive ahead, f_side positive to the right - the same projection
+	   projectSprite uses to place a sprite on screen. */
+	const f16 f_dx = fromX - player.pos.x;
+	const f16 f_dy = fromY - player.pos.y;
+	const f16 f_cos = fpcos(player.pos.angle);
+	const f16 f_sin = fpsin(player.pos.angle);
+	const f16 f_along = fpmul(f_dx, f_cos) + fpmul(f_dy, f_sin);
+	const f16 f_side = -fpmul(f_dx, f_sin) + fpmul(f_dy, f_cos);
+	const f16 f_absAlong = (f_along < 0) ? -f_along : f_along;
+	const f16 f_absSide = (f_side < 0) ? -f_side : f_side;
+	const f16 f_shove = (f16)((PLAYER_MOVE_TICK * damage) >> 2);
+	const f16 f_kick = (f16)((PLAYER_TURN_TICK * damage) >> 4);
+
+	if(damage >= player.health)
+		player.health = 0;
+	else
+		player.health -= damage;
+
+	//Shoved away from the shooter, along the facing axis.
+	f_moveVel = clampFp(f_moveVel + ((f_along >= 0) ? -f_shove : f_shove),
+		-PLAYER_KNOCKBACK_MAX, PLAYER_KNOCKBACK_MAX);
+
+	//The view jolts to one side or the other.
+	shotRand = (u16)(shotRand * 25173 + 13849);
+	addTurnImpulse((shotRand & 0x8000) ? f_kick : -f_kick);
+
+	//Flash the screen edge the shooter is on, so a hit from out of view says
+	//which way to turn.
+	if(f_absAlong >= f_absSide)
+		player.hitDir = (f_along >= 0) ? PLAYER_HIT_FRONT : PLAYER_HIT_BACK;
+	else
+		player.hitDir = (f_side >= 0) ? PLAYER_HIT_RIGHT : PLAYER_HIT_LEFT;
+
+	player.hitFlash = PLAYER_HIT_FLASH_FRAMES;
 }
 
 void updatePlayer(u16 keys)
