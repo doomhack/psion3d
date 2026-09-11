@@ -46,6 +46,14 @@
    fills the rest of the interval. Without this the whole burst wore the
    muzzle flash, which on a Heavy meant a flash that never went out. */
 #define ENEMY_FLASH_TICKS 4
+
+/* How long an enemy keeps its aim on a player who ducks out of sight. Reappear
+   within this and the wind-up resumes where it left off rather than starting
+   over, so cover is a decision instead of a loop - peek-and-shoot works once,
+   then the gun is already up. A resumed aim is never shorter than the
+   reacquire floor, so it is never literally instant. */
+#define ENEMY_AIM_MEMORY_TICKS 64
+#define ENEMY_REACQUIRE_TICKS 4
 #define ENEMY_HURT_DELAY fpSecondsToTicks(flt2fp(0.25f))
 #define ENEMY_DYING_DELAY fpSecondsToTicks(flt2fp(0.3f))
 
@@ -392,8 +400,27 @@ static void enemyStartFlee(enemy_t* enemy)
 static void enemyStartAim(enemy_t* enemy)
 {
     enemy->state = ENEMY_STATE_AIMING;
-    enemy->stateCounter = enemy->enemyStats->aimTicks;
     enemy->spriteFrame = ENEMY_FRAME_AIM;
+
+    /* Sight lost and regained inside the memory window: pick the aim up
+       where it was, and spend the memory so a later loss starts afresh. */
+    if(enemy->aimMemoryAge < ENEMY_AIM_MEMORY_TICKS)
+    {
+        enemy->stateCounter = enemy->aimMemory;
+        enemy->aimMemoryAge = ENEMY_AIM_MEMORY_TICKS;
+        return;
+    }
+
+    enemy->stateCounter = enemy->enemyStats->aimTicks;
+}
+
+/* Sight lost part way through an aim or a burst. Remember how much aim was
+   still owed - none, for a burst already under way - and go looking. */
+static void enemyLoseAim(enemy_t* enemy, const u8 remaining)
+{
+    enemy->aimMemory = (remaining < ENEMY_REACQUIRE_TICKS) ? ENEMY_REACQUIRE_TICKS : remaining;
+    enemy->aimMemoryAge = 0;
+    enemyStartSearch(enemy, enemyMoveTicks(enemy));
 }
 
 /* Something loud happened at x, y. Only enemies that are not already dealing
@@ -811,6 +838,9 @@ u16 getEnemyCell(u16 x, u16 y, s8 cell)
     //An enemy map character stands on bare floor.
     enemyList[enemyId].underCell = MAP_MASK_WALK;
 
+    //No aim to remember yet.
+    enemyList[enemyId].aimMemoryAge = ENEMY_AIM_MEMORY_TICKS;
+
     return enemyOverlayCell(enemyId, &enemyList[enemyId]);
 }
 
@@ -964,6 +994,12 @@ void runAI()
         if(canSee)
             enemySetTargetToPlayer(enemy);
 
+        /* A remembered aim goes stale while the enemy is doing anything other
+           than aiming or firing. Saturates, so the compare is the whole cost. */
+        if(enemy->state != ENEMY_STATE_AIMING && enemy->state != ENEMY_STATE_ATTACKING &&
+           enemy->aimMemoryAge < ENEMY_AIM_MEMORY_TICKS)
+            enemy->aimMemoryAge++;
+
         switch(enemy->state)
         {
             case ENEMY_STATE_IDLE:
@@ -999,15 +1035,21 @@ void runAI()
                 break;
 
             case ENEMY_STATE_SEARCHING:
-                if(enemyCounterTick(id, enemy))
-                    break;
-
+                /* Tested before the counter, not after it. The counter is the
+                   pause before the first search step - a full move period, four
+                   seconds for a Heavy - and testing sight only on its expiry
+                   made that a blind window: duck for a moment, step back out,
+                   and anything that could not stagger the enemy had four free
+                   seconds against a target that would not look up. */
                 if(canSee)
                 {
                     enemy->state = ENEMY_STATE_CHASING;
                     enemy->stateCounter = 0;
                     break;
                 }
+
+                if(enemyCounterTick(id, enemy))
+                    break;
 
                 /* Out of patience. Without this a search never ends: an enemy
                    that cannot reach the target cell never satisfies the arrival
@@ -1111,10 +1153,10 @@ void runAI()
                    so a target that steps behind cover is broken off at once
                    instead of drawing a half-second aim at a wall. Nothing is in
                    flight during an aim, so skipping the counter tick loses no
-                   movement. */
+                   movement. The aim owed so far is kept, see enemyLoseAim. */
                 if(!canSee)
                 {
-                    enemyStartSearch(enemy, enemyMoveTicks(enemy));
+                    enemyLoseAim(enemy, enemy->stateCounter);
                     break;
                 }
 
@@ -1247,11 +1289,12 @@ void runAI()
                    each round rolls repositionChance to decide whether it was the
                    last, so that one knob sets burst length and movement together.
                    A burst only carries on at something still in sight and still
-                   in reach - otherwise it is a search or a chase, and the next
-                   burst starts with a fresh aim. */
+                   in reach - otherwise it is a search or a chase. Losing sight
+                   mid-burst leaves no aim owed: reappear soon and the burst
+                   resumes after the reacquire floor. */
                 if(!canSee)
                 {
-                    enemyStartSearch(enemy, enemyMoveTicks(enemy));
+                    enemyLoseAim(enemy, 0);
                     break;
                 }
 
