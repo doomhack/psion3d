@@ -118,16 +118,42 @@ Hits needed ÷ hit chance. The SMG spends 2.5× the pistol's rounds even point-b
 | Civilian | 100 | — | — | 1.0 m/s | — (flees) | 0 | — | 19% | 94% | — |
 | Mercenary | 75 | 10 | 4% (10/256) | 1.5 m/s | 1–2 cells | 0 | 75% | 13% | 6% | — |
 | Soldier | 150 | 15 | 16% (40/256) | 2.0 m/s | 2–3 cells | 0 | 38% | 25% | 3% | AK47 |
-| Heavy | 255 | 25 | 10% (25/256) | 0.5 m/s | 2–4 cells | 20 | 6% | 6% | 2% | LMG |
+| Heavy | 255 | 25 | 10% (25/256) | 0.5 m/s | 1–4 cells | 20 | 6% | 6% | 2% | LMG |
 
 - Enemy accuracy *is* a hit-chance roll (unlike the player's, which is spread), so range does not
   change it.
-- **Firing band** is Manhattan cells. Below the band the enemy gives ground before aiming; above it,
-  it closes. The Merc's lower bound is 1, so it never retreats. Distance can never be 0.
+- **Firing band** is Manhattan cells. Above it the enemy closes; below it, only the Soldier gives
+  ground (a 1s walk at 2 m/s). The Merc and Heavy have a lower bound of 1 and never retreat — the
+  Heavy's old retreat was a 4s walk during which it could be kited for free. Distance can never
+  be 0.
 - **Stagger at** is `staggerDamage`: a hit below it lands but does not interrupt. The Heavy's 20
   means the pistol (40) and LMG (20) rock it; SMG (15) and AK (16) rounds do not.
 - HP is `u8` — 255 is the ceiling without a type change.
-- Enemies give up the chase beyond 14 cells (28 m).
+- Enemies give up the chase beyond 14 cells (28 m). Now that doors and arches no longer stop a
+  pursuit, this leash is the only thing that ends one.
+
+### Movement and sight
+
+Enemies use the same openings the player does.
+
+| Cell | Enemy may enter | Blocks enemy sight |
+| --- | --- | --- |
+| Floor, pickup | yes | no |
+| Archway | yes | no |
+| Unlocked door | yes | **only while closed** |
+| Locked door | no | yes |
+| Window, bars, low wall, pillar | no | no |
+| Solid wall, decor, another enemy | no | walls yes; decor and enemies no |
+
+- An **unlocked door is open** while the player or any enemy is in the door cell or one of its four
+  neighbours. That single test drives the door's drawn gap, enemy line of sight, and therefore what
+  can be shot through in both directions. A door seen opening on its own means something is coming
+  through it.
+- Enemies are an **overlay** on the cell they stand on; the arch, door or pickup beneath is
+  preserved and restored when they move off. A pickup under an enemy is hidden until it moves.
+- **Corpses clear** about 1.3s after death (0.3s dying + 1s down). Combat types leave their weapon
+  on that cell, or on an adjacent floor cell if they died in an opening. A body is an obstacle to
+  other enemies only for that window, never permanently.
 
 ### Firing cycle
 
@@ -191,3 +217,14 @@ for every type). Evade is **only** rolled after a hit; approaches are now the sh
   AK47's, which is also the drop the player is most likely to be holding.
 - **A Heavy at range is a long fight.** 4.5s with the pistol, 6.4s with the AK, 11.5s if the player
   insists on the SMG. Enough time for flanking enemies to matter.
+- **Heavies plant.** They never retreat, so a Heavy in a doorway holds it, and closing on one no
+  longer buys silence — at 1 cell it fires for 25 and the SMG cannot stagger it. The player can
+  always disengage (4 m/s against 0.5) but cannot kite.
+- **Rooms are no longer islands.** Enemies follow through arches and doorways and hunt to the last
+  place they saw the player, so a room is only as safe as its exits. Use the 14-cell leash to
+  bound a chase: a retreat longer than that sheds pursuers, a shorter one does not.
+- **Doors are a tell.** A closed door hides the player from anything behind it and vice versa. It
+  opens the moment an enemy reaches the far side, so a door that opens by itself is warning of an
+  arrival — and a player who wants to hold a door shut must not stand next to it.
+- **Choke points are temporary.** A kill in a corridor blocks the enemies behind it for ~1.3s, then
+  the body clears and the weapon drops. It buys a beat, not a barricade.
