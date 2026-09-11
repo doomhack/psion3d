@@ -89,7 +89,7 @@ static void tryMove(const f16 dx, const f16 dy)
 	f16 ny = player.pos.y;
 	u16 cell = fmapCell(nx, ny);
 
-	if(canWalk(cell) && !enemyBlocksPosition(nx, ny))
+	if(canWalk(cell) && !enemyBlocksMove(player.pos.x, player.pos.y, nx, ny))
 		player.pos.x = nx;
 
 	nx = player.pos.x;
@@ -97,7 +97,7 @@ static void tryMove(const f16 dx, const f16 dy)
 
 	cell = fmapCell(nx, ny);
 
-	if(canWalk(cell) && !enemyBlocksPosition(nx, ny))
+	if(canWalk(cell) && !enemyBlocksMove(player.pos.x, player.pos.y, nx, ny))
 		player.pos.y = ny;
 }
 

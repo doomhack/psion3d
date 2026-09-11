@@ -97,7 +97,7 @@ extern enemy_t enemyList[MAX_ENEMIES];
 
 u16 getEnemyCell(u16 x, u16 y, s8 cell);
 enemy_t* getEnemy(u16 id);
-u16 enemyBlocksPosition(f16 x, f16 y);
+u16 enemyBlocksMove(f16 fromX, f16 fromY, f16 toX, f16 toY);
 void damageEnemy(u16 id, u8 damage);
 void alertEnemies(const u8 x, const u8 y);
 void runAI(void);

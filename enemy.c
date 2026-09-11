@@ -169,12 +169,14 @@ static void enemyUpdateMapCell(const u16 id, enemy_t* enemy)
 
     newCell = mapCell(newX, newY);
 
-    /* Somebody else got here first. Two enemies can pick the same empty cell
-       in one tick; the move test only ran when the step was chosen, and the
-       cell is claimed on crossing. Overwriting would capture their marker as
-       our underCell and resurrect it as a ghost when we left, so turn back
-       instead: the same counter carries the glide home. */
-    if(isEnemy(newCell))
+    /* Somebody got here first. The move test only ran when the step was
+       chosen and the cell is claimed on crossing, so another enemy may have
+       taken it - or the player may have walked into it during the glide.
+       Overwriting an enemy would capture their marker as our underCell and
+       resurrect it as a ghost when we left; landing on the player pins them
+       inside our collision radius. Either way, turn back: the same counter
+       carries the glide home. */
+    if(isEnemy(newCell) || (newX == playerCellX && newY == playerCellY))
     {
         enemySetMoveTarget(enemy, enemy->cellX, enemy->cellY);
         return;
@@ -851,7 +853,13 @@ enemy_t* getEnemy(u16 id)
     return NULL;
 }
 
-u16 enemyBlocksPosition(f16 x, f16 y)
+/* Would moving the player from (fromX, fromY) to (toX, toY) push into an
+   enemy? A move is only refused if it ends inside an enemy's radius AND
+   brings the player closer to that enemy. The old test refused any move that
+   ended inside the radius, so once an enemy had got within it - by gliding
+   into the next cell while the player stood at the shared edge - every
+   direction was "inside the radius" and the player was pinned in place. */
+u16 enemyBlocksMove(f16 fromX, f16 fromY, f16 toX, f16 toY)
 {
     u16 id;
 
@@ -860,6 +868,8 @@ u16 enemyBlocksPosition(f16 x, f16 y)
         const enemy_t* enemy = &enemyList[id];
         s16 dx;
         s16 dy;
+        s32 d2To;
+        s32 d2From;
 
         if(enemy->state == ENEMY_STATE_DEAD)
             continue;
@@ -867,15 +877,26 @@ u16 enemyBlocksPosition(f16 x, f16 y)
         /* Map positions are at most MAP_X << FP_BITS, so the difference of two
            f16 always fits in 16 bits. Rejecting in 16 bit keeps the common case
            off the 32 bit helper path. */
-        dx = x - enemy->x;
-        dy = y - enemy->y;
+        dx = toX - enemy->x;
+        dy = toY - enemy->y;
 
         if(dx > ENEMY_COLLISION_RADIUS || dx < -ENEMY_COLLISION_RADIUS ||
             dy > ENEMY_COLLISION_RADIUS || dy < -ENEMY_COLLISION_RADIUS)
             continue;
 
         /* Only survivors of the box test need the widened distance check. */
-        if((((s32)dx * dx) + ((s32)dy * dy)) <= ENEMY_COLLISION_RADIUS_SQ)
+        d2To = ((s32)dx * dx) + ((s32)dy * dy);
+
+        if(d2To > ENEMY_COLLISION_RADIUS_SQ)
+            continue;
+
+        /* Inside the radius. Allowed if it is not getting any closer - the
+           way out of an overlap is always open. */
+        dx = fromX - enemy->x;
+        dy = fromY - enemy->y;
+        d2From = ((s32)dx * dx) + ((s32)dy * dy);
+
+        if(d2To < d2From)
             return TRUE;
     }
 
