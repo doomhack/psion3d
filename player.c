@@ -29,6 +29,14 @@ const weapon_t weapons[] =
 #define PLAYER_AIM_SPAN 30
 #define PLAYER_MAX_SPREAD_SPANS 15
 
+/* Half the player's width, in cells: 0.3 m, cells being 2 m. Wall collision
+   tests this far past the centre along the edge that is moving, so the eye
+   never reaches a wall face. Settled by play: a quarter cell felt too wide,
+   0.1 m too thin. Must stay under 0.5 or a one-cell corridor or doorway
+   closes. Kept as a constant rather than FP_METERS_TO_MAP so it does not cost
+   an fpmul per test. */
+#define PLAYER_RADIUS flt2fp(0.15f)
+
 /* Sprites are 64 rows tall and every weapon sits at y 96, so lowering by a
    full sprite height puts the top edge on the bottom of the screen and
    drawSprite clips the whole thing away. */
@@ -83,22 +91,39 @@ static f16 clampFp(const f16 value, const f16 min, const f16 max)
 	return value;
 }
 
+/* One axis at a time, so a move into a wall still slides along it. Each axis
+   tests the two corners of the player's box on the edge that is moving, at
+   the new position: two corners catch a convex corner on a diagonal move, and
+   testing only the leading edge means a player who is somehow overlapping a
+   wall can still back out of it rather than being wedged. fmapCell returns a
+   void wall for anything off the map, so the corners need no bounds check. */
 static void tryMove(const f16 dx, const f16 dy)
 {
-	f16 nx = player.pos.x + dx;
-	f16 ny = player.pos.y;
-	u16 cell = fmapCell(nx, ny);
+	f16 nx, ny, f_edge;
 
-	if(canWalk(cell) && !enemyBlocksMove(player.pos.x, player.pos.y, nx, ny))
-		player.pos.x = nx;
+	if(dx != 0)
+	{
+		nx = player.pos.x + dx;
+		ny = player.pos.y;
+		f_edge = nx + ((dx > 0) ? PLAYER_RADIUS : -PLAYER_RADIUS);
 
-	nx = player.pos.x;
-	ny = player.pos.y + dy;
+		if(canWalk(fmapCell(f_edge, ny - PLAYER_RADIUS)) &&
+			canWalk(fmapCell(f_edge, ny + PLAYER_RADIUS)) &&
+			!enemyBlocksMove(player.pos.x, player.pos.y, nx, ny))
+			player.pos.x = nx;
+	}
 
-	cell = fmapCell(nx, ny);
+	if(dy != 0)
+	{
+		nx = player.pos.x;
+		ny = player.pos.y + dy;
+		f_edge = ny + ((dy > 0) ? PLAYER_RADIUS : -PLAYER_RADIUS);
 
-	if(canWalk(cell) && !enemyBlocksMove(player.pos.x, player.pos.y, nx, ny))
-		player.pos.y = ny;
+		if(canWalk(fmapCell(nx - PLAYER_RADIUS, f_edge)) &&
+			canWalk(fmapCell(nx + PLAYER_RADIUS, f_edge)) &&
+			!enemyBlocksMove(player.pos.x, player.pos.y, nx, ny))
+			player.pos.y = ny;
+	}
 }
 
 /*  The use key, on the cell the player is facing. Stepping forward in quarter
