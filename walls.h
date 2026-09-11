@@ -24,6 +24,8 @@ typedef struct wallhit_t
 	f16 f_wallDist;
 	f16 f_wallX;
 	u16 cell;
+	u8 mapX; //Cell coordinates, for wall types whose look depends on their neighbours.
+	u8 mapY;
 	u8 side;
 } wallhit_t;
 

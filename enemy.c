@@ -101,9 +101,15 @@ static u16 absDiff(const s16 a, const s16 b)
     return a > b ? a - b : b - a;
 }
 
-static u16 enemyCellValue(const u16 id, const enemy_t* enemy)
+static void enemySetMoveTarget(enemy_t* enemy, const s16 x, const s16 y);
+
+/* An enemy is an overlay on whatever it stands on. The cell keeps its own
+   flags and type nibble - floor, pickup, archway or doorway - and gains the
+   enemy marker on top, so leaving can restore it exactly. The renderer reads
+   the enemy's sprite from enemyList by id, never from the cell's type. */
+static u16 enemyOverlayCell(const u16 id, const enemy_t* enemy)
 {
-    return (MAP_MASK_SPRITE | MAP_MASK_ENEMY | MAP_MASK_WALK | SET_CELL_TYPE_ID(enemy->type) | id);
+    return (enemy->underCell | MAP_MASK_SPRITE | MAP_MASK_ENEMY | id);
 }
 
 static u16 enemyDistanceToPlayer(const enemy_t* enemy)
@@ -141,27 +147,59 @@ static void enemyUpdateMapCell(const u16 id, enemy_t* enemy)
     u8 newX = (u8)fp2int(enemy->x);
     u8 newY = (u8)fp2int(enemy->y);
     u16 oldCell;
+    u16 newCell;
 
     if(newX == enemy->cellX && newY == enemy->cellY)
         return;
 
+    newCell = mapCell(newX, newY);
+
+    /* Somebody else got here first. Two enemies can pick the same empty cell
+       in one tick; the move test only ran when the step was chosen, and the
+       cell is claimed on crossing. Overwriting would capture their marker as
+       our underCell and resurrect it as a ghost when we left, so turn back
+       instead: the same counter carries the glide home. */
+    if(isEnemy(newCell))
+    {
+        enemySetMoveTarget(enemy, enemy->cellX, enemy->cellY);
+        return;
+    }
+
     oldCell = mapCell(enemy->cellX, enemy->cellY);
 
     if(isEnemy(oldCell) && GET_CELL_ID(oldCell) == id)
-        updateCell(enemy->cellX, enemy->cellY, MAP_MASK_WALK);
+        updateCell(enemy->cellX, enemy->cellY, enemy->underCell);
 
-    updateCell(newX, newY, enemyCellValue(id, enemy));
+    /* MARKED is per frame scratch for the renderer; never carry it. */
+    enemy->underCell = newCell & ~MAP_MASK_MARKED;
+    updateCell(newX, newY, enemyOverlayCell(id, enemy));
 
     enemy->cellX = newX;
     enemy->cellY = newY;
 }
 
-/* The corpse is drawn from its map cell, so writing a pickup over that cell is
-   what both removes the body and puts the weapon it carried in its place. */
-static void enemyDropPickup(const u16 id, const enemy_t* enemy)
+/* Orthogonal neighbours, for finding floor beside a corpse. */
+static const s8 neighbourX[4] = {1, -1, 0, 0};
+static const s8 neighbourY[4] = {0, 0, 1, -1};
+
+/* The corpse is drawn from its map cell, so giving the cell back is what
+   removes the body. Bodies do not linger: a corpse holds the cell's enemy
+   marker, and the cell format has no room for a second enemy on top, so a
+   permanent body is a permanent obstacle - one kill in a corridor used to stop
+   everything behind it. Combat types leave their weapon behind. */
+static void enemyReleaseCell(const u16 id, const enemy_t* enemy)
 {
     u16 cell;
     u8 pickupType;
+    u8 i;
+
+    /* The release must never touch a cell that has stopped being this corpse. */
+    cell = mapCell(enemy->cellX, enemy->cellY);
+
+    if(!isEnemy(cell) || GET_CELL_ID(cell) != id)
+        return;
+
+    updateCell(enemy->cellX, enemy->cellY, enemy->underCell);
 
     switch(enemy->type)
     {
@@ -177,18 +215,29 @@ static void enemyDropPickup(const u16 id, const enemy_t* enemy)
             pickupType = PICKUP_TYPE_M249;
             break;
 
-        default: //Civilians carry nothing, so their body simply stays.
+        default: //Civilians carry nothing.
             return;
     }
 
-    /* Nothing writes a dead enemy's cell today, but the drop must never land
-       on a cell that has stopped being this corpse. */
-    cell = mapCell(enemy->cellX, enemy->cellY);
-
-    if(!isEnemy(cell) || GET_CELL_ID(cell) != id)
+    /* A pickup owns the cell's type nibble, so it can only go on bare floor.
+       Dying in an archway or doorway drops the weapon beside the opening. */
+    if(enemy->underCell == MAP_MASK_WALK)
+    {
+        updateCell(enemy->cellX, enemy->cellY, makePickupCell(pickupType));
         return;
+    }
 
-    updateCell(enemy->cellX, enemy->cellY, makePickupCell(pickupType));
+    for(i = 0; i < 4; i++)
+    {
+        s16 x = enemy->cellX + neighbourX[i];
+        s16 y = enemy->cellY + neighbourY[i];
+
+        if(x >= 0 && y >= 0 && x < MAP_X && y < MAP_Y && mapCell(x, y) == MAP_MASK_WALK)
+        {
+            updateCell(x, y, makePickupCell(pickupType));
+            return;
+        }
+    }
 }
 
 /* The view sin/cos are the same for every enemy in a tick, and the angle only
@@ -404,6 +453,35 @@ static void enemyShootPlayer(const u16 id, const enemy_t* enemy)
         player.health -= damage;
 }
 
+/* Mirrors what the renderer lets the player see through. A solid wall stops
+   the ray; a non-solid wall - archway, window, bars, low wall, pillar - is
+   drawn but seen past. Doors are the one case with state: shut unless someone
+   is at them. Locked doors, and any wall type not listed, are shut. */
+static u16 cellBlocksSight(const u16 cell, const s16 x, const s16 y)
+{
+    if(!isWall(cell))
+        return FALSE;
+
+    if(isSolid(cell))
+        return TRUE;
+
+    switch(mapCellType(cell))
+    {
+        case WALL_TYPE_ARCH:
+        case WALL_TYPE_WINDOW:
+        case WALL_TYPE_BARS:
+        case WALL_TYPE_LOW:
+        case WALL_TYPE_PILLAR:
+            return FALSE;
+
+        case WALL_TYPE_UNLOCKED_DOOR:
+            return !(doorEnemyNear(x, y) ||
+                (absDiff(x, playerCellX) + absDiff(y, playerCellY)) <= 1);
+    }
+
+    return TRUE;
+}
+
 static u16 enemyCanSeePlayer(const enemy_t* enemy)
 {
     s16 x0 = fp2int(enemy->x);
@@ -436,7 +514,7 @@ static u16 enemyCanSeePlayer(const enemy_t* enemy)
         if(x0 == x1 && y0 == y1)
             return TRUE;
 
-        if(isWall(mapCell(x0, y0)))
+        if(cellBlocksSight(mapCell(x0, y0), x0, y0))
             return FALSE;
     }
 
@@ -445,10 +523,22 @@ static u16 enemyCanSeePlayer(const enemy_t* enemy)
 
 static u16 enemyTryMoveTo(const u16 id, enemy_t* enemy, const s16 newX, const s16 newY)
 {
+    u16 cell;
+
     if(newX < 0 || newY < 0 || newX >= MAP_X || newY >= MAP_Y)
         return FALSE;
 
-    if(mapCell(newX, newY) != MAP_MASK_WALK)
+    /* Anything walkable that no other enemy holds: floor, a pickup, an archway,
+       an open doorway. This used to demand bare floor exactly, which made
+       every dropped weapon and every opening a wall to the AI. The player is
+       not in the map, so their cell has to be excluded by hand or a sidestep
+       can glide straight onto them. */
+    cell = mapCell(newX, newY);
+
+    if(!canWalk(cell) || isEnemy(cell))
+        return FALSE;
+
+    if(newX == playerCellX && newY == playerCellY)
         return FALSE;
 
     enemySetMoveTarget(enemy, newX, newY);
@@ -711,7 +801,10 @@ u16 getEnemyCell(u16 x, u16 y, s8 cell)
     enemyList[enemyId].enemyStats = &enemyStats[enemyType];
     enemyList[enemyId].health = enemyStats[enemyType].health;
 
-    return (MAP_MASK_SPRITE | MAP_MASK_ENEMY | MAP_MASK_WALK | SET_CELL_TYPE_ID(enemyType) | enemyId);
+    //An enemy map character stands on bare floor.
+    enemyList[enemyId].underCell = MAP_MASK_WALK;
+
+    return enemyOverlayCell(enemyId, &enemyList[enemyId]);
 }
 
 enemy_t* getEnemy(u16 id)
@@ -835,14 +928,14 @@ void runAI()
         {
             enemy->spriteFrame = ENEMY_FRAME_DEATH;
 
-            /* Runs down once and stays at zero, so the drop fires on the single
-               tick the counter expires and never again. */
+            /* Runs down once and stays at zero, so the release fires on the
+               single tick the counter expires and never again. */
             if(enemy->stateCounter > 0)
             {
                 enemy->stateCounter--;
 
                 if(enemy->stateCounter == 0)
-                    enemyDropPickup(id, enemy);
+                    enemyReleaseCell(id, enemy);
             }
 
             continue;

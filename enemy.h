@@ -87,6 +87,7 @@ typedef struct enemy_t
     u8 stateCells; //Move periods left in the current activity. FLEEING counts flight, SEARCHING counts patience. Set on entry to either.
     u8 hurtResumeState; //State interrupted by HURT, restored on exit if it was an aim or attack.
     u8 hurtResumeCounter; //stateCounter to restore alongside hurtResumeState.
+    u16 underCell; //The map cell this enemy is standing on, restored exactly when it leaves.
     const enemystats_t* enemyStats; //Enemy stats.
 } enemy_t;
 

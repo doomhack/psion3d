@@ -124,6 +124,12 @@ static u16 drawWallD(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
 	s16 dist = hit->f_wallDist >> 4;
 
+	/* An enemy at the door holds it fully open; otherwise it swings with the
+	   player's approach as it always has. The same test gates enemy line of
+	   sight, so a door seen standing open is one that can be shot through. */
+	if(doorEnemyNear(hit->mapX, hit->mapY))
+		return drawWallDoorGap(x, y, w, h, hit, 16);
+
 	return drawWallDoorGap(x, y, w, h, hit, (dist > 16) ? 0 : (16 - dist));
 }
 

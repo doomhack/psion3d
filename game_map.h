@@ -140,4 +140,17 @@ static u16 isSolid(const u16 cell)
 	return cell & MAP_MASK_SOLID;
 }
 
+/* The one piece of door state the game has. An unlocked door is open while
+   someone is at it: this tests the door cell and its four neighbours for an
+   enemy, and each caller adds the player's own proximity. The wall styles draw
+   the gap from it and enemy line of sight passes through it, so what the
+   player sees open is what can be shot through. mapCell returns a void wall
+   for out of range coordinates, so the edges need no guard. */
+static u16 doorEnemyNear(const u16 x, const u16 y)
+{
+	return isEnemy(mapCell(x, y)) ||
+		isEnemy(mapCell(x + 1, y)) || isEnemy(mapCell(x - 1, y)) ||
+		isEnemy(mapCell(x, y + 1)) || isEnemy(mapCell(x, y - 1));
+}
+
 #endif

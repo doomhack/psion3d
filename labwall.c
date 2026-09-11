@@ -233,6 +233,11 @@ static u16 drawAirlockDoor(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	s16 dist = hit->f_wallDist >> 4;
 	s16 doorgap, halfgap;
 
+	/* An enemy at the door holds it fully open; otherwise it travels with the
+	   player's approach. Same test as enemy line of sight, see walls.c. */
+	if(doorEnemyNear(hit->mapX, hit->mapY))
+		return drawAirlock(x, y, h, hit, DOOR_TRAVEL);
+
 	if(dist >= 16)
 		return drawAirlock(x, y, h, hit, 0);
 

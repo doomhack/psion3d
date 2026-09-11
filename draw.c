@@ -518,7 +518,11 @@ void draw()
 				hitcell = mapCell(mapx, mapy);
 				hit = isWall(hitcell);
 
-				if(hit == 0)
+				/* Sprites are gathered from every cell the ray can see into, which
+				   is every cell that is not solid - an enemy standing in an archway
+				   or doorway is in a wall cell and used to be skipped here, so it
+				   simply was not drawn. Same single mask test as the old hit == 0. */
+				if(!isSolid(hitcell))
 				{
 					if(isSprite(hitcell) && !isMarked(hitcell) &&
 						spritesMarked < MAX_VISIBLE_SPRITES)
@@ -567,6 +571,8 @@ void draw()
 			solid = isSolid(hitcell) || hits >= 2;
 			
 			wallhits[hits].cell = hitcell;
+			wallhits[hits].mapX = (u8)mapx;
+			wallhits[hits].mapY = (u8)mapy;
 			wallhits[hits].side = side;
 
 			/* The side distance was advanced past the boundary just crossed, so
