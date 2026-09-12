@@ -25,7 +25,6 @@ static void labDepthWall(s16 x, s16 y, s16 h, const wallhit_t* hit)
 
 static void panelSeams(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
-	s16 wallx = hit->f_wallX;
 	s16 rail = h >> 4;
 
 	if(rail < 1)
@@ -36,18 +35,55 @@ static void panelSeams(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	bmFillRect4(x, y + h - (h >> 2) - rail, rail, blackBm);
 
 	/* Narrow vertical joins between prefabricated panels. */
-	if((wallx >= 62 && wallx < 70) ||
-		(wallx >= 190 && wallx < 198))
+	if(wallSpans(hit, 62, 70) || wallSpans(hit, 190, 198))
 		bmFillRect4(x, y, h, blackBm);
 }
 
-static u16 drawBrickPanels(s16 x, s16 y, s16 h, const wallhit_t* hit)
+/* Prefabricated concrete panels: a dark cornice along the ceiling line, a
+   stripe group at eye height, vent boxes along the skirting, and a soft joint
+   between panels. In span calls per column, which is what wall cost is:
+
+     depth >= WALL_DETAIL_DEPTH  flat                          1
+     depth >= LAB_PANEL_NEAR     base, cornice, one dark band  3
+     nearer                      base, cornice, two stripes    4, plus a vent
+                                                                 on 3/4 of columns
+     joint column                the above, plus a 1 pixel     +1, one column
+                                 line                          per joint
+
+   The stripe group hangs off row 80 like the old horizon band did, so it is
+   always on screen and never clips. Its two bands have a gap of bare wall
+   between them, and that gap is the third stripe for free: black, wall, dither
+   read as three bands for two calls. The stripes are meant to be identical
+   along a corridor, so nothing here varies by cell.
+
+   The joint is the one thing here narrower than a column: a single pixel of
+   black, put at the pixel of the one column whose footprint holds the joint's
+   position on the face. It is the same width at every distance and does not
+   swim between columns as the player moves, which is the point of carrying
+   the footprint at all. */
+
+#define PANEL_VENT_PITCH 32 /* one vent box and one gap, in wallX units */
+#define PANEL_VENT_W 24     /* the box; the gap is the rest of the pitch */
+#define PANEL_JOINT 128     /* face position of the mid cell joint; the other is the cell edge */
+
+/* The last joint drawn, as a place on the map rather than a wallX, so that the
+   cell edge joint is the same joint from either cell. Footprints overlap on
+   purpose, so more than one column can hold a joint; but a joint is a vertical
+   line in the world and lands in exactly one screen column, so any later claim
+   on the same joint in the same frame is that overlap, and stands down. The
+   first column to claim it draws it, and columns are drawn left to right. One
+   record is enough because a face's joints come one after another. */
+static s16 jointLastAlong;
+static u8 jointLastLine;
+static u8 jointLastSide;
+static u8 jointLastFrame;
+
+static u16 drawConcretePanels(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
 	s16 depth = fp2int(hit->f_wallDist);
-	/* y is already 80 - (wallHeight >> 1) for this wall type. */
-	s16 bottom = 80 + (hit->wallHeight >> 1);
-	s16 wallheight8 = (hit->wallHeight >> 3);
-	s16 wallheight16 = wallheight8 >> 1;
+	s16 band = h >> 4;
+	s16 joint, along, lo, hi;
+	u8 line;
 
 	if(depth >= WALL_DETAIL_DEPTH)
 	{
@@ -55,25 +91,92 @@ static u16 drawBrickPanels(s16 x, s16 y, s16 h, const wallhit_t* hit)
 
 		return TRUE;
 	}
-	else if(depth >= 4 || hit->side)
-	{
+
+	if(depth >= LAB_PANEL_NEAR || hit->side)
 		bmFillRect4(x, y, h, greyBm);
-	}
 	else
-	{
 		bmFillPattern4(x, y, h, greyBm);
+
+	if(band < 1)
+		band = 1;
+
+	if(depth >= LAB_PANEL_NEAR)
+	{
+#if LAB_PANEL_CORNICE
+		bmFillRect4(x, y, band + (band >> 1), blackBm);
+#endif
+#if LAB_PANEL_STRIPES
+		bmFillRect4(x, 80 - band - band - band, band + band + band, blackBm);
+#endif
+
+		return TRUE;
 	}
 
-	/* Band at the horizon first: it is always on screen and the widest, so it
-	   is the one to keep when BRICK_BAND_COUNT is reduced. */
-#if BRICK_BAND_COUNT >= 1
-	bmFillPattern4(x, 80-wallheight8, wallheight8, blackBm);
+#if LAB_PANEL_CORNICE
+	bmFillRect4(x, y, band + (band >> 1), blackBm);
 #endif
-#if BRICK_BAND_COUNT >= 2
-	bmFillPattern4(x, y + wallheight8, wallheight8, blackBm);
+
+#if LAB_PANEL_STRIPES
+	bmFillRect4(x, 80 - band - band - band, band, blackBm);
+	bmFillPattern4(x, 80 - band, band, blackBm);
 #endif
-#if BRICK_BAND_COUNT >= 3
-	bmFillPattern4(x, bottom - wallheight16, wallheight16, blackBm);
+
+#if LAB_PANEL_VENTS
+	/* The call is skipped only when the column's whole footprint lies in the
+	   gap between two boxes, so the row stays continuous however coarsely the
+	   face is sampled, and the gaps show where the columns are fine enough to
+	   resolve them. */
+	{
+		s16 phase = (u16)(hit->f_wallX - hit->f_wallXHalf) & (PANEL_VENT_PITCH - 1);
+
+		if(phase < PANEL_VENT_W || phase + hit->f_wallXHalf + hit->f_wallXHalf > PANEL_VENT_PITCH)
+			bmFillRect4(x, y + h - band, band, blackBm);
+	}
+#endif
+
+#if LAB_PANEL_SEAMS
+	/* Two panels to a cell, so a joint mid cell and one at the cell edge. The
+	   edge joint is at 0 of one cell and 256 of its neighbour, and a footprint
+	   can reach it from either side, so both are asked. Drawn last: it runs
+	   through the stripes and the vents, as a real joint does.
+
+	   These are wallSpans() unrolled, because every near column runs them to
+	   find out it has no joint: the footprint's low edge is never above 256
+	   and its high edge never below 0, so the edge tests are one compare each.
+
+	   The cutoff first: a column that covers a large part of the face is on a
+	   wall seen obliquely or far off, where joints would fall in nearly every
+	   column - a comb on screen and a span call in each of them. */
+	if(hit->f_wallXHalf > LAB_PANEL_JOINT_HALF)
+		return TRUE;
+
+	lo = hit->f_wallX - hit->f_wallXHalf;
+	hi = hit->f_wallX + hit->f_wallXHalf;
+
+	if(lo <= PANEL_JOINT && hi > PANEL_JOINT)
+		joint = PANEL_JOINT;
+	else if(lo <= 0)
+		joint = 0;
+	else if(hi > 256)
+		joint = 256;
+	else
+		return TRUE;
+
+	/* An x face runs along y, so its joints are placed by mapY; a y face the
+	   other way round. */
+	line = hit->side ? hit->mapY : hit->mapX;
+	along = (s16)((hit->side ? hit->mapX : hit->mapY) << 8) + joint;
+
+	if(jointLastFrame == wallFrame && along == jointLastAlong &&
+		line == jointLastLine && hit->side == jointLastSide)
+		return TRUE;
+
+	jointLastFrame = wallFrame;
+	jointLastAlong = along;
+	jointLastLine = line;
+	jointLastSide = hit->side;
+
+	bmFillCol1(x + wallPixel(hit, joint), y, h, blackBm);
 #endif
 
 	return TRUE;
@@ -485,17 +588,18 @@ static u16 drawLabStripLight(s16 x, s16 y, s16 h, const wallhit_t* hit)
 
 /* Conduit runs. Vertical detail, so a column either carries a run or it does
    not - one extra span at most, none on the wall between. The brackets sit
-   inside the run own columns, so they cost nothing anywhere else. */
+   inside the run own columns, so they cost nothing anywhere else. The run is
+   tested before its lit edge, so a column at range that covers both keeps the
+   dark run. */
 static u16 drawLabConduit(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
-	s16 wallx = hit->f_wallX;
 	s16 band;
 
 	labDepthWall(x, y, h, hit);
 
-	if((wallx >= 32 && wallx < 48) ||
-		(wallx >= 104 && wallx < 120) ||
-		(wallx >= 192 && wallx < 208))
+	if(wallSpans(hit, 32, 48) ||
+		wallSpans(hit, 104, 120) ||
+		wallSpans(hit, 192, 208))
 	{
 		bmFillRect4(x, y, h, blackBm);
 
@@ -518,9 +622,9 @@ static u16 drawLabConduit(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	}
 
 	/* Lit edge down the side of each run, so it reads as round. */
-	if((wallx >= 48 && wallx < 56) ||
-		(wallx >= 120 && wallx < 128) ||
-		(wallx >= 208 && wallx < 216))
+	if(wallSpans(hit, 48, 56) ||
+		wallSpans(hit, 120, 128) ||
+		wallSpans(hit, 208, 216))
 	{
 		bmClearRect4(x, y, h, blackBm);
 		bmFillRect4(x, y, h, greyBm);
@@ -549,7 +653,7 @@ static u16 drawLabRack(s16 x, s16 y, s16 h, const wallhit_t* hit)
 		rail = 1;
 
 	/* Frame upright first: vertical, so the bays either side pay nothing. */
-	if(wallx >= 120 && wallx < 136)
+	if(wallSpans(hit, 120, 136))
 	{
 		bmFillRect4(x, y, h, blackBm);
 
@@ -708,7 +812,7 @@ u16 drawWallLab(u16 x, wallhit_t* hit)
 	switch(wallType)
 	{
 		case WALL_TYPE_SOLID:
-			return drawBrickPanels(x, y, h, hit);
+			return drawConcretePanels(x, y, h, hit);
 		case WALL_TYPE_SHOOTABLE:
 			return drawShootablePanel(x, y, h, hit);
 		case WALL_TYPE_ARCH:

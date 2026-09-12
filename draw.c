@@ -197,6 +197,31 @@ static const s16 rayIdxOffset[60] =
 	59, 61, 64, 67, 70, 73, 76, 78, 82, 85
 };
 
+/* Half the angular width of each column, in 1/4096ths of a radian: half the
+   larger of the gaps to the rays either side of it. The offsets above are not
+   evenly spaced - the gaps run 2, 3 and 4 entries - so a ray does not sit in
+   the middle of its column, and a footprint that reaches a quarter of the way
+   to each neighbour leaves a hole on the wide side that a feature can fall
+   through. Reaching half the larger gap both ways closes it: the two columns
+   either side of any gap meet at its middle at least. The overlap that
+   creates on the narrow side is why a feature that must land in one column
+   dedupes; see labwall.c. Generated from rayIdxOffset:
+   round(max(off[i] - off[i-1], off[i+1] - off[i]) / 2 * 2pi / 1024 * 4096). */
+static const u8 rayHalfWidth[60] =
+{
+	38, 38, 38, 50, 50, 38, 38, 38, 38, 38,
+	38, 50, 50, 38, 38, 38, 38, 38, 38, 38,
+	50, 50, 38, 50, 50, 38, 38, 38, 38, 38,
+	38, 50, 50, 38, 38, 38, 38, 38, 38, 38,
+	50, 50, 38, 38, 38, 38, 38, 38, 38, 38,
+	38, 38, 38, 38, 38, 38, 38, 50, 50, 38
+};
+
+/* Counts frames, so that a wall style can tell a second claim on the same
+   feature in one frame - a footprint overlap - from the same feature seen
+   again next frame. Wraps; only equality is ever tested. */
+u8 wallFrame = 0;
+
 /* Which map cell a shot landed on. f_wallDepth holds the distance to the
    surface that claimed the column, so the cell itself starts a little further
    along the ray: step past that surface in sixteenths of a cell until a wall
@@ -425,6 +450,8 @@ void draw()
 		recipReady = TRUE;
 	}
 
+	wallFrame++;
+
 	for(i = 0; i < 60; i++)
 	{
 		wallhit_t wallhits[3];
@@ -502,7 +529,9 @@ void draw()
 			u16 hitcell;
 			f16 f_dist;
 			f16 f_wallx;
-			
+			f16 f_step;
+			u16 delta;
+
 			do
 			{
 				if(sidedx < sidedy)
@@ -589,20 +618,52 @@ void draw()
 				f_dist = (f16)(sidedx - deltax);
 
 				f_wallx = player.pos.y + fpmul(f_dist, f_dy);
+				delta = deltax;
 			}
 			else
 			{
 				f_dist = (f16)(sidedy - deltay);
 
 				f_wallx = player.pos.x + fpmul(f_dist, f_dx);
+				delta = deltay;
 			}
 
 			if(f_dist <= 0)
 				f_dist = 1;
 
+			/* How much of the face this column covers, either side of the
+			   sample. wallX moves along the face by dist / cos per radian, and
+			   delta is already 1 / cos; the column's half width in radians is
+			   rayHalfWidth, in 4096ths, so the product is (f_step / 16 * w)
+			   / 256. The margin on top is on purpose: it is a footprint for
+			   feature tests, and neighbouring footprints must overlap rather
+			   than leave gaps, or a feature falling in a gap is lost exactly
+			   as it was under a point test. f_wallx itself is only good to
+			   about 1% of its offset from the player - delta is floored, f_dy
+			   is rounded, and fpmul truncates twice - so f_step / 128 covers
+			   that, and the plus one keeps the footprint from reaching 0 on a
+			   wall the player is touching. A feature that must land in exactly
+			   one column has to dedupe; see the panel joint in labwall.c.
+			   Per hit, not per DDA step. Clamped to a whole face: fpmul keeps
+			   bits 8..23 of the product, so a grazing hit at over 64 cells
+			   along the ray runs the result up towards the sign bit, and past
+			   256 cells wraps it. The clamp also bounds the 16 bit product
+			   below: 1024 * 50 fits.
+
+			   Which way wallX runs across the screen falls out of the step
+			   direction: an x face seen looking +x has wallX (the y coordinate)
+			   growing with the ray angle, a y face seen looking +y has wallX
+			   (the x coordinate) shrinking with it. */
+			f_step = fpmul(f_dist, (f16)delta);
+
+			if((u16)f_step >= 16384)
+				f_step = 16384;
+
 			wallhits[hits].wallHeight = WALL_HEIGHT_NUM / f_dist;
 			wallhits[hits].f_wallDist = f_dist;
 			wallhits[hits].f_wallX = f_wallx - int2fp(fp2int(f_wallx));
+			wallhits[hits].f_wallXHalf = (s16)((((u16)f_step >> 4) * rayHalfWidth[i]) >> 8) + (f_step >> 7) + 1;
+			wallhits[hits].wallXMirror = side ? (u8)(stepy > 0) : (u8)(stepx < 0);
 			
 			hits++;
 			

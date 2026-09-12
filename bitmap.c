@@ -192,6 +192,39 @@ void bmFillRect4(s16 x, s16 y, s16 h, u8* bm)
 	} while(--h);
 }
 
+/* One pixel wide vertical line. The same loop as bmFillRect4 with a single
+   bit mask: bmFillRect(x, y, 1, h) does the same job through a fillSpan call
+   per row, which measured 5fps on the panel joints. */
+void bmFillCol1(s16 x, s16 y, s16 h, u8* bm)
+{
+	u8* row;
+	u8 mask;
+
+	if(h <= 0 || x < 0 || x >= BM_WIDTH)
+		return;
+
+	if(y < 0)
+	{
+		h += y;
+		y = 0;
+	}
+
+	if(y + h > BM_HEIGHT)
+		h = BM_HEIGHT - y;
+
+	if(h <= 0)
+		return;
+
+	row = bm + (y << 5) + (x >> 3);
+	mask = (u8)(1 << (x & 7));
+
+	do
+	{
+		*row |= mask;
+		row += BM_ROW_BYTES;
+	} while(--h);
+}
+
 void bmDrawRect(s16 x, s16 y, s16 w, s16 h, u8* bm)
 {
 	s16 yy;

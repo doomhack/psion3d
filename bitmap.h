@@ -15,6 +15,7 @@ extern u8* greyBm;
 void bmClearScreen(void);
 void bmFillRect(s16 x, s16 y, s16 w, s16 h, u8* bm);
 void bmFillRect4(s16 x, s16 y, s16 h, u8* bm);
+void bmFillCol1(s16 x, s16 y, s16 h, u8* bm);
 void bmDrawRect(s16 x, s16 y, s16 w, s16 h, u8* bm);
 void bmClearRect(s16 x, s16 y, s16 w, s16 h, u8* bm);
 void bmClearRect4(s16 x, s16 y, s16 h, u8* bm);

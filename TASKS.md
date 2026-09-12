@@ -70,7 +70,7 @@ lined with them is the case to put on the fps counter.
 Done: the id is `WALL_TYPE_SOLID`. Every style renders it differently, so the
 name now describes what the map means rather than what one style draws.
 Verified as a pure rename - `PSION3D.IMG` hashed identically either side of it.
-The style-internal names (`drawBrickPanels`, `brickPattern`, `BRICK_BAND_COUNT`)
+The style-internal names (`drawBrickPanels`, `brickPattern`, `BRICK_BAND_COUNT`; the lab ones have since become `drawConcretePanels` and `LAB_PANEL_*`)
 were left alone; those genuinely describe one style's appearance.
 
 ### 6. Fill out the 16 wall types

@@ -105,7 +105,7 @@ Measured budget, map 1, fixed corridor position, 20fps = 50ms/frame:
 | Weapon overlay sprite | ~4ms |
 | Screen clear, blit, enemy sprites, AI, `wFlush` combined | ~12ms |
 
-**Span call count dominates wall cost, not rows written.** Three dither bands covering 0.31× the column height measured 5.6ms — 2.6× the per-row cost of the full-height span they sit on. Fewer, larger span calls win; splitting a style into *more* calls to write *fewer* rows loses. `WALL_DETAIL_DEPTH` and `BRICK_BAND_COUNT` in `walls.h` are the tunables, with their measured costs documented there.
+**Span call count dominates wall cost, not rows written.** Three dither bands covering 0.31× the column height measured 5.6ms — 2.6× the per-row cost of the full-height span they sit on. Fewer, larger span calls win; splitting a style into *more* calls to write *fewer* rows loses. `WALL_DETAIL_DEPTH` and the `LAB_PANEL_*` switches in `walls.h` are the tunables, with their measured costs documented there.
 
 **How to measure.** Add a `#define` that *removes* work, rebuild, read the fps counter (`psion3d.c` prints it once a second). Watch it ~10 seconds; one fps step is ~2.5ms at 20fps. Measure from a fixed position — active enemies move and make readings unstable.
 
