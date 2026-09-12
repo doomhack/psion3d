@@ -220,6 +220,77 @@ so adding a level is: author the ASCII map, add the style case, ship the file.
 Level select (task 1) has nothing to select from until this happens, and it is
 the reason objectives (task 3) and the level exit (task 10) matter.
 `Psion Levels.xlsx` in the repo root appears to be the level design workbook.
+## Development infrastructure
+
+Tooling that makes a change verifiable before it reaches the emulator. The
+verification ladder today is: compiles (automated, 5s), bytes unchanged for a
+refactor (automated, `PSION3D.IMG` hash), DGROUP within budget (manual recipe),
+logic correct (PC build, by hand), looks right (emulator, by eye), performance
+(device only). The items below automate the middle rungs so each session can
+prove more without a human step, and turn the human steps into reading a
+number instead of forming a judgement.
+
+### 17. Headless PC build
+- [ ] Command-line mode that renders fixed frames to image files without a window.
+
+`hostInit()` / `hostFrame()` / `hostFramebuffer()` in
+[pc/src/host.c](pc/src/host.c) already separate the game from the Qt view, and
+`psion3dFrameImage()` in [pc/src/GameView.cpp](pc/src/GameView.cpp:34) already
+builds a `QImage` from the framebuffer, so this is a CLI over existing pieces:
+`psion3d_pc --map N --pos X,Y --angle A --frames N --out frame.png`. Position
+and angle are Q8 (`fp_types.h`), matching `pos` in `psion3d.h`. Once frames
+can be written to disk, a directory of golden frames for known positions makes
+renderer regressions detectable by comparison rather than by eye, and an agent
+can read the PNG itself before anything goes near the emulator. Optionally
+accept a scripted key sequence (`--keys "fwd:32,fire:1"`) so movement,
+collision and shot resolution can be checked the same way.
+
+### 18. DGROUP budget check
+- [ ] Script that reads `PSION3D.MAP` and prints DGROUP used, failing above a threshold.
+
+The recipe is at the end of [MEMORY_BUDGET.md](MEMORY_BUDGET.md): `__bss_end`
+relative to the DGROUP segment paragraph. A PowerShell script that parses the
+map after a build and prints used / free / limit, with a non-zero exit above
+a configurable line (say 48 KB of the 64 KB), turns the memory rule of thumb
+into a gate that runs after every build. Should also append a row to the
+history table in `MEMORY_BUDGET.md` on request, so the table stops being
+hand-maintained.
+
+### 19. Benchmark mode
+- [ ] Build-time `#define` that spawns at the fixed measurement position and reports average fps.
+
+Performance is measured on hardware only, and today that means standing in the
+map 1 corridor and watching the once-a-second counter in
+[psion3d.c](psion3d.c:157) for ten seconds. A `BENCH` define that forces the
+spawn position and angle to the documented corridor spot, ignores input, and
+prints the average over 10 seconds (or 200 frames) to a debug slot makes the
+reading repeatable and the device step a number to copy into a commit
+message. The position and angle should be written down once here so the
+numbers in `CLAUDE.md` stay comparable across sessions.
+
+### 20. One-shot verify script
+- [ ] A single command that builds, hashes, checks DGROUP, and builds the PC host.
+
+Runs the DOSBox build, reports errors from `build.log`, hashes `PSION3D.IMG`
+and compares to the previous run (unchanged = refactor-safe, changed = expected
+for features), runs the DGROUP check (task 18), and builds the PC target. Once
+task 17 exists, also renders the golden frames and diffs them. Intended to be
+wired up as a project skill under `.claude/` so it runs after every change
+without being asked. Note the DOSBox mount is pinned to this directory, so
+only one build can run at a time; the script should fail fast if `build.log`
+is locked rather than queue.
+
+### 21. Map validator
+- [ ] Check a `.map` for size, unknown characters, spawn count and reachability.
+
+Promoted from the housekeeping note below. Hand-authored ASCII with no
+checking is fine for one map and not for several (task 16). Reachability from
+the spawn cell over `MAP_MASK_WALK` cells is the useful part: it catches sealed
+rooms and enemies placed inside walls, which otherwise only show up on device.
+`getCellEncoding()` in [game_map.c](game_map.c) is the source of truth for
+valid characters; the validator should reuse it via the PC build rather than
+keep a second table.
+
 ## Housekeeping
 
 - [ ] `TEXWALL.OBJ` is left over from the removed textured-wall experiment;
@@ -227,7 +298,7 @@ the reason objectives (task 3) and the level exit (task 10) matter.
       the stale object.
 - [ ] `~$Psion Levels.xlsx` is an Excel lock file that has been committed once
       already and is currently untracked. Add `~$*` to `.gitignore`.
-- [ ] Map authoring is hand-written ASCII with no validator. Before authoring
+- [ ] Map authoring is hand-written ASCII with no validator (now task 21). Before authoring
       several levels (task 16), consider a tool that checks a `.map` for size,
       unknown characters and unreachable cells - `Psion Levels.xlsx` suggests
       the design already happens in a spreadsheet, so a converter may fit.
