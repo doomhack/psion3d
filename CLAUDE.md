@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `TASKS.md` is the project task list - planned features and their current state. Check it before starting new work, and tick items off there as they land.
 
+`MEMORY_BUDGET.md` is the measured memory breakdown - near data (DGROUP) is the binding limit at ~65% of 64 KB, not the 512 KB system total. Check it before adding a global array, and refresh it with the recipe at its end when you do.
+
 ## What this is
 
 A Wolfenstein-style raycaster for the Psion 3a/3c/3mx (SIBO), written in C89 against the PLIB/WLIB SDK and built with the JPI/TopSpeed compiler (`tsc`). Target hardware is a ~27 MHz NEC V30MX with a 240x160 2-bit greyscale LCD. `PROGRAM.OPL` is the original OPL prototype, kept for reference only.
@@ -53,7 +55,7 @@ Working-tree line endings are mixed (git stores LF, some files are CRLF on disk)
 | `bitmap.c` | Local 1bpp screen buffers and fill/clear/pattern/line primitives |
 | `videomem.a` | JPI assembler `blitVideoMem()` — direct writes to segment 0x40 video RAM |
 | `fpasm.a` | JPI assembler `fpmul()` — the Q8 multiply, using the V30's native `IMUL` |
-| `sprite.c` | `.spr` loading into segments, frame cache, projection, drawing (`tst_spr.h` = fallback pattern) |
+| `sprite.c` | `.spr` loading into segments, frame cache, projection, drawing. A slot that failed to load draws nothing; there is no built-in fallback sprite |
 | `enemy.c` | Enemy state machine, AI tick, damage, per-type stats |
 | `player.c` | Player position/movement, weapon table and firing state |
 | `game_map.c` | 64x64 `map[][]`, ASCII-to-cell encoding, map file loading, per-level asset/wall-style selection |
