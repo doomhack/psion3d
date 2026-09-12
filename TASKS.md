@@ -135,8 +135,10 @@ deciding together.
 ### 8. Status bars
 - [ ] On-screen health, ammo, weapon and objective status.
 
-The player already carries `health`, `weaponsOwned`, `items` and current weapon
-in [player.h](player.h). The display question is where it goes: the game window
+The player already carries `health`, `weaponsOwned`, `items`, current weapon
+and, since task 11, `ammo[]` per pool in [player.h](player.h). Ammo is the
+most pressing thing to show: today the only sign a pool is dry is the weapon
+swapping itself for the pistol. The display question is where it goes: the game window
 is the 240x160 region at x=120, the debug window is the 120x160 region at x=0,
 and the right-hand 120x160 of the 480x160 LCD is unused. Putting status in a
 side window costs no game-view rows and no per-frame raycast work, but the
@@ -146,8 +148,9 @@ route and should only redraw when a value changes.
 ### 9. Player death and game over
 - [ ] Handle `player.health` reaching zero.
 
-`damagePlayer` in [enemy.c](enemy.c:349) already clamps health to 0, and
-[enemy.c](enemy.c:337) stops enemies firing at a dead player, but nothing else
+`hurtPlayer` in [player.c](player.c) already clamps health to 0 (and applies
+the knockback, view kick and hurt flash), and `enemyShootPlayer` in
+[enemy.c](enemy.c) stops enemies firing at a dead player, but nothing else
 reacts - the player keeps walking and shooting at 0 health. Needs a death state,
 a death screen or fade, and a route back to the menu or a restart. Objectives
 (task 3) mean little until failure is possible.
@@ -164,14 +167,21 @@ Start and exit are settled as map data rather than wall types: task 6 spent all
 sixteen ids and deliberately left none for them.
 
 ### 11. Ammunition
-- [ ] Track and consume ammo.
+- [x] Track and consume ammo.
 
-`weapon_t.ammoType` in [player.h](player.h:25) is declared and never read;
-`player_t` has no ammo counts, so every weapon fires forever. Needs per-type
-counts on the player, a decrement on fire, an empty-weapon behaviour, and ammo
-pickup types - `PICKUP_TYPE_*` has four values used of eight, with 4-7 already
-reserved for map characters `'L'`..`'O'`. The status bar (task 8) has little to
-show without this.
+Done. The pistol is infinite (`AMMO_TYPE_NONE`); the SMG, AK47 and LMG each
+draw from their own pool in `player.ammo[]`, sized by `ammoTypes[]` in
+[player.c](player.c) - `{pickup, cap}` per pool, currently 10/90, 20/120,
+30/160. There are no separate ammo pickups: a weapon pickup *is* that weapon's
+ammo, so `giveWeapon` in [pickup.c](pickup.c) tops the pool up on every
+collection and grants the weapon only on the first. Firing an empty weapon
+switches to the pistol through the normal lower/raise, which is the only
+"empty" signal until task 8 lands.
+
+The pickup rule and the reasoning are in [BALANCE.md](BALANCE.md): 2x what it
+costs to kill the enemy that drops the weapon, at that enemy's engagement
+range. The numbers are first guesses; enemy mix sets the economy and there are
+no levels yet (task 16), so expect them to move.
 
 ### 12. Sound
 - [ ] Weapon, hit and alert sounds.
@@ -207,9 +217,13 @@ asset lists driven off the same `mapId` switch that picks the wall style.
 ### 15. Difficulty levels
 - [ ] Selectable difficulty.
 
-`enemystats_t` is a per-type table in [enemy.h](enemy.h:59), so scaling enemy
+`enemystats_t` is a per-type table in [enemy.h](enemy.h), so scaling enemy
 health, damage and accuracy is cheap to apply at level load. The menu (task 1)
-is the natural home for the setting.
+is the natural home for the setting. Since the combat pass (task 22) the
+table also carries stagger threshold, wind-up, burst interval and reposition
+chance - accuracy and damage are the two to scale for difficulty, since the
+others define the archetype rather than the threat. The tuned baseline and
+what each number does are in [BALANCE.md](BALANCE.md).
 
 ### 16. More levels
 - [ ] Levels beyond `map/map1.map`.
@@ -220,6 +234,49 @@ so adding a level is: author the ASCII map, add the style case, ship the file.
 Level select (task 1) has nothing to select from until this happens, and it is
 the reason objectives (task 3) and the level exit (task 10) matter.
 `Psion Levels.xlsx` in the repo root appears to be the level design workbook.
+
+### 22. Combat balance and enemy AI
+- [x] Weapon feel, enemy state machine, enemy mobility, tuning, hurt feedback.
+
+Done across 2026-09-11/12, recorded here because it was never a list item and
+the next person should know the ground moved. [BALANCE.md](BALANCE.md) is the
+reference for all of it - numbers, formulas, and placement notes.
+
+Shipped, roughly in order:
+
+- **Weapon feel**: lower/raise on switch, recoil kick, impact markers that
+  persist and land where the round struck, enemy-to-player tracers (XOR on the
+  black plane so they read on any background). Weapon table settled by feel;
+  sweet spots are SMG 1-2 cells, AK47 4-6, pistol 8, LMG everywhere.
+- **AI structure**: every enemy used to be fully suppressed by any weapon (a
+  hit restarted a 0.75s recovery, so nothing ever fired back). Now a flinch
+  pauses an aim rather than resetting it, `staggerDamage` lets a Heavy shrug
+  off SMG and AK rounds, fire is in bursts (`aimTicks` / `attackTicks` /
+  `repositionChance`), evade is only rolled after a hit, a fleeing enemy stays
+  fleeing when hit again, and only the Soldier retreats when the player closes.
+- **Mobility**: enemies are an overlay on their cell (`underCell`), so they
+  walk over pickups and through arches and doorways, see through everything
+  the player can, and open doors by proximity (`doorEnemyNear` - the one bit
+  of door state the game has). Corpses release their cell after ~1.3s.
+- **Fairness**: `SEARCHING` re-checks sight every tick (it had a 4s blind
+  window), and enemies remember an interrupted aim for 2s so micro-peeking
+  does not reset them. The design rule is *no forced damage*: peek shorter
+  than the wind-up, hide longer than the memory, and any room can be taken for
+  zero. Verified by simulation for every weapon against every type.
+- **Tuning**: all three combat types confirmed by feel. Danger anchored on
+  GoldenEye Agent - one Merc ~100s to kill a passive player, Soldier ~60s,
+  Heavy ~28s. `evadeChance` and `fleeChance` are still untouched by design.
+- **Hurt feedback**: `hurtPlayer` owns damage and applies a shove away from
+  the shooter (scaled by damage, allowed past walking speed), a view kick, and
+  a black bar on the screen edge nearest the shooter for three frames. The
+  player-enemy collision test is directional, so an overlap is always
+  escapable.
+
+None of the per-frame additions were measured by ablation on hardware. The
+candidates, if the counter ever moves: the DDA sprite gate changed from
+`!isWall` to `!isSolid` (one mask for another), `doorEnemyNear` per door
+column, the tracer XOR lines, and the impact marker's three-frame life.
+
 ## Development infrastructure
 
 Tooling that makes a change verifiable before it reaches the emulator. The
