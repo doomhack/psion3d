@@ -69,6 +69,8 @@ Useful options:
 | `--map <n>` | load a different level |
 | `--assets <dir>` | read `map/` and `spr/` from somewhere else (or set `PSION3D_ASSETS`) |
 | `--screenshot <file>` | render one frame to a PNG at 1:1 and exit, without opening a window |
+| `--pos <x,y>` | start the player here instead of the map's spawn. Q8 map units (256 per cell), the same numbers the HUD shows, so `7040,384` is cell 27.5,1.5. Warns if the cell is not walkable |
+| `--angle <a>` | start facing this way. Q8 radians as the HUD shows them: `0` looks along +X, `402` is a quarter turn, `1608` a full circle. Either placement option alone keeps the spawn's value for the other |
 | `--frames <n>` | advance *n* ticks on the virtual clock first; deterministic, so it pairs with `--screenshot` |
 | `--fire` | hold the fire key down through the `--frames` loop, so a shot lands and its effect on the map is visible in a headless `--screenshot` |
 | `--use` | hold the use key down through the `--frames` loop, so a switch in reach is thrown and its effect on the map is visible in a headless `--screenshot` |

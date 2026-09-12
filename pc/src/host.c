@@ -98,6 +98,25 @@ void hostClearKeys(void)
 	keys = 0;
 }
 
+/* --------------------------------------------------------------- position */
+
+void hostSetPlayerPosition(short x, short y, short angle)
+{
+	if(!g_started)
+		return;
+
+	player.pos.x = (f16)x;
+	player.pos.y = (f16)y;
+	player.pos.angle = (f16)angle;
+
+	if(!canWalk(fmapCell(player.pos.x, player.pos.y)))
+		fprintf(stderr, "warning: cell %d,%d is not walkable\n",
+		        fp2int(player.pos.x), fp2int(player.pos.y));
+
+	bmClearScreen();
+	draw();
+}
+
 /* ------------------------------------------------------------------ frame */
 
 /*  The mirror of psion3d.c's runTicks(): sample the clock, run the shared

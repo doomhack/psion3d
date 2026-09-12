@@ -43,6 +43,13 @@ void hostShutdown(void);
 void hostSetKey(HostKey k, int down);
 void hostClearKeys(void);           /* on focus loss, so nothing sticks down */
 
+/*  Place the player. All three are Q8 (256 == 1.0), the units the HUD and
+    hostGetStats report, so a position read off the HUD can be typed back in.
+    The angle is Q8 radians and wraps in the trig table. Redraws the frame so
+    a headless --screenshot with no --frames shows the new view. Warns on
+    stderr if the cell is not walkable, but places the player anyway. */
+void hostSetPlayerPosition(short x, short y, short angle);
+
 /*  One frame: catch up whole ticks against the tick counter, then clear,
     draw and unpack. */
 void hostFrame(void);

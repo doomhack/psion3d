@@ -231,19 +231,27 @@ prove more without a human step, and turn the human steps into reading a
 number instead of forming a judgement.
 
 ### 17. Headless PC build
-- [ ] Command-line mode that renders fixed frames to image files without a window.
+- [x] Command-line mode that renders fixed frames to image files without a window.
 
-`hostInit()` / `hostFrame()` / `hostFramebuffer()` in
-[pc/src/host.c](pc/src/host.c) already separate the game from the Qt view, and
-`psion3dFrameImage()` in [pc/src/GameView.cpp](pc/src/GameView.cpp:34) already
-builds a `QImage` from the framebuffer, so this is a CLI over existing pieces:
-`psion3d_pc --map N --pos X,Y --angle A --frames N --out frame.png`. Position
-and angle are Q8 (`fp_types.h`), matching `pos` in `psion3d.h`. Once frames
-can be written to disk, a directory of golden frames for known positions makes
-renderer regressions detectable by comparison rather than by eye, and an agent
-can read the PNG itself before anything goes near the emulator. Optionally
-accept a scripted key sequence (`--keys "fwd:32,fire:1"`) so movement,
-collision and shot resolution can be checked the same way.
+Done. The full line is
+`psion3d_pc --map N --pos X,Y --angle A --frames N --screenshot frame.png`;
+the options are listed in [pc/README.md](pc/README.md). `--pos` and `--angle`
+are Q8, the same numbers the HUD prints, so a view found by walking the window
+build can be reproduced headlessly by typing its HUD readout back in. They go
+through `hostSetPlayerPosition()` in [pc/src/host.c](pc/src/host.c), which
+redraws so a `--screenshot` with no `--frames` shows the placed view, and
+warns on stderr (without refusing) when the cell is not walkable. Either
+option alone keeps the spawn's value for the other. `--fire` and `--use` hold
+those keys through the `--frames` loop.
+
+Checked: `--pos 7040,384 --angle 0` renders byte-identical to the default
+spawn, and a bad value fails before any asset is loaded.
+
+Not done, and worth doing when task 20 wants them: a directory of golden
+frames for known positions, diffed after each build; and a scripted key
+sequence (`--keys "fwd:32,fire:1"`) so movement and collision can be checked
+the same way - today only fire and use can be held, and only for the whole
+loop.
 
 ### 18. DGROUP budget check
 - [ ] Script that reads `PSION3D.MAP` and prints DGROUP used, failing above a threshold.

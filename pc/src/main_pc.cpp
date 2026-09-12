@@ -41,6 +41,13 @@ int main(int argc, char **argv)
 		"Hold the use key down through the --frames loop, so a switch in reach "
 		"is thrown and its effect on the map is visible in a headless "
 		"--screenshot.");
+	QCommandLineOption posOpt("pos",
+		"Start the player at X,Y instead of the map's spawn. Q8 map units "
+		"(256 per cell), as shown on the HUD - so 7040,384 is cell 27.5,1.5.",
+		"x,y");
+	QCommandLineOption angleOpt("angle",
+		"Start facing this angle. Q8 radians, as shown on the HUD: 0 looks "
+		"along +X, 402 is a quarter turn, 1608 is a full circle.", "a");
 	QCommandLineOption verboseOpt({"v", "verbose-io"},
 		"Report every failed file open, including loadSprite's routine probe "
 		"past the last frame of each sprite.");
@@ -53,8 +60,51 @@ int main(int argc, char **argv)
 	parser.addOption(framesOpt);
 	parser.addOption(fireOpt);
 	parser.addOption(useOpt);
+	parser.addOption(posOpt);
+	parser.addOption(angleOpt);
 	parser.addOption(verboseOpt);
 	parser.process(app);
+
+	/*  Parse the placement before hostInit so a typo fails without loading
+	    assets. Both are Q8, matching player.pos, so a value read off the HUD
+	    reproduces the same view. */
+	bool placePlayer = false;
+	int posX = 0, posY = 0, angle = 0;
+
+	if(parser.isSet(posOpt))
+	{
+		const QStringList xy = parser.value(posOpt).split(',');
+		bool okX = false, okY = false;
+
+		if(xy.size() == 2)
+		{
+			posX = xy[0].trimmed().toInt(&okX);
+			posY = xy[1].trimmed().toInt(&okY);
+		}
+
+		if(!okX || !okY)
+		{
+			std::fprintf(stderr, "--pos wants X,Y in Q8 map units, e.g. 7040,384\n");
+			return 1;
+		}
+
+		placePlayer = true;
+	}
+
+	if(parser.isSet(angleOpt))
+	{
+		bool ok = false;
+
+		angle = parser.value(angleOpt).toInt(&ok);
+
+		if(!ok)
+		{
+			std::fprintf(stderr, "--angle wants a Q8 radian value, e.g. 402\n");
+			return 1;
+		}
+
+		placePlayer = true;
+	}
 
 	if(parser.isSet(verboseOpt))
 		pcSetIoVerbose(1);
@@ -80,6 +130,25 @@ int main(int argc, char **argv)
 	{
 		std::fprintf(stderr, "hostInit failed.\n");
 		return 1;
+	}
+
+	if(placePlayer)
+	{
+		/* Either option alone keeps the spawn's value for the other. */
+		HostStats spawn;
+
+		hostGetStats(&spawn);
+
+		if(!parser.isSet(posOpt))
+		{
+			posX = spawn.playerX;
+			posY = spawn.playerY;
+		}
+
+		if(!parser.isSet(angleOpt))
+			angle = spawn.playerAngle;
+
+		hostSetPlayerPosition((short)posX, (short)posY, (short)angle);
 	}
 
 	if(parser.isSet(fireOpt))
