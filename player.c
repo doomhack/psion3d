@@ -11,10 +11,22 @@ player_t player = {0};
 
 const weapon_t weapons[] = 
 {
-	{24, 40, 240, 0, SPRITE_SLOT_PISTOL, 35, 96}, //Pistol
-	{6, 15, 160, 0, SPRITE_SLOT_SMG, 35, 96}, //SMG
-	{8, 16, 208, 1, SPRITE_SLOT_AR, 35, 96}, //AR
-	{5, 20, 192, 2, SPRITE_SLOT_LMG, 35, 96}, //LMG
+	{24, 40, 240, AMMO_TYPE_NONE, SPRITE_SLOT_PISTOL, 35, 96}, //Pistol
+	{6, 15, 160, AMMO_TYPE_SMG, SPRITE_SLOT_SMG, 35, 96}, //SMG
+	{8, 16, 208, AMMO_TYPE_AR, SPRITE_SLOT_AR, 35, 96}, //AR
+	{5, 20, 192, AMMO_TYPE_LMG, SPRITE_SLOT_LMG, 35, 96}, //LMG
+};
+
+/* Pickup is twice what it costs to kill the enemy that drops that weapon at
+   its own engagement range (Merc 5 SMG rounds, Soldier 10 AK, Heavy 13 LMG),
+   so a disciplined kill banks half a pickup for spending elsewhere and a
+   sprayer breaks even. Caps are deliberately loose until there are real
+   levels to tune against - enemy mix decides this, and there isn't one yet. */
+const ammotype_t ammoTypes[] =
+{
+	{10, 90},  //SMG
+	{20, 120}, //AR
+	{30, 160}, //LMG
 };
 
 
@@ -202,6 +214,21 @@ static f16 dampMomentum(const f16 value)
 	return damped;
 }
 
+void giveAmmo(const u8 ammoType)
+{
+	u16 rounds;
+
+	if(ammoType == AMMO_TYPE_NONE)
+		return;
+
+	rounds = player.ammo[ammoType] + ammoTypes[ammoType].pickup;
+
+	if(rounds > ammoTypes[ammoType].cap)
+		rounds = ammoTypes[ammoType].cap;
+
+	player.ammo[ammoType] = (u8)rounds;
+}
+
 /* Begin lowering the current weapon so that index can be raised in its place.
    Retargeting part way through simply changes what comes back up. */
 void selectWeapon(const u8 index)
@@ -295,15 +322,30 @@ static void updatePlayerWeapon(u16 keys)
 		//No firing while the weapon is off screen being swapped.
 		if(keys & KEY_FIRE)
 		{
-			player.weaponState.shootCooldown = player.currentWeapon->fireDelay;
-			player.weaponState.weaponSpriteId = (player.currentWeapon->weaponSprite << 3) | 1;
-			player.weaponState.shootFrames = WEAPON_FLASH_TICKS;
-			player.weaponState.shotSpan = getShotSpan(player.currentWeapon->accuracy);
-			player.weaponState.shotPending = TRUE;
-			player.weaponState.recoilOffset = WEAPON_RECOIL_KICK;
+			const u8 ammoType = player.currentWeapon->ammoType;
 
-			//Gunfire gives the player away, whether or not the round hits.
-			alertEnemies((u8)fp2int(player.pos.x), (u8)fp2int(player.pos.y));
+			if(ammoType != AMMO_TYPE_NONE && player.ammo[ammoType] == 0)
+			{
+				/* Dry. Fall back to the pistol, which never runs out. The
+				   switch animation inhibits fire until it is up, so a held
+				   trigger cannot bounce through here every tick. */
+				selectWeapon(WEAPON_PISTOL);
+			}
+			else
+			{
+				if(ammoType != AMMO_TYPE_NONE)
+					player.ammo[ammoType]--;
+
+				player.weaponState.shootCooldown = player.currentWeapon->fireDelay;
+				player.weaponState.weaponSpriteId = (player.currentWeapon->weaponSprite << 3) | 1;
+				player.weaponState.shootFrames = WEAPON_FLASH_TICKS;
+				player.weaponState.shotSpan = getShotSpan(player.currentWeapon->accuracy);
+				player.weaponState.shotPending = TRUE;
+				player.weaponState.recoilOffset = WEAPON_RECOIL_KICK;
+
+				//Gunfire gives the player away, whether or not the round hits.
+				alertEnemies((u8)fp2int(player.pos.x), (u8)fp2int(player.pos.y));
+			}
 		}
 	}
 
@@ -332,6 +374,9 @@ void initPlayer()
 
 	player.weaponsOwned = 0; //Only the pistol is free; the rest are pickups.
 	player.items = 0;
+	player.ammo[AMMO_TYPE_SMG] = 0;
+	player.ammo[AMMO_TYPE_AR] = 0;
+	player.ammo[AMMO_TYPE_LMG] = 0;
 	player.currentWeapon = &weapons[WEAPON_PISTOL];
 	player.weaponState.shootCooldown = 0;
 	player.weaponState.shootFrames = 0;

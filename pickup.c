@@ -3,11 +3,14 @@
 #include "game_map.h"
 #include "player.h"
 
-/* Grant a weapon the player does not already carry. Raising it only on the
-   first one of its kind means a second MP5 lying in a corridor tops up the
-   ownership bit without yanking a better gun out of the player's hands. */
+/* Every weapon pickup is also that weapon's ammo, so the pool is topped up
+   on each one. The weapon itself is granted and raised only on the first of
+   its kind, so a second MP5 lying in a corridor refills without yanking a
+   better gun out of the player's hands. */
 static void giveWeapon(const u8 index)
 {
+	giveAmmo(weapons[index].ammoType);
+
 	if(player.weaponsOwned & (1 << index))
 		return;
 

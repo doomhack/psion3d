@@ -17,12 +17,29 @@
 #define WEAPON_SWITCH_LOWERING 1
 #define WEAPON_SWITCH_RAISING 2
 
+/* Ammo pools. Each weapon draws from its own; nothing is shared. The pistol
+   has no pool at all and never runs dry - it is the floor the player falls
+   back to when anything else is empty. */
+#define AMMO_TYPE_SMG 0
+#define AMMO_TYPE_AR 1
+#define AMMO_TYPE_LMG 2
+#define AMMO_TYPE_COUNT 3
+#define AMMO_TYPE_NONE 0xff //Infinite.
+
+typedef struct ammotype_t
+{
+	u8 pickup; //Rounds a weapon pickup of this type adds.
+	u8 cap; //Most the player can carry.
+} ammotype_t;
+
+extern const ammotype_t ammoTypes[];
+
 typedef struct weapon_t
 {
 	u8 fireDelay; //Ticks between sucessive fire rounds.
 	u8 damage; //Damge dealt.
 	u8 accuracy; //0..255 chance of hitting.
-	u8 ammoType; //Index of ammo type.
+	u8 ammoType; //AMMO_TYPE_* pool this weapon draws from, or AMMO_TYPE_NONE.
 	u8 weaponSprite; //Sprite Slot.
 	u8 spanX; //X Spand to draw sprite.
 	u8 y; //Y pos to draw sprite.
@@ -65,6 +82,7 @@ typedef struct player_t
 	u8 items; //bitmask of PLAYER_ITEM_* held.
 	u8 hitFlash; //Frames left of the hurt border.
 	u8 hitDir; //PLAYER_HIT_* edge to paint it on.
+	u8 ammo[AMMO_TYPE_COUNT]; //Rounds carried per pool.
 
 } player_t;
 
@@ -78,5 +96,8 @@ void updatePlayer(u16 keys);
    them, a jolt to the view, and a flash on the edge of the screen they are on. */
 void hurtPlayer(const u8 damage, const f16 fromX, const f16 fromY);
 void selectWeapon(const u8 index);
+
+/* Add one pickup's worth to a pool, up to its cap. AMMO_TYPE_NONE is ignored. */
+void giveAmmo(const u8 ammoType);
 
 #endif

@@ -16,8 +16,9 @@ untouched: `evadeChance` and `fleeChance`, which should be judged in play before
 The danger reference is Goldeneye 007 on Agent: one guard takes ~100s to kill a passive player from
 full health, two take ~50s. The Merc is anchored there; the Soldier and Heavy halve it per tier.
 
-Ammo is not yet implemented (see TASKS.md); when it lands the pistol is infinite and the SMG, AK47
-and LMG each get their own pool.
+**Ammo** landed 2026-09-12: the pistol is infinite; the SMG, AK47 and LMG each have their own pool,
+refilled only by the weapon pickup an enemy of the matching type drops. Pickup sizes and caps are
+first guesses and expected to move once there are levels to play — enemy mix decides the economy.
 
 ## Units
 
@@ -91,18 +92,58 @@ The clearest picture of the spray-and-pray tax.
 | AK47 | 3.8s | 3.8s | 3.8s | 3.8s | 6.4s |
 | LMG | 1.9s | 1.9s | 1.9s | 2.7s | 4.6s |
 
-### Rounds expended per kill (for when ammo lands)
+## Ammo
 
-Hits needed ÷ hit chance. The SMG spends 2.5× the pistol's rounds even point-blank, ~9× at 8 cells.
+Source: `ammoTypes[]` in [player.c](player.c) — `{pickup, cap}` per pool — and `ammoType` on each
+weapon. Rules:
 
-| Target | Weapon | 1–2 cells | 4 cells | 6 cells | 8 cells |
-| --- | --- | --- | --- | --- | --- |
-| Merc | SMG | 5 | 8 | 11 | 18 |
-| | Pistol | 2 | 2 | 2 | 2 |
-| Soldier | SMG | 10 | 16 | 22 | 37 |
-| | Pistol | 4 | 4 | 4 | 4 |
-| Heavy | SMG | 17 | 27 | 37 | 62 |
-| | Pistol | 7 | 7 | 7 | 7 |
+- The **pistol never runs out.** It is the floor the player falls back to; running anything else
+  dry is a downgrade, never a dead end.
+- Every other weapon draws from **its own pool**. Nothing is shared.
+- The **only source** of ammo is the weapon pickup a dead enemy leaves: Merc → MP5, Soldier → AK47,
+  Heavy → M249. Every pickup of a weapon refills that weapon's pool, whether or not the player
+  already carries it. So each pool is a closed loop with one enemy type.
+- **Firing an empty weapon switches to the pistol** (through the normal lower/raise). Selecting an
+  empty weapon is allowed; the first trigger pull swaps back. Until there is a HUD, that swap is the
+  only signal a pool is dry.
+
+| Pool | Pickup | Cap | Dropper | Dropper costs (at its band) | Net per disciplined kill | Dropper kills to fill cap |
+| --- | --- | --- | --- | --- | --- | --- |
+| SMG | 10 | 90 | Merc | 5 | +5 | 18 |
+| AK47 | 20 | 120 | Soldier | 10 | +10 | 12 |
+| LMG | 30 | 160 | Heavy | 13 | +17 | 10 |
+
+Sizing rule: **pickup = 2× what it costs to kill the enemy that drops it, at that enemy's engagement
+range.** A disciplined player banks half of every pickup for spending that weapon on something
+else; a sprayer at range breaks even. The caps are deliberately loose — at present they cannot bind
+without a level heavy in one enemy type — because the mix is what will set them and there are no
+levels yet.
+
+### Rounds per kill, by weapon and range
+
+Hits needed ÷ hit chance, centred aim. Pistol and AK47 are flat to 6 cells; the SMG is the only
+weapon whose ammo cost depends on discipline. The **band** column is the range that enemy opens
+fire at, which is where fights actually happen. Overkill on the final round is under 10% for every
+pairing, so these are honest.
+
+| Target | Weapon | 1–2 cells | 4 cells | 6 cells | 8 cells | **at its band** |
+| --- | --- | --- | --- | --- | --- | --- |
+| Merc (2 cells) | Pistol | 2 | 2 | 2 | 2 | **2** |
+| | SMG | 5 | 8 | 11 | 18 | **5** |
+| | AK47 | 5 | 5 | 5 | 8 | **5** |
+| | LMG | 4 | 4 | 6 | 9 | **4** |
+| Soldier (3 cells) | Pistol | 4 | 4 | 4 | 4 | **4** |
+| | SMG | 10 | 16 | 22 | 37 | **12** |
+| | AK47 | 10 | 10 | 10 | 17 | **10** |
+| | LMG | 8 | 8 | 11 | 19 | **8** |
+| Heavy (4 cells) | Pistol | 7 | 7 | 7 | 7 | **7** |
+| | SMG | 17 | 27 | 37 | 62 | **27** |
+| | AK47 | 16 | 16 | 16 | 27 | **16** |
+| | LMG | 13 | 13 | 18 | 30 | **13** |
+
+Two things the table leaves out, both arguing for erring generous when the numbers are revisited:
+real aim error adds misses on top of the spread model, and rounds spent on an enemy that does not
+drop that weapon never come back as that weapon's ammo.
 
 ## Enemies
 
@@ -271,3 +312,11 @@ for every type). Evade is **only** rolled after a hit; approaches are now the sh
   arrival — and a player who wants to hold a door shut must not stand next to it.
 - **Choke points are temporary.** A kill in a corridor blocks the enemies behind it for ~1.3s, then
   the body clears and the weapon drops. It buys a beat, not a barricade.
+- **Every enemy needs a retreat.** Careful play must be able to take any room for zero damage (see
+  the Enemies section): peek shorter than the wind-up, hide longer than the 2s aim memory. That
+  needs a position with line of sight to the enemy *and* a step out of it. A dead-end room with the
+  Heavy between the player and the door has no such position and breaks the rule.
+- **Enemy mix is the ammo economy.** SMG ammo only comes from Mercs, AK from Soldiers, LMG from
+  Heavies. A stretch of Soldiers with no Mercs drains the SMG with nothing to refill it; a Heavy
+  gauntlet with no Soldiers leaves the AK dry. Mixing types is what keeps the player switching
+  weapons — and the pistol is the reason a bad mix is slow rather than fatal.
