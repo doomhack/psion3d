@@ -40,13 +40,13 @@ static void panelSeams(s16 x, s16 y, s16 h, const wallhit_t* hit)
 }
 
 /* Prefabricated concrete panels: a dark cornice along the ceiling line, a
-   stripe group at eye height, vent boxes along the skirting, and a soft joint
+   stripe group at eye height, a dark skirting, and a one pixel joint
    between panels. In span calls per column, which is what wall cost is:
 
      depth >= WALL_DETAIL_DEPTH  flat                          1
      depth >= LAB_PANEL_NEAR     base, cornice, one dark band  3
-     nearer                      base, cornice, two stripes    4, plus a vent
-                                                                 on 3/4 of columns
+     nearer                      base, cornice, two stripes,   5
+                                 skirting
      joint column                the above, plus a 1 pixel     +1, one column
                                  line                          per joint
 
@@ -62,8 +62,6 @@ static void panelSeams(s16 x, s16 y, s16 h, const wallhit_t* hit)
    swim between columns as the player moves, which is the point of carrying
    the footprint at all. */
 
-#define PANEL_VENT_PITCH 32 /* one vent box and one gap, in wallX units */
-#define PANEL_VENT_W 24     /* the box; the gap is the rest of the pitch */
 #define PANEL_JOINT 128     /* face position of the mid cell joint; the other is the cell edge */
 
 /* The last joint drawn, as a place on the map rather than a wallX, so that the
@@ -122,16 +120,11 @@ static u16 drawConcretePanels(s16 x, s16 y, s16 h, const wallhit_t* hit)
 #endif
 
 #if LAB_PANEL_VENTS
-	/* The call is skipped only when the column's whole footprint lies in the
-	   gap between two boxes, so the row stays continuous however coarsely the
-	   face is sampled, and the gaps show where the columns are fine enough to
-	   resolve them. */
-	{
-		s16 phase = (u16)(hit->f_wallX - hit->f_wallXHalf) & (PANEL_VENT_PITCH - 1);
-
-		if(phase < PANEL_VENT_W || phase + hit->f_wallXHalf + hit->f_wallXHalf > PANEL_VENT_PITCH)
-			bmFillRect4(x, y + h - band, band, blackBm);
-	}
+	/* Skirting. This began as a row of vent boxes with gaps gated on the
+	   footprint, but a gap of 8 wallX is narrower than a column's footprint
+	   beyond about a cell, so the gaps only ever showed up close and every
+	   column paid the test. A plain band is the same call without it. */
+	bmFillRect4(x, y + h - band, band, blackBm);
 #endif
 
 #if LAB_PANEL_SEAMS

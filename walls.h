@@ -16,12 +16,14 @@
    5.6ms per frame, about 2.6x the per row cost of the full height grey span
    they sat on, because the call and its clip preamble outweigh the rows they
    write. Set any of these to 0 to ablate that element and read the fps
-   counter. The seams and vents are gated on the column's footprint on the
-   face, so most columns pay nothing for them.
+   counter. The seams are gated on the column's footprint on the face, so
+   most columns pay nothing for them.
 
    Measured on hardware, map 1, each element alone against a 20fps baseline
    with all four off: cornice 20 (it replaced the old top band one for one),
-   stripes 19, vents 19.5, seams 19.5 with LAB_PANEL_JOINT_HALF at 16. The
+   stripes 19, skirting 19.5 (as gated vent boxes; the gaps were narrower
+   than a footprint beyond a cell, so it became a plain band), seams 19.5
+   with LAB_PANEL_JOINT_HALF at 16. The
    seams were 15 through bmFillRect (a fillSpan call per row) and 19 through
    bmFillCol1 with no footprint cutoff, when grazing corridor walls put a
    joint in nearly every column; unrolling the wallSpans() tests changed
@@ -30,7 +32,7 @@
 #define LAB_PANEL_CORNICE 0 /* dark band along the ceiling line */
 #define LAB_PANEL_STRIPES 1 /* stripe group at eye height */
 #define LAB_PANEL_SEAMS 1   /* one pixel joint between panels, two per cell */
-#define LAB_PANEL_VENTS 1   /* vent boxes along the skirting */
+#define LAB_PANEL_VENTS 1   /* dark skirting band */
 
 /* Widest column footprint, as f_wallXHalf, that still draws a panel joint.
    Joints are 128 wallX apart, so at a half width of 16 they are four columns
