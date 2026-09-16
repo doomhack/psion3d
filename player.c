@@ -31,11 +31,16 @@ const ammotype_t ammoTypes[] =
 
 
 #define PLAYER_MOVE_SPEED_MPS flt2fp(4.0f)
+#define PLAYER_STRAFE_SPEED_MPS flt2fp(3.0f)
 #define PLAYER_TURN_SPEED_RADPS flt2fp(2.0f)
 
+/* Strafe is 3/4 of walk, so the strafe-run diagonal is a 3-4-5 triangle:
+   5 m/s, 1.25x walking speed. */
 #define PLAYER_MOVE_TICK FP_METERS_PER_SECOND_TO_MAP_TICK(PLAYER_MOVE_SPEED_MPS)
+#define PLAYER_STRAFE_TICK FP_METERS_PER_SECOND_TO_MAP_TICK(PLAYER_STRAFE_SPEED_MPS)
 #define PLAYER_TURN_TICK FP_RADIANS_PER_SECOND_TO_TICK(PLAYER_TURN_SPEED_RADPS)
 #define PLAYER_MOVE_IMPULSE (PLAYER_MOVE_TICK >> 1)
+#define PLAYER_STRAFE_IMPULSE (PLAYER_STRAFE_TICK >> 1)
 #define PLAYER_TURN_IMPULSE (PLAYER_TURN_TICK >> 1)
 #define PLAYER_MOMENTUM_DAMPING flt2fp(0.33f)
 #define PLAYER_AIM_SPAN 30
@@ -70,6 +75,7 @@ const ammotype_t ammoTypes[] =
 #define PLAYER_HIT_FLASH_FRAMES 3
 
 static f16 f_moveVel = 0;
+static f16 f_strafeVel = 0;
 static f16 f_turnVel = 0;
 static u16 shotRand = 0x6d2b;
 
@@ -192,6 +198,11 @@ static void tryUse(void)
 static void addMoveImpulse(const f16 amount)
 {
 	f_moveVel = clampFp(f_moveVel + amount, -PLAYER_MOVE_TICK, PLAYER_MOVE_TICK);
+}
+
+static void addStrafeImpulse(const f16 amount)
+{
+	f_strafeVel = clampFp(f_strafeVel + amount, -PLAYER_STRAFE_TICK, PLAYER_STRAFE_TICK);
 }
 
 static void addTurnImpulse(const f16 amount)
@@ -369,6 +380,7 @@ void initPlayer()
 	player.pos.angle = 0;
 	player.health = 100;
 	f_moveVel = 0;
+	f_strafeVel = 0;
 	f_turnVel = 0;
 	useHeld = FALSE;
 
@@ -460,14 +472,32 @@ void updatePlayer(u16 keys)
 		f_moveVel = dampMomentum(f_moveVel);
 	}
 
+	if(keys & (KEY_STRAFE_LEFT | KEY_STRAFE_RIGHT))
+	{
+		if(keys & KEY_STRAFE_LEFT)
+			addStrafeImpulse(-PLAYER_STRAFE_IMPULSE);
+
+		if(keys & KEY_STRAFE_RIGHT)
+			addStrafeImpulse(PLAYER_STRAFE_IMPULSE);
+	}
+	else
+	{
+		f_strafeVel = dampMomentum(f_strafeVel);
+	}
+
 	player.pos.angle += f_turnVel;
 
 	/* With no velocity dx and dy are both zero and tryMove cannot change the
 	   position, so skip it along with its two enemy list scans. */
-	if(f_moveVel != 0)
+	if(f_moveVel != 0 || f_strafeVel != 0)
 	{
-		dx = fpmul(fpcos(player.pos.angle), f_moveVel);
-		dy = fpmul(fpsin(player.pos.angle), f_moveVel);
+		const f16 f_cos = fpcos(player.pos.angle);
+		const f16 f_sin = fpsin(player.pos.angle);
+
+		/* Right of the facing is (-sin, cos), the frame hurtPlayer and
+		   projectSprite use, so a positive strafe velocity moves right. */
+		dx = fpmul(f_cos, f_moveVel) - fpmul(f_sin, f_strafeVel);
+		dy = fpmul(f_sin, f_moveVel) + fpmul(f_cos, f_strafeVel);
 
 		tryMove(dx, dy);
 

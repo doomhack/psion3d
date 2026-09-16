@@ -192,7 +192,7 @@ without moving the fps counter, then decide how far to take it. Treat any cost
 estimate as a guess until measured.
 
 ### 13. Control scheme
-- [ ] Strafing and a menu/pause key. ~~A use key.~~
+- [ ] A menu/pause key. ~~A use key.~~ ~~Strafing.~~
 
 The use key is done: `KEY_USE` is bit 9 of the `keys` mask, read from
 `kbScan[4] & 0x1` (the device spacebar) in [psion3d.c](psion3d.c), and space or
@@ -201,9 +201,20 @@ once per catch-up tick against one input sample a frame, so a held key would
 otherwise fire several times in a frame. Today it throws switches; doors still
 open on approach on their own.
 
-`KEY_11` through `KEY_16` in [psion3d.h](psion3d.h) are still defined and
-unbound. Strafing and a pause/menu key (needed by task 1) want scancodes in
-[psion3d.c](psion3d.c) and matching keys on the PC host.
+Strafing is done: `KEY_STRAFE_LEFT` and `KEY_STRAFE_RIGHT` are bits 10 and 11,
+read from `,` (`kbScan[3] & 0x2`) or A (`kbScan[6] & 0x4`) and `.`
+(`kbScan[7] & 0x10`) or D (`kbScan[5] & 0x10`) on the device. W
+(`kbScan[6] & 0x20`) and S (`kbScan[6] & 0x10`) double the up/down arrows, so
+WASD moves and strafes while the arrows move and turn, on device and PC alike. [player.c](player.c) keeps a separate
+`f_strafeVel` with the same impulse/damping model as `f_moveVel` but capped at
+3 m/s against the 4 m/s walk, and combines both into one `tryMove` along the
+facing and its right vector `(-sin, cos)`. Diagonal movement is deliberately
+not normalised: forward plus strafe is a 3-4-5 triangle, 5 m/s or 1.25x
+walking speed - the classic strafe-run. Keep it.
+
+`KEY_13` through `KEY_16` in [psion3d.h](psion3d.h) are still defined and
+unbound. A pause/menu key (needed by task 1) wants a scancode in
+[psion3d.c](psion3d.c) and a matching key on the PC host.
 
 ### 14. Per-level asset loading
 - [ ] Load only the sprites a level actually uses.

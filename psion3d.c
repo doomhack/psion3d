@@ -60,7 +60,8 @@ static void updateKeys()
 
 	p_getscancodes(kbScan);
 
-	if(kbScan[7] & 0x20)
+	//Arrows move and turn; W/S move and A/D strafe, as on the PC host.
+	if((kbScan[7] & 0x20) || (kbScan[6] & 0x20))
 		keys |= KEY_UP;
 
 	if(kbScan[2] & 0x80)
@@ -69,7 +70,7 @@ static void updateKeys()
 	if(kbScan[4] & 0x1)
 		keys |= KEY_USE;
 
-	if(kbScan[0] & 0x20)
+	if((kbScan[0] & 0x20) || (kbScan[6] & 0x10))
 		keys |= KEY_DOWN;
 
 	if(kbScan[0] & 0x10)
@@ -89,6 +90,12 @@ static void updateKeys()
 
 	if(kbScan[4] & 0x4)
 		keys |= KEY_WEAPON_4;
+
+	if((kbScan[3] & 0x2) || (kbScan[6] & 0x4))
+		keys |= KEY_STRAFE_LEFT;
+
+	if((kbScan[7] & 0x10) || (kbScan[5] & 0x10))
+		keys |= KEY_STRAFE_RIGHT;
 }
 
 static u16 runTicks(u16 gameTime)

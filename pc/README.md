@@ -56,8 +56,9 @@ set PATH=C:\Qt\6.9.1\mingw_64\bin;%PATH%
 pc\build\psion3d_pc.exe
 ```
 
-Arrows or WASD move, Ctrl or Return fires, space or E is the use key, 1-4 select
-weapons, P pauses. Space is the use key on the device too (`kbScan[4] & 0x1`),
+Arrows move and turn, W/S move and A/D strafe (as do `,` and `.`, matching the
+device), Ctrl or Return fires, space or E is the use key, 1-4 select weapons,
+P pauses. Space is the use key on the device too (`kbScan[4] & 0x1`),
 which is why it no longer fires here. Assets are read from the working tree's
 `map/` and `spr/`, so an edited sprite shows up on the next run without
 deploying anything.

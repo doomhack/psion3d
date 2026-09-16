@@ -23,14 +23,14 @@
 #include <string.h>
 
 /*  HostKey -> KEY_*. The device reaches the same bitmask by reading a raw
-    10-word hardware key matrix with p_getscancodes and testing nine bits
-    (psion3d.c:49-83). The matrix is transport, not behaviour: `keys` is the
-    real seam, and it is what updatePlayer() consumes. */
+    10-word hardware key matrix with p_getscancodes and testing one bit per
+    key (updateKeys in psion3d.c). The matrix is transport, not behaviour:
+    `keys` is the real seam, and it is what updatePlayer() consumes. */
 static const u16 g_keyBits[HOST_KEY_COUNT] =
 {
 	KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_FIRE,
 	KEY_WEAPON_1, KEY_WEAPON_2, KEY_WEAPON_3, KEY_WEAPON_4,
-	KEY_USE
+	KEY_USE, KEY_STRAFE_LEFT, KEY_STRAFE_RIGHT
 };
 
 static u16 g_gameTime = 0;
