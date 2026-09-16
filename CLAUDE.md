@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `TASKS.md` is the project task list - planned features and their current state. Check it before starting new work, and tick items off there as they land.
 
-`MEMORY_BUDGET.md` is the measured memory breakdown - near data (DGROUP) is the binding limit at ~65% of 64 KB, not the 512 KB system total. Check it before adding a global array, and refresh it with the recipe at its end when you do.
+`MEMORY_BUDGET.md` is the measured memory breakdown - near data (DGROUP) is the binding limit at ~65% of 64 KB, not the 512 KB system total. Check it before adding a global array, and run `.\tools\memcheck.bat` after the build to see the numbers and the delta (`-Baseline old.MAP` names the regions that moved; `-Record "note"` appends the history row).
 
 ## What this is
 
@@ -24,7 +24,7 @@ A Wolfenstein-style raycaster for the Psion 3a/3c/3mx (SIBO), written in C89 aga
 
 There is also a native development build — see `pc/README.md`. It compiles the portable modules against replacement SDK headers and hosts them in a Qt window, so the renderer can be debugged with breakpoints instead of an emulator. It does not replace on-device testing, and its frame rate means nothing: performance is still measured on hardware.
 
-There is no automated test suite and no lint step. Verification means building, running `PSION3D.IMG` in an emulator or on device, and eyeballing rendering, movement, sprite occlusion, and map boundaries.
+There is no unit-test suite and no lint step. **After any code change, run `.\tools\verify.bat`** (the `/verify` skill explains the output): it does the DOSBox build, hashes `PSION3D.IMG` against the previous build, runs the DGROUP check with per-region deltas, builds the PC host and diffs the golden frames in `golden/` — about 15 seconds. A refactor must leave the image unchanged and every frame matching; a rendering change should be looked at in `.verify\frames\` and then accepted with `-UpdateGolden`. What it cannot check - feel, sprite occlusion in motion, performance - still means running `PSION3D.IMG` in an emulator or on device.
 
 **The toolchain is 16-bit DOS**, so it runs under DOSBox (installed at `C:\Program Files (x86)\DOSBox-0.74-3`). Its configured mounts are `C:` = `E:\dosroot` (SIBOSDK + TopSpeed) and `D:` = this repo, so a headless build is:
 

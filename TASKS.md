@@ -115,9 +115,12 @@ Notes for whoever touches this next:
 - `WALL_TYPE_LOCKED_DOOR` had no case in [walls.c](walls.c) at all and drew as a
   blank occluding column. `drawWallD` is now `drawWallDoorGap` plus two
   wrappers, the same shape `labwall.c` already had.
-- [map/map2.map](map/map2.map) is a showcase corridor holding one run of every
-  type. Nothing loads it - `main()` calls `loadMap(1)` - so change that line to
-  see it, and delete the file when it has served its purpose.
+- [map/map99.map](map/map99.map) is a showcase corridor holding one run of every
+  type, numbered out of the way so `map2` onward are free for real levels.
+  Nothing loads it on the device - `main()` calls `loadMap(1)` - so change
+  that line to see it, or `psion3d_pc --map 99`. Two golden views in
+  [golden/views.txt](golden/views.txt) render it, so keep the file: it is the
+  only map that exercises every wall type.
 - Costs were not measured on hardware. The types that add full-width spans
   (`SHELF`, `LIGHT`) are the ones to watch on the fps counter.
 
@@ -315,22 +318,32 @@ those keys through the `--frames` loop.
 Checked: `--pos 7040,384 --angle 0` renders byte-identical to the default
 spawn, and a bad value fails before any asset is loaded.
 
-Not done, and worth doing when task 20 wants them: a directory of golden
-frames for known positions, diffed after each build; and a scripted key
-sequence (`--keys "fwd:32,fire:1"`) so movement and collision can be checked
-the same way - today only fire and use can be held, and only for the whole
-loop.
+The golden frames landed with task 20 (`golden/`, diffed by
+`tools\verify.bat`). Still not done: a scripted key sequence
+(`--keys "fwd:32,fire:1"`) so movement and collision can be checked the same
+way - today only fire and use can be held, and only for the whole loop.
 
 ### 18. DGROUP budget check
-- [ ] Script that reads `PSION3D.MAP` and prints DGROUP used, failing above a threshold.
+- [x] Script that reads `PSION3D.MAP` and prints DGROUP used, failing above a threshold.
 
-The recipe is at the end of [MEMORY_BUDGET.md](MEMORY_BUDGET.md): `__bss_end`
-relative to the DGROUP segment paragraph. A PowerShell script that parses the
-map after a build and prints used / free / limit, with a non-zero exit above
-a configurable line (say 48 KB of the 64 KB), turns the memory rule of thumb
-into a gate that runs after every build. Should also append a row to the
-history table in `MEMORY_BUDGET.md` on request, so the table stops being
-hand-maintained.
+Done. `.\tools\memcheck.bat` parses the linker map after a build and prints
+`_TEXT`, DGROUP (used, % of 64 KB, bytes to the limit) and the far sprite
+total, each with its delta against the last row of the history table in
+[MEMORY_BUDGET.md](MEMORY_BUDGET.md), then the DGROUP segment breakdown
+(`_CONST` / `_DATA` / `_BSS`). Exit 1 above the limit (`-Limit`, default
+48 KB), exit 2 if the map is missing, so task 20 can gate on it.
+
+To see what a change cost, copy `PSION3D.MAP` before it and run
+`memcheck -Baseline old.MAP` after: the deltas move to the saved map and the
+report adds every DGROUP region that changed size, attributed to the public
+symbol it starts at (statics fold into the region after the preceding
+public, as in the doc). `-Record "note"` appends today's row to the history
+table in the file's own line endings.
+
+Checked by adding a referenced 1,000-byte global: `_BSS` +1,000, DGROUP
++1,008 (paragraph alignment), the region named as `_memcheckProbe`. An
+*unreferenced* global links to nothing and shows no delta, which is the
+linker's smart linking, not a script bug.
 
 ### 19. Benchmark mode
 - [ ] Build-time `#define` that spawns at the fixed measurement position and reports average fps.
@@ -345,16 +358,42 @@ message. The position and angle should be written down once here so the
 numbers in `CLAUDE.md` stay comparable across sessions.
 
 ### 20. One-shot verify script
-- [ ] A single command that builds, hashes, checks DGROUP, and builds the PC host.
+- [x] A single command that builds, hashes, checks DGROUP, and builds the PC host.
 
-Runs the DOSBox build, reports errors from `build.log`, hashes `PSION3D.IMG`
-and compares to the previous run (unchanged = refactor-safe, changed = expected
-for features), runs the DGROUP check (task 18), and builds the PC target. Once
-task 17 exists, also renders the golden frames and diffs them. Intended to be
-wired up as a project skill under `.claude/` so it runs after every change
-without being asked. Note the DOSBox mount is pinned to this directory, so
-only one build can run at a time; the script should fail fast if `build.log`
-is locked rather than queue.
+Done. `.\tools\verify.bat` runs the ladder in about 15 seconds and prints one
+`[OK]` / `[FAIL]` / `[SKIP]` / `[WARN]` line per rung: DOSBox build with
+`Error` and `Warning` lines read back from `build.log` (a missing
+`PSION3D.EXE` also counts as failure, since `tsc` deletes it), `PSION3D.IMG`
+hash against the build before this one (`unchanged - refactor-safe` or
+`CHANGED`), `memcheck` with the previous `PSION3D.MAP` as `-Baseline` so a
+grown region is named, CMake build of the PC host (configured on first run
+from the recipe in `pc/README.md`), and the golden frames. Exit 0 pass, 1
+fail, 3 already running: one instance at a time, held by an exclusive lock on
+`%TEMP%\psion3d-verify.lock` and a share-check on `build.log`, failing fast
+as asked. Working files live in `.verify/` (gitignored).
+
+Golden frames are the piece task 17 left open. [golden/views.txt](golden/views.txt)
+lists a name and `psion3d_pc` arguments per view; the script renders each
+headlessly and compares pixels with `golden/<name>.png`, reporting the count
+and bounding box of any difference and leaving the rendered frame in
+`.verify/frames/`. `-UpdateGolden` accepts the rendered frames. Four views
+ship: map 1 spawn (lab style), map 1 two ticks into a shot (muzzle flash and
+impact marker), and two of the `map99` showcase corridor (default style, every
+wall type). Renders are deterministic - checked with 200 ticks of AI and with
+fire held, twice each.
+
+Wired up as the `/verify` skill in [.claude/skills/verify/SKILL.md](.claude/skills/verify/SKILL.md),
+and `CLAUDE.md` now says to run it after every change.
+
+Checked end to end: `WALL_DETAIL_DEPTH` 6 -> 2 plus a referenced 500-byte
+global gave image CHANGED, DGROUP +512 naming `_memcheckProbe`, and all four
+frames failing with the difference boxed; a syntax error gave the `tsc` line
+and skipped the rest; reverting gave unchanged and four matches. Note
+`-SkipPc` still diffs frames against the existing PC exe, so they are stale
+after a portable-module change.
+
+Still open from task 17: a scripted key sequence so movement and collision
+can be golden-framed too.
 
 ### 21. Map validator
 - [ ] Check a `.map` for size, unknown characters, spawn count and reachability.

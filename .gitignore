@@ -5,3 +5,5 @@
 *.LOG
 pc/build/
 *.user
+.verify/
+pc/.qtcreator/CMakeLists.txt.user

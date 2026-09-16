@@ -1,0 +1,19 @@
+# Golden views rendered by tools\verify.ps1 through the PC host.
+#
+# One view per line: <name> <psion3d_pc arguments>. The script appends
+# --screenshot itself. Positions are Q8 map units (256 per cell) and angles
+# Q8 radians (402 = quarter turn), the same numbers the PC HUD shows, so a
+# view found by walking the window build can be added by typing its readout in.
+#
+# Accept new or changed frames with: .\tools\verify.bat -UpdateGolden
+#
+# map 1 spawn: the lab style, the corridor used for fps measurement
+map1_spawn         --map 1
+# two ticks with fire held: muzzle flash and the impact marker on the far wall
+map1_fire          --map 1 --frames 2 --fire
+# map 99 is the showcase corridor, numbered out of the way of real levels.
+# Default style: signs, lights, pipes, shelves and switch along the top wall;
+# doors, windows, bars, parapet and pillars below
+showcase_corridor  --map 99 --pos 7040,384 --angle 0
+# the same lower run seen face-on from the room beneath it
+showcase_room      --map 99 --pos 9344,1152 --angle 1206

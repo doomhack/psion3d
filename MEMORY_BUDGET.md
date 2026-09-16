@@ -129,14 +129,16 @@ The OS, window server and file system take their own share on top.
 | 2026-09-05 | 15,038 | 42,214 | 35,840 | test-pattern fallback removed: −2,058 DGROUP |
 | 2026-09-11 | 22,760 | 42,400 | 49,152 | pickups, decorations, tracers, `gameloop.c` |
 | 2026-09-12 | 24,634 | 42,816 | 49,152 | AI memory fields, player collision, hit feedback |
+| 2026-09-16 | 25,385 | 42,864 | 49,152 | detail walls, strafe keys, memcheck script |
 
 Code has grown ~9 KB in a week; data has barely moved. That is the intended
 shape — features should land as code and far data, not as near arrays.
 
 ## Rules of thumb
 
-- **Before adding a global array, check DGROUP.** `__bss_end` in the map,
-  relative to the DGROUP segment paragraph (e.g. `0704:A740` → 42,816).
+- **Before adding a global array, check DGROUP.** Run `.\tools\memcheck.bat`,
+  or read `__bss_end` in the map relative to the DGROUP segment paragraph
+  (e.g. `0704:A740` → 42,816).
 - **Bulk data goes far.** Sprites already do. A 128x128 map is 32,768 bytes
   against 22,720 free and cannot live in `map[][]` as declared; it would need
   a far segment and accessor changes in `game_map.h`.
@@ -150,7 +152,14 @@ shape — features should land as code and far data, not as near arrays.
 
 ## How to re-measure
 
-Build, then read the segment table at the top of `PSION3D.MAP`:
+Build, then run `.\tools\memcheck.bat`. It prints `_TEXT`, DGROUP and far
+sprite bytes with the delta against the last history row, plus the DGROUP
+segment breakdown, and exits 1 above 48 KB (`-Limit`). `-Record "note"`
+appends a row to the history table below. To attribute a change, keep a copy of
+the previous `PSION3D.MAP` and pass `-Baseline old.MAP`: the report then
+lists every DGROUP region whose size moved.
+
+By hand, read the segment table at the top of `PSION3D.MAP`:
 
 ```bash
 "C:\Program Files (x86)\DOSBox-0.74-3\DOSBox.exe" -c "D:" -c "tsc /m unnamed.pr /smain=psion3d /v0 /zq > D:\build.log" -c "exit"
