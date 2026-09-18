@@ -103,6 +103,27 @@ static void setImpact(const f16 x, const f16 y, const u8 frame,
 #define TRACER_END_Y 152
 #define TRACER_MISS_OFFSET 32
 
+/* Centred on the column an accurate shot resolves against (span 30, x 122)
+   and the sprite horizon. Four arms with a gap at the middle, XORed like the
+   tracers so it reads against wall, sprite and open floor alike, and so no
+   pixel is flipped twice where the arms would otherwise meet. */
+#define CROSSHAIR_X 122
+#define CROSSHAIR_Y 80
+#define CROSSHAIR_GAP 2
+#define CROSSHAIR_ARM 4
+
+static void drawCrosshair(void)
+{
+	bmXorLine(CROSSHAIR_X - CROSSHAIR_GAP - CROSSHAIR_ARM, CROSSHAIR_Y,
+		CROSSHAIR_X - CROSSHAIR_GAP, CROSSHAIR_Y, blackBm);
+	bmXorLine(CROSSHAIR_X + CROSSHAIR_GAP, CROSSHAIR_Y,
+		CROSSHAIR_X + CROSSHAIR_GAP + CROSSHAIR_ARM, CROSSHAIR_Y, blackBm);
+	bmXorLine(CROSSHAIR_X, CROSSHAIR_Y - CROSSHAIR_GAP - CROSSHAIR_ARM,
+		CROSSHAIR_X, CROSSHAIR_Y - CROSSHAIR_GAP, blackBm);
+	bmXorLine(CROSSHAIR_X, CROSSHAIR_Y + CROSSHAIR_GAP,
+		CROSSHAIR_X, CROSSHAIR_Y + CROSSHAIR_GAP + CROSSHAIR_ARM, blackBm);
+}
+
 typedef struct tracer_t
 {
 	u8 enemyId;
@@ -204,8 +225,9 @@ static const s16 rayIdxOffset[60] =
    to each neighbour leaves a hole on the wide side that a feature can fall
    through. Reaching half the larger gap both ways closes it: the two columns
    either side of any gap meet at its middle at least. The overlap that
-   creates on the narrow side is why a feature that must land in one column
-   dedupes; see labwall.c. Generated from rayIdxOffset:
+   creates on the narrow side means a feature narrower than a footprint can
+   land in two neighbouring columns, and wall styles draw it a column wide
+   rather than pick one. Generated from rayIdxOffset:
    round(max(off[i] - off[i-1], off[i+1] - off[i]) / 2 * 2pi / 1024 * 4096). */
 static const u8 rayHalfWidth[60] =
 {
@@ -216,11 +238,6 @@ static const u8 rayHalfWidth[60] =
 	50, 50, 38, 38, 38, 38, 38, 38, 38, 38,
 	38, 38, 38, 38, 38, 38, 38, 50, 50, 38
 };
-
-/* Counts frames, so that a wall style can tell a second claim on the same
-   feature in one frame - a footprint overlap - from the same feature seen
-   again next frame. Wraps; only equality is ever tested. */
-u8 wallFrame = 0;
 
 /* Which map cell a shot landed on. f_wallDepth holds the distance to the
    surface that claimed the column, so the cell itself starts a little further
@@ -450,8 +467,6 @@ void draw()
 		recipReady = TRUE;
 	}
 
-	wallFrame++;
-
 	for(i = 0; i < 60; i++)
 	{
 		wallhit_t wallhits[3];
@@ -642,18 +657,15 @@ void draw()
 			   about 1% of its offset from the player - delta is floored, f_dy
 			   is rounded, and fpmul truncates twice - so f_step / 128 covers
 			   that, and the plus one keeps the footprint from reaching 0 on a
-			   wall the player is touching. A feature that must land in exactly
-			   one column has to dedupe; see the panel joint in labwall.c.
+			   wall the player is touching. A feature can therefore land in two
+			   neighbouring columns, and there is no way for a column to tell
+			   which of them it is; wall styles draw such features a column
+			   wide and accept the doubling.
 			   Per hit, not per DDA step. Clamped to a whole face: fpmul keeps
 			   bits 8..23 of the product, so a grazing hit at over 64 cells
 			   along the ray runs the result up towards the sign bit, and past
 			   256 cells wraps it. The clamp also bounds the 16 bit product
-			   below: 1024 * 50 fits.
-
-			   Which way wallX runs across the screen falls out of the step
-			   direction: an x face seen looking +x has wallX (the y coordinate)
-			   growing with the ray angle, a y face seen looking +y has wallX
-			   (the x coordinate) shrinking with it. */
+			   below: 1024 * 50 fits. */
 			f_step = fpmul(f_dist, (f16)delta);
 
 			if((u16)f_step >= 16384)
@@ -663,7 +675,6 @@ void draw()
 			wallhits[hits].f_wallDist = f_dist;
 			wallhits[hits].f_wallX = f_wallx - int2fp(fp2int(f_wallx));
 			wallhits[hits].f_wallXHalf = (s16)((((u16)f_step >> 4) * rayHalfWidth[i]) >> 8) + (f_step >> 7) + 1;
-			wallhits[hits].wallXMirror = side ? (u8)(stepy > 0) : (u8)(stepx < 0);
 			
 			hits++;
 			
@@ -706,6 +717,8 @@ void draw()
 		(u8)(player.currentWeapon->y + player.weaponState.switchOffset
 			+ player.weaponState.recoilOffset),
 		player.weaponState.weaponSpriteId);
+
+	drawCrosshair();
 
 	/* Hurt flash: a thick black bar on the screen edge nearest the shooter,
 	   over everything, for a few frames. On a white background black is the

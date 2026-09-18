@@ -5,50 +5,14 @@
 
 /* Lab wall set. All detail is made from solid, clear, or dithered spans. */
 
-static void labDepthWall(s16 x, s16 y, s16 h, const wallhit_t* hit)
-{
-	s16 depth = fp2int(hit->f_wallDist);
-
-	if(depth >= WALL_DETAIL_DEPTH)
-	{
-		bmFillRect4(x, y, h, blackBm);
-		return;
-	}
-
-	bmFillPattern4(x, y, h, blackBm);
-
-	if(depth >= 4 || hit->side)
-		bmFillRect4(x, y, h, greyBm);
-	else
-		bmClearRect4(x, y, h, greyBm);
-}
-
-static void panelSeams(s16 x, s16 y, s16 h, const wallhit_t* hit)
-{
-	s16 rail = h >> 4;
-
-	if(rail < 1)
-		rail = 1;
-
-	/* Sealed horizontal joints at one quarter and three quarters. */
-	bmFillRect4(x, y + (h >> 2), rail, blackBm);
-	bmFillRect4(x, y + h - (h >> 2) - rail, rail, blackBm);
-
-	/* Narrow vertical joins between prefabricated panels. */
-	if(wallSpans(hit, 62, 70) || wallSpans(hit, 190, 198))
-		bmFillRect4(x, y, h, blackBm);
-}
-
-/* Prefabricated concrete panels: a dark cornice along the ceiling line, a
-   stripe group at eye height, a dark skirting, and a one pixel joint
-   between panels. In span calls per column, which is what wall cost is:
+/* Prefabricated concrete panels: a one row line along the ceiling, a stripe
+   group at eye height and a dark skirting. In span calls per column, which is
+   what wall cost is:
 
      depth >= WALL_DETAIL_DEPTH  flat                          1
-     depth >= LAB_PANEL_NEAR     base, cornice, one dark band  3
-     nearer                      base, cornice, two stripes,   5
+     depth >= LAB_PANEL_NEAR     base, ceiling, one dark band  3
+     nearer                      base, ceiling, two stripes,   5
                                  skirting
-     joint column                the above, plus a 1 pixel     +1, one column
-                                 line                          per joint
 
    The stripe group hangs off row 80 like the old horizon band did, so it is
    always on screen and never clips. Its two bands have a gap of bare wall
@@ -56,32 +20,15 @@ static void panelSeams(s16 x, s16 y, s16 h, const wallhit_t* hit)
    read as three bands for two calls. The stripes are meant to be identical
    along a corridor, so nothing here varies by cell.
 
-   The joint is the one thing here narrower than a column: a single pixel of
-   black, put at the pixel of the one column whose footprint holds the joint's
-   position on the face. It is the same width at every distance and does not
-   swim between columns as the player moves, which is the point of carrying
-   the footprint at all. */
-
-#define PANEL_JOINT 128     /* face position of the mid cell joint; the other is the cell edge */
-
-/* The last joint drawn, as a place on the map rather than a wallX, so that the
-   cell edge joint is the same joint from either cell. Footprints overlap on
-   purpose, so more than one column can hold a joint; but a joint is a vertical
-   line in the world and lands in exactly one screen column, so any later claim
-   on the same joint in the same frame is that overlap, and stands down. The
-   first column to claim it draws it, and columns are drawn left to right. One
-   record is enough because a face's joints come one after another. */
-static s16 jointLastAlong;
-static u8 jointLastLine;
-static u8 jointLastSide;
-static u8 jointLastFrame;
-
+   There is nothing here narrower than a column. A one pixel joint between
+   panels was tried: it has to land in exactly one column, and a column only
+   knows its centre sample and an overlapping estimate of its footprint, so
+   keeping it single needed per frame dedupe state that then had to survive
+   two faces interleaving through a grille. The joint went instead. */
 static u16 drawConcretePanels(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
 	s16 depth = fp2int(hit->f_wallDist);
 	s16 band = h >> 4;
-	s16 joint, along, lo, hi;
-	u8 line;
 
 	if(depth >= WALL_DETAIL_DEPTH)
 	{
@@ -98,110 +45,213 @@ static u16 drawConcretePanels(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	if(band < 1)
 		band = 1;
 
+	/* Ceiling line: one row of black where the wall meets the ceiling. A row is
+	   the same call as the cornice band it replaced, which measured free. */
+	bmFillRect4(x, y, 1, blackBm);
+
 	if(depth >= LAB_PANEL_NEAR)
 	{
-#if LAB_PANEL_CORNICE
-		bmFillRect4(x, y, band + (band >> 1), blackBm);
-#endif
-#if LAB_PANEL_STRIPES
 		bmFillRect4(x, 80 - band - band - band, band + band + band, blackBm);
-#endif
 
 		return TRUE;
 	}
 
-#if LAB_PANEL_CORNICE
-	bmFillRect4(x, y, band + (band >> 1), blackBm);
-#endif
-
-#if LAB_PANEL_STRIPES
 	bmFillRect4(x, 80 - band - band - band, band, blackBm);
 	bmFillPattern4(x, 80 - band, band, blackBm);
-#endif
 
-#if LAB_PANEL_VENTS
 	/* Skirting. This began as a row of vent boxes with gaps gated on the
 	   footprint, but a gap of 8 wallX is narrower than a column's footprint
 	   beyond about a cell, so the gaps only ever showed up close and every
 	   column paid the test. A plain band is the same call without it. */
 	bmFillRect4(x, y + h - band, band, blackBm);
-#endif
 
-#if LAB_PANEL_SEAMS
-	/* Two panels to a cell, so a joint mid cell and one at the cell edge. The
-	   edge joint is at 0 of one cell and 256 of its neighbour, and a footprint
-	   can reach it from either side, so both are asked. Drawn last: it runs
-	   through the stripes and the vents, as a real joint does.
-
-	   These are wallSpans() unrolled, because every near column runs them to
-	   find out it has no joint: the footprint's low edge is never above 256
-	   and its high edge never below 0, so the edge tests are one compare each.
-
-	   The cutoff first: a column that covers a large part of the face is on a
-	   wall seen obliquely or far off, where joints would fall in nearly every
-	   column - a comb on screen and a span call in each of them. */
-	if(hit->f_wallXHalf > LAB_PANEL_JOINT_HALF)
-		return TRUE;
-
-	lo = hit->f_wallX - hit->f_wallXHalf;
-	hi = hit->f_wallX + hit->f_wallXHalf;
-
-	if(lo <= PANEL_JOINT && hi > PANEL_JOINT)
-		joint = PANEL_JOINT;
-	else if(lo <= 0)
-		joint = 0;
-	else if(hi > 256)
-		joint = 256;
-	else
-		return TRUE;
-
-	/* An x face runs along y, so its joints are placed by mapY; a y face the
-	   other way round. */
-	line = hit->side ? hit->mapY : hit->mapX;
-	along = (s16)((hit->side ? hit->mapX : hit->mapY) << 8) + joint;
-
-	if(jointLastFrame == wallFrame && along == jointLastAlong &&
-		line == jointLastLine && hit->side == jointLastSide)
-		return TRUE;
-
-	jointLastFrame = wallFrame;
-	jointLastAlong = along;
-	jointLastLine = line;
-	jointLastSide = hit->side;
-
-	bmFillCol1(x + wallPixel(hit, joint), y, h, blackBm);
-#endif
-
-	return TRUE;
+    return TRUE;
 }
 
-static u16 drawShootablePanel(s16 x, s16 y, s16 h, const wallhit_t* hit)
+/* Shootable wall: a concrete panel with a large grille set into it, big enough
+   to be the way through once it is shot out. The cell is not solid, so the
+   ray ran on and whatever stands behind it was drawn into this column first;
+   the grille writes the black plane only, so that shows through the slats,
+   which is the tell that the wall is worth a round.
+
+   The outer quarter of the face on each side is the standard panel, on a
+   column cleared of the wall behind. The middle half is a header and sill of
+   panel carrying the ceiling line and skirting across, and between them the
+   opening. Near, five slats - a rail against the header, one against the
+   sill, three between - with the wall behind in the gaps; from LAB_PANEL_NEAR
+   out a dither mesh, one span, in step with the panel's stripes collapsing at
+   that depth. Beyond WALL_DETAIL_DEPTH the wall behind is black too, so the
+   column is one black span.
+
+   The frame down each side is a stile the width of a column, drawn by every
+   column whose footprint holds the opening's edge - one column, or two where
+   neighbouring footprints overlap on it. That is the grain of the renderer:
+   a thinner stile has to pick one column, which the footprint cannot do on
+   its own, and the dedupe state it took was not worth a few pixels. The
+   opening between the stiles is a point test, which is safe for a feature
+   this much wider than any footprint at detail depth.
+
+   The opening's columns return FALSE, leaving them non occluding as BARS and
+   WINDOW do: the depth buffer holds one distance per column, and a sprite
+   behind the grille drawing over it is the lesser error against it vanishing
+   in the gaps. */
+
+#define VENT_LEFT 64   /* wallX extent of the opening: the middle half */
+#define VENT_RIGHT 192
+
+static u16 drawVentPanel(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
-	labDepthWall(x, y, h, hit);
-
-	if(fp2int(hit->f_wallDist) < WALL_DETAIL_DEPTH)
-		panelSeams(x, y, h, hit);
-
-	return TRUE;
-}
-
-static u16 drawLabPassage(s16 x, s16 y, s16 h, const wallhit_t* hit)
-{
+	s16 depth = fp2int(hit->f_wallDist);
 	s16 wallx = hit->f_wallX;
-	s16 capHeight = h >> 2;
+	s16 band = h >> 4;
+	s16 ventY, ventH, sillY, slat, pitch;
+	u16 stile;
 
-	if(wallx > 32 && wallx < 224)
+	if(depth >= WALL_DETAIL_DEPTH)
 	{
-		bmFillRect4(x, y, capHeight, greyBm);
-		bmFillPattern4(x, y, capHeight, blackBm);
+		bmFillRect4(x, y, h, blackBm);
+
+		return TRUE;
+	}
+
+	if(band < 1)
+		band = 1;
+
+	ventY = y + (h >> 2);
+	sillY = y + h - band - band;
+	ventH = sillY - ventY;
+
+	stile = wallSpans(hit, VENT_LEFT, VENT_LEFT + 1) ||
+		wallSpans(hit, VENT_RIGHT - 1, VENT_RIGHT);
+
+	if(wallx < VENT_LEFT || wallx >= VENT_RIGHT)
+	{
+		bmClearRect4(x, y, h, blackBm);
+		drawConcretePanels(x, y, h, hit);
+
+		if(stile)
+			bmFillRect4(x, ventY, ventH, blackBm);
+
+		return TRUE;
+	}
+
+	/* Header and sill, the same face as the panel either side. */
+	bmClearRect4(x, y, ventY - y, blackBm);
+	bmClearRect4(x, sillY, y + h - sillY, blackBm);
+
+	if(depth >= LAB_PANEL_NEAR || hit->side)
+	{
+		bmFillRect4(x, y, ventY - y, greyBm);
+		bmFillRect4(x, sillY, y + h - sillY, greyBm);
+	}
+	else
+	{
+		bmFillPattern4(x, y, ventY - y, greyBm);
+		bmFillPattern4(x, sillY, y + h - sillY, greyBm);
+	}
+
+	bmFillRect4(x, y, 1, blackBm);
+	bmFillRect4(x, y + h - band, band, blackBm);
+
+	if(stile)
+	{
+		bmFillRect4(x, ventY, ventH, blackBm);
+
+		return TRUE;
+	}
+
+	if(depth >= LAB_PANEL_NEAR)
+	{
+		bmFillPattern4(x, ventY, ventH, blackBm);
 
 		return FALSE;
 	}
 
-	bmFillRect4(x, y, h, greyBm);
-	bmFillPattern4(x, y, h, blackBm);
+	/* Five slats: a rail against the header, one against the sill, and three
+	   between at a quarter of the height each. */
+	slat = ventH >> 4;
 
-	return TRUE;
+	if(slat < 1)
+		slat = 1;
+
+	pitch = ventH >> 2;
+
+	bmFillRect4(x, ventY, slat, blackBm);
+	bmFillRect4(x, ventY + pitch, slat, blackBm);
+	bmFillRect4(x, ventY + pitch + pitch, slat, blackBm);
+	bmFillRect4(x, ventY + pitch + pitch + pitch, slat, blackBm);
+	bmFillRect4(x, ventY + ventH - slat, slat, blackBm);
+
+	return FALSE;
+}
+
+/* Archway: an opening in the panel wall. The jambs, the outer 32 wallX each
+   side, are concrete panel columns on a column cleared of what the ray found
+   beyond, so the ceiling line, stripes and skirting run up to the opening;
+   two arches side by side share a pier. Over the opening a lintel of panel
+   face carries the ceiling line across, with a black beam along its
+   underside, and a black stile down each jamb's inner edge - a column wide,
+   on whichever columns' footprints hold the edge, as the grille's are - so
+   the opening is framed even when the wall beyond is the same grey as the
+   jambs. The cell is not solid, so the opening's columns are otherwise left
+   as the ray drew what stands behind them. Gated as the panels are: beyond
+   WALL_DETAIL_DEPTH the lintel is one black span and there are no stiles. */
+
+#define ARCH_JAMB 32 /* wallX of jamb at each side of the cell */
+
+static u16 drawLabPassage(s16 x, s16 y, s16 h, const wallhit_t* hit)
+{
+	s16 depth = fp2int(hit->f_wallDist);
+	s16 wallx = hit->f_wallX;
+	s16 band = h >> 4;
+	s16 lintelH = h >> 2;
+
+	u16 stile = depth < WALL_DETAIL_DEPTH &&
+		(wallSpans(hit, ARCH_JAMB, ARCH_JAMB + 1) ||
+		wallSpans(hit, 256 - ARCH_JAMB - 1, 256 - ARCH_JAMB));
+
+	if(wallx < ARCH_JAMB || wallx >= 256 - ARCH_JAMB)
+	{
+		bmClearRect4(x, y, h, blackBm);
+		drawConcretePanels(x, y, h, hit);
+
+		if(stile)
+			bmFillRect4(x, y + lintelH, h - lintelH, blackBm);
+
+		return TRUE;
+	}
+
+	if(depth >= WALL_DETAIL_DEPTH)
+	{
+		bmFillRect4(x, y, lintelH, blackBm);
+
+		return FALSE;
+	}
+
+	if(band < 1)
+		band = 1;
+
+	if(stile)
+	{
+		bmClearRect4(x, y, lintelH, blackBm);
+		bmFillRect4(x, y, lintelH, greyBm);
+		bmFillRect4(x, y, 1, blackBm);
+		bmFillRect4(x, y + lintelH - band, h - lintelH + band, blackBm);
+
+		return TRUE;
+	}
+
+	bmClearRect4(x, y, lintelH, blackBm);
+
+	if(depth >= LAB_PANEL_NEAR || hit->side)
+		bmFillRect4(x, y, lintelH, greyBm);
+	else
+		bmFillPattern4(x, y, lintelH, greyBm);
+
+	bmFillRect4(x, y, 1, blackBm);
+	bmFillRect4(x, y + lintelH - band, band, blackBm);
+
+	return FALSE;
 }
 
 /* Airlock door. A fixed surround - black outer edge, grey frame, black lip and
@@ -346,28 +396,98 @@ static u16 drawAirlockDoor(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	return drawAirlock(x, y, h, hit, halfgap);
 }
 
-static u16 drawHazardBulkhead(s16 x, s16 y, s16 h, const wallhit_t* hit)
+/* Lockers: three to a cell, black doors between grey uprights, under a black
+   top rail and standing on the panel skirting. Each door has a dithered vent
+   near its top and another near its foot, and a pale handle slot at hand
+   height towards one edge. The doors are point tests, being wide enough to be
+   safe at any detail depth; the uprights and the handle are footprint tests,
+   since both are narrower than a column at range. A footprint test fattens
+   with the footprint, though: seen down a corridor a column covers most of a
+   door, every column holds an upright's centre line, and the run went solid
+   grey. So past LAB_LINE_HALF the uprights and handles are dropped and
+   the run is doors and vents alone, which is at least the right colour.
+   Inside LAB_PANEL_NEAR everything; out to WALL_DETAIL_DEPTH the handles go;
+   beyond, one black span. The grey plane is left alone except under the uprights: a solid
+   cell's column arrives clear, and the black fill is black wherever nothing
+   is cleared out of it. */
+
+#define LOCKER_DOOR_W 68
+#define LOCKER_POST_W 16
+#define LOCKER_PITCH (LOCKER_DOOR_W + LOCKER_POST_W)
+#define LOCKER_EDGE 10 /* half an upright at each cell edge */
+/* Centre line of the upright after door n. */
+#define LOCKER_POST(n) (LOCKER_EDGE + LOCKER_DOOR_W + (LOCKER_POST_W >> 1) + (n) * LOCKER_PITCH)
+#define LOCKER_VENT_IN 8   /* vent inset from each door edge */
+#define LOCKER_HANDLE_IN 8 /* handle slot, from the door edge */
+#define LOCKER_HANDLE_W 6
+
+static u16 drawLockers(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
-	s16 wallx = hit->f_wallX >> 4;
-	s16 bandY = y + (h >> 2);
-	s16 bandH = h >> 2;
-	s16 step;
+	s16 depth = fp2int(hit->f_wallDist);
+	s16 wallx = hit->f_wallX;
+	s16 band = h >> 4;
+	s16 ventH = h >> 3;
+	s16 handleH = ventH;
+	s16 d, doorX;
 
 	bmFillRect4(x, y, h, blackBm);
-	bmFillRect4(x, bandY, bandH, greyBm);
 
-	/* Chunky stepped warning stripe, made from vertical rectangles. */
-	step = (wallx + ((bandY >> 2) & 3)) & 3;
-	if(step < 2)
-		bmClearRect4(x, bandY, bandH, blackBm);
+	if(depth >= WALL_DETAIL_DEPTH)
+		return TRUE;
+
+	if(band < 1)
+		band = 1;
+
+	/* An upright is drawn by the columns whose footprint holds its centre
+	   line: one column, two at most, whatever its nominal width. Tested on
+	   the full width it came out three columns wide against three column
+	   doors. */
+	if(hit->f_wallXHalf <= LAB_LINE_HALF &&
+		(wallSpans(hit, 0, 1) ||
+		wallSpans(hit, LOCKER_POST(0), LOCKER_POST(0) + 1) ||
+		wallSpans(hit, LOCKER_POST(1), LOCKER_POST(1) + 1) ||
+		wallSpans(hit, 256, 257)))
+	{
+		bmClearRect4(x, y + band, h - band - band, blackBm);
+		bmFillRect4(x, y + band, h - band - band, greyBm);
+
+		return TRUE;
+	}
+
+	/* Fold the three doors onto one. */
+	d = wallx - LOCKER_EDGE;
+
+	if(d >= LOCKER_PITCH + LOCKER_PITCH)
+		d -= LOCKER_PITCH + LOCKER_PITCH;
+	else if(d >= LOCKER_PITCH)
+		d -= LOCKER_PITCH;
+
+	if(d >= LOCKER_VENT_IN && d < LOCKER_DOOR_W - LOCKER_VENT_IN)
+	{
+		bmFillPattern4(x, y + ventH, ventH, blackBm);
+		bmFillPattern4(x, y + h - ventH - ventH, ventH, blackBm);
+	}
+
+	if(depth >= LAB_PANEL_NEAR || hit->f_wallXHalf > LAB_LINE_HALF)
+		return TRUE;
+
+	doorX = wallx - d;
+
+	if(wallSpans(hit, doorX + LOCKER_HANDLE_IN, doorX + LOCKER_HANDLE_IN + LOCKER_HANDLE_W))
+		bmClearRect4(x, y + (h >> 1) - (handleH >> 1), handleH, blackBm);
 
 	return TRUE;
 }
 
-/* Glazed partition. A black frame divides the wall into three bays, each a lit
-   transom over dithered glass over a solid spandrel. The glass writes the black
-   plane only, so the wall behind keeps its grey and still shows through, and no
-   span reaches outside a panel it paints over. The cell stays non occluding. */
+/* Glazed partition. A black frame divides the wall into three bays, each a
+   transom over dithered glass over a solid spandrel, standing on the same
+   skirting as the concrete panels. The glass writes the black plane only, so
+   the wall behind keeps its grey and still shows through, and no span reaches
+   outside a panel it paints over. The cell stays non occluding.
+
+   Gated by depth as the concrete panels are: inside LAB_PANEL_NEAR the
+   skirting and the mullions, beyond it neither - every column is a bay, so
+   the partition reads as one run of glazing from a distance. */
 
 #define BARS_PITCH 80  /* one bay plus one mullion, in wallX units */
 #define BARS_BAY 64    /* glazed width of a bay, leaving 16 for the mullion */
@@ -379,53 +499,57 @@ static u16 drawServiceGrille(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	s16 transH = h >> 2;
 	s16 glassY = y + transH;
 	s16 spandY = y + h - transH;
-	s16 lightH;
+	s16 band = h >> 4;
+	s16 depth = fp2int(hit->f_wallDist);
 
 	if(rail < 1)
 		rail = 1;
 
+	if(band < 1)
+		band = 1;
+
 	/* Fold the three bays onto one pitch, so one range test covers the outer
 	   frame and both mullions. */
-	if(bx >= BARS_PITCH + BARS_PITCH)
-		bx -= BARS_PITCH + BARS_PITCH;
-	else if(bx >= BARS_PITCH)
-		bx -= BARS_PITCH;
-
-	if(bx < 0 || bx >= BARS_BAY)
+	if(depth < LAB_PANEL_NEAR)
 	{
-		bmFillRect4(x, y, h, blackBm);
+		if(bx >= BARS_PITCH + BARS_PITCH)
+			bx -= BARS_PITCH + BARS_PITCH;
+		else if(bx >= BARS_PITCH)
+			bx -= BARS_PITCH;
 
-		return FALSE;
+		if(bx < 0 || bx >= BARS_BAY)
+		{
+			bmFillRect4(x, y, h, blackBm);
+
+			return FALSE;
+		}
 	}
 
-	/* Transom, with a pale light panel skewed across it. The panel only has to
-	   clear the grey plane, the black one having gone with the transom. */
+	/* Transom. */
 	bmClearRect4(x, y, transH, blackBm);
 	bmFillRect4(x, y, transH, greyBm);
 	bmFillRect4(x, y, rail, blackBm);
 	bmFillRect4(x, glassY - rail, rail, blackBm);
 
-	if(bx >= 12 && bx < 52)
-	{
-		lightH = transH >> 2;
-
-		bmClearRect4(x, y + lightH + ((BARS_BAY - bx) >> 4), lightH, greyBm);
-	}
-
 	bmFillPattern4(x, glassY, spandY - glassY, blackBm);
 
+	/* Spandrel, with the panel skirting along its foot. */
 	bmClearRect4(x, spandY, transH, blackBm);
 	bmFillRect4(x, spandY, transH, greyBm);
 	bmFillRect4(x, spandY, rail, blackBm);
-	bmFillRect4(x, y + h - rail, rail, blackBm);
+
+	if(depth < LAB_PANEL_NEAR)
+		bmFillRect4(x, y + h - band, band, blackBm);
 
 	return FALSE;
 }
 
 /* Observation window. Three nested frame rings - black, grey, then a thin black
-   lip - set into a pale wall, with dithered glass inside and a skirting band
-   below. Like the grille the glass writes the black plane only, so the wall
-   behind shows through it and no clear reaches across it. */
+   lip - set into a pale wall, with tinted glass inside, under the panel
+   ceiling line and standing on the panel skirting. The glass is a grey dither
+   and nothing else: the black plane sits over the grey, so the black of
+   whatever stands behind the window shows through the tint, and no clear
+   reaches across the pane. */
 
 #define WIN_MARGIN 12 /* pale wall outside the frame, in wallX units */
 #define WIN_OUTER 31  /* inner edge of the black ring */
@@ -444,8 +568,10 @@ static u16 drawObservationWindow(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	s16 b3 = b4 + (h >> 5);
 	s16 b2 = b3 + (h >> 4);
 	s16 b1 = b2 + (h >> 4);
-	s16 skirtY = y + h - (h >> 3);
-	s16 glintY, glintH;
+	s16 band = h >> 4;
+
+	if(band < 1)
+		band = 1;
 
 	if(fx < WIN_INNER)
 	{
@@ -453,6 +579,7 @@ static u16 drawObservationWindow(s16 x, s16 y, s16 h, const wallhit_t* hit)
 		   overdrawn onto a cleared column, outermost first. */
 		bmClearRect4(x, y, h, blackBm);
 		bmClearRect4(x, y, h, greyBm);
+		bmFillRect4(x, y, 1, blackBm);
 
 		if(fx >= WIN_MARGIN)
 			bmFillRect4(x, t1, b1 - t1, blackBm);
@@ -466,7 +593,7 @@ static u16 drawObservationWindow(s16 x, s16 y, s16 h, const wallhit_t* hit)
 		if(fx >= WIN_MID)
 			bmFillRect4(x, t3, b3 - t3, blackBm);
 
-		bmFillRect4(x, skirtY, h >> 4, greyBm);
+		bmFillRect4(x, y + h - band, band, blackBm);
 
 		return TRUE;
 	}
@@ -475,26 +602,13 @@ static u16 drawObservationWindow(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	   that nothing has to be cleared back off again. */
 	bmClearRect4(x, y, t4 - y, blackBm);
 	bmClearRect4(x, y, t1 - y, greyBm);
+	bmFillRect4(x, y, 1, blackBm);
 	bmFillRect4(x, t1, t2 - t1, blackBm);
 	bmFillRect4(x, t2, t3 - t2, greyBm);
 	bmFillRect4(x, t3, t4 - t3, blackBm);
 
-	bmFillPattern4(x, t4, b4 - t4, blackBm);
+	bmFillPattern4(x, t4, b4 - t4, greyBm);
 
-	/* A glint raked across the glass. It hides the view, so it clears both
-	   planes, and it is clamped because the span primitives clip to the screen
-	   rather than to the pane. */
-	if(wallx >= 70 && wallx < 150)
-	{
-		glintH = (b4 - t4) >> 3;
-		glintY = t4 + glintH + ((wallx - 70) >> 2);
-
-		if(glintY + glintH > b4)
-			glintY = b4 - glintH;
-
-		bmClearRect4(x, glintY, glintH, blackBm);
-		bmClearRect4(x, glintY, glintH, greyBm);
-	}
 
 	/* Sill: the three bands again, then the pale wall and its skirting. */
 	bmClearRect4(x, b4, y + h - b4, blackBm);
@@ -502,7 +616,7 @@ static u16 drawObservationWindow(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	bmFillRect4(x, b4, b3 - b4, blackBm);
 	bmFillRect4(x, b3, b2 - b3, greyBm);
 	bmFillRect4(x, b2, b1 - b2, blackBm);
-	bmFillRect4(x, skirtY, h >> 4, greyBm);
+	bmFillRect4(x, y + h - band, band, blackBm);
 
 	return FALSE;
 }
@@ -513,82 +627,140 @@ static u16 drawLabVoid(s16 x)
 	return FALSE;
 }
 
-/* Wall mounted display. The same role as the default style painted board, but
-   here the face is lit: it clears both planes, which leaves the background
-   shade - the brightest the display has, and the only true highlight in the
-   palette. */
+/* Signboard on the concrete panel wall: a board three quarters of the cell
+   wide and half the wall high, its top a fifth of the way down, in a black
+   frame over the panel stripes, with four lines of lettering suggested by
+   black bars of unequal length, centred: a centred line is symmetric about
+   the face's middle, so it reads the same whichever way wallX runs on this
+   face, and nothing here needs to know. The face clears both planes, which leaves the
+   background shade - the brightest the display has - so a sign reads as lit
+   across a room. The board is drawn at every distance for that reason; the
+   lettering only inside LAB_PANEL_NEAR. */
+
+#define SIGN_L 32        /* wallX extent of the board */
+#define SIGN_R 224
+#define SIGN_MID 128     /* the lettering is centred here, each line this wide either side */
+#define SIGN_HALF1 80
+#define SIGN_HALF2 56
+#define SIGN_HALF3 72
+#define SIGN_HALF4 40
+
 static u16 drawLabDisplay(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
 	s16 wallx = hit->f_wallX;
-	s16 boardY, boardH, rail;
+	s16 boardY = y + (h >> 3) + (h >> 4) + (h >> 6); /* a fifth, near enough */
+	s16 boardH = h >> 1;
+	s16 rail = h >> 5;
+	s16 faceY, faceH, lineY, pitch, tx;
 
-	labDepthWall(x, y, h, hit);
+	drawConcretePanels(x, y, h, hit);
 
-	if(wallx < 64 || wallx >= 192)
-	{
-		if(fp2int(hit->f_wallDist) < WALL_DETAIL_DEPTH)
-			panelSeams(x, y, h, hit);
-
+	if(wallx < SIGN_L || wallx >= SIGN_R)
 		return TRUE;
-	}
-
-	boardY = y + (h >> 2);
-	boardH = h >> 1;
-	rail = h >> 5;
 
 	if(rail < 1)
 		rail = 1;
 
-	bmFillRect4(x, boardY, boardH, blackBm);
+	faceY = boardY + rail;
+	faceH = boardH - rail - rail;
 
-	if(wallx < 72 || wallx >= 184)
+	bmFillRect4(x, boardY, boardH, blackBm);
+	bmClearRect4(x, faceY, faceH, blackBm);
+	bmClearRect4(x, faceY, faceH, greyBm);
+
+	if(fp2int(hit->f_wallDist) >= LAB_PANEL_NEAR)
 		return TRUE;
 
-	bmClearRect4(x, boardY + rail, boardH - rail - rail, blackBm);
-	bmClearRect4(x, boardY + rail, boardH - rail - rail, greyBm);
+	/* Distance from the face's middle, either way. */
+	tx = wallx < SIGN_MID ? SIGN_MID - wallx : wallx - SIGN_MID;
 
-	/* Lines of readout across the screen. */
-	if(fp2int(hit->f_wallDist) < WALL_DETAIL_DEPTH)
-	{
-		bmFillRect4(x, boardY + (boardH >> 2), rail, blackBm);
-		bmFillRect4(x, boardY + (boardH >> 1), rail, blackBm);
-	}
+	pitch = faceH >> 2;
+	lineY = faceY + (pitch >> 1) - (rail >> 1);
+
+	if(tx < SIGN_HALF1)
+		bmFillRect4(x, lineY, rail, blackBm);
+
+	if(tx < SIGN_HALF2)
+		bmFillRect4(x, lineY + pitch, rail, blackBm);
+
+	if(tx < SIGN_HALF3)
+		bmFillRect4(x, lineY + pitch + pitch, rail, blackBm);
+
+	if(tx < SIGN_HALF4)
+		bmFillRect4(x, lineY + pitch + pitch + pitch, rail, blackBm);
 
 	return TRUE;
 }
 
-/* Strip light on a dark bulkhead. It runs the full width of the face, which is
-   the expensive shape, so the spill below it is held back to near walls: three
-   spans a column out at distance, five up close. */
+/* Lit wall: the concrete panel wall under a strip light. The face is the
+   pale dither the panels use face on and near, here at every depth and on
+   both sides, with the same ceiling line, stripes and skirting; the light
+   itself is a white band near the top, in a black housing near. The lamp is
+   drawn at every distance, as the one true highlight in the palette it is
+   what makes the wall worth walking towards. Spans per column: the panel's
+   plus one for the lamp, plus two for its housing near. */
 static u16 drawLabStripLight(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
+	s16 depth = fp2int(hit->f_wallDist);
+	s16 band = h >> 4;
+	s16 rail = h >> 5;
 	s16 lampY = y + (h >> 3);
 	s16 lampH = h >> 4;
 
-	bmFillRect4(x, y, h, blackBm);
+	if(band < 1)
+		band = 1;
 
-	bmClearRect4(x, lampY, lampH, blackBm);
-	bmClearRect4(x, lampY, lampH, greyBm);
+	if(rail < 1)
+		rail = 1;
 
-	if(fp2int(hit->f_wallDist) < WALL_DETAIL_DEPTH)
+	if(lampH < 1)
+		lampH = 1;
+
+	if(depth >= WALL_DETAIL_DEPTH)
 	{
-		bmClearRect4(x, lampY + lampH, lampH, blackBm);
-		bmFillRect4(x, lampY + lampH, lampH, greyBm);
+		bmFillRect4(x, y, h, blackBm);
+		bmClearRect4(x, lampY, lampH, blackBm);
+
+		return TRUE;
 	}
+
+	bmFillPattern4(x, y, h, greyBm);
+	bmFillRect4(x, y, 1, blackBm);
+
+	if(depth >= LAB_PANEL_NEAR)
+	{
+		bmFillRect4(x, 80 - band - band - band, band + band + band, blackBm);
+		bmClearRect4(x, lampY, lampH, greyBm);
+
+		return TRUE;
+	}
+
+	bmFillRect4(x, 80 - band - band - band, band, blackBm);
+	bmFillPattern4(x, 80 - band, band, blackBm);
+	bmFillRect4(x, y + h - band, band, blackBm);
+
+	bmClearRect4(x, lampY, lampH, greyBm);
+	bmFillRect4(x, lampY - rail, rail, blackBm);
+	bmFillRect4(x, lampY + lampH, rail, blackBm);
 
 	return TRUE;
 }
 
-/* Conduit runs. Vertical detail, so a column either carries a run or it does
-   not - one extra span at most, none on the wall between. The brackets sit
-   inside the run own columns, so they cost nothing anywhere else. The run is
-   tested before its lit edge, so a column at range that covers both keeps the
-   dark run. */
+/* Conduit runs down the concrete panel wall. Vertical detail, so a column
+   either carries a run or it does not - one extra span at most, none on the
+   wall between. The brackets sit inside the run's own columns, so they cost
+   nothing anywhere else. The run is tested before its lit edge, so a column
+   at range that covers both keeps the dark run; the edge clears both planes,
+   since grey on the grey panel would not show. Past LAB_LINE_HALF the runs
+   are dropped and the wall is plain panel, for the reason given there. */
 static u16 drawLabConduit(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
 	s16 band;
 
-	labDepthWall(x, y, h, hit);
+	drawConcretePanels(x, y, h, hit);
+
+	if(hit->f_wallXHalf > LAB_LINE_HALF)
+		return TRUE;
 
 	if(wallSpans(hit, 32, 48) ||
 		wallSpans(hit, 104, 120) ||
@@ -596,7 +768,7 @@ static u16 drawLabConduit(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	{
 		bmFillRect4(x, y, h, blackBm);
 
-		if(fp2int(hit->f_wallDist) >= WALL_DETAIL_DEPTH)
+		if(fp2int(hit->f_wallDist) >= LAB_PANEL_NEAR)
 			return TRUE;
 
 		band = h >> 6;
@@ -615,65 +787,72 @@ static u16 drawLabConduit(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	}
 
 	/* Lit edge down the side of each run, so it reads as round. */
-	if(wallSpans(hit, 48, 56) ||
+	if(fp2int(hit->f_wallDist) < WALL_DETAIL_DEPTH &&
+		(wallSpans(hit, 48, 56) ||
 		wallSpans(hit, 120, 128) ||
-		wallSpans(hit, 208, 216))
+		wallSpans(hit, 208, 216)))
 	{
 		bmClearRect4(x, y, h, blackBm);
-		bmFillRect4(x, y, h, greyBm);
+		bmClearRect4(x, y, h, greyBm);
 	}
 
 	return TRUE;
 }
 
-/* Equipment racking. The shelves run the full width of the face, which is the
-   costly shape - three such bands on the brick wall measured 5.6ms a frame - so
-   this is held to two, and it is a feature wall rather than a corridor filler. */
-static u16 drawLabRack(s16 x, s16 y, s16 h, const wallhit_t* hit)
+/* Tiled wall: concrete panel over a dado of white tiles. The top three
+   eighths are the panel face under the ceiling line; below that the tiles
+   run to the skirting, the bare screen with a black grout course every
+   eighth of the wall. The tiles replace the panel stripes, so the run reads
+   as one surface with a change of material rather than a panel with a
+   feature on it. The courses are near detail; from LAB_PANEL_NEAR out the
+   tiles are one white band with an edge, and the skirting stays at every
+   detail depth here, since a white band running into the floor would have
+   no bottom. There are no vertical joints: a column wide, sometimes two,
+   against courses one row deep, they read as bars beyond a cell and a half
+   and as a grid only in the columns whose footprint happened to be narrow,
+   so the courses carry the tiling alone. */
+static u16 drawLabTiles(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
-	s16 wallx = hit->f_wallX;
-	s16 upperY = y + (h >> 2);
-	s16 lowerY = y + h - (h >> 2);
-	s16 rail = h >> 5;
-	s16 lamp;
+	s16 depth = fp2int(hit->f_wallDist);
+	s16 band = h >> 4;
+	s16 pitch = h >> 3;
+	s16 tileY = y + (h >> 2) + (h >> 3);
 
-	labDepthWall(x, y, h, hit);
-
-	if(fp2int(hit->f_wallDist) >= WALL_DETAIL_DEPTH)
-		return TRUE;
-
-	if(rail < 1)
-		rail = 1;
-
-	/* Frame upright first: vertical, so the bays either side pay nothing. */
-	if(wallSpans(hit, 120, 136))
+	if(depth >= WALL_DETAIL_DEPTH)
 	{
 		bmFillRect4(x, y, h, blackBm);
 
 		return TRUE;
 	}
 
-	bmFillRect4(x, upperY, rail, blackBm);
-	bmFillRect4(x, lowerY, rail, blackBm);
+	if(band < 1)
+		band = 1;
 
-	/* Indicator lamps on the gear in every other bay. */
-	if((wallx >> 5) & 1)
-	{
-		lamp = h >> 5;
+	if(depth >= LAB_PANEL_NEAR || hit->side)
+		bmFillRect4(x, y, tileY - y, greyBm);
+	else
+		bmFillPattern4(x, y, tileY - y, greyBm);
 
-		if(lamp < 1)
-			lamp = 1;
+	bmFillRect4(x, y, 1, blackBm);
+	bmFillRect4(x, tileY, 1, blackBm);
+	bmFillRect4(x, y + h - band, band, blackBm);
 
-		bmClearRect4(x, upperY - (h >> 4), lamp, blackBm);
-		bmClearRect4(x, upperY - (h >> 4), lamp, greyBm);
-	}
+	if(depth >= LAB_PANEL_NEAR)
+		return TRUE;
+
+	bmFillRect4(x, tileY + pitch, 1, blackBm);
+	bmFillRect4(x, tileY + pitch + pitch, 1, blackBm);
+	bmFillRect4(x, tileY + pitch + pitch + pitch, 1, blackBm);
+	bmFillRect4(x, tileY + pitch + pitch + pitch + pitch, 1, blackBm);
 
 	return TRUE;
 }
 
 /* A bench or partition low enough to see over. The cell is not solid, so the
    ray ran on and what stands behind it went into this column first; the bench
-   is opaque, so it clears the black plane back off over its own half.
+   is opaque, so it clears the black plane back off over its own half. It
+   stands on the panel skirting, gated as the panels are, and beyond
+   WALL_DETAIL_DEPTH it is one black span like every other wall.
 
    It returns FALSE, leaving the column non occluding. The depth buffer holds
    one distance per column and cannot say solid-below-row-100, so the choice is
@@ -685,25 +864,36 @@ static u16 drawLabBench(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	s16 top = y + (h >> 1);
 	s16 lowH = h - (h >> 1);
 	s16 coping = h >> 5;
+	s16 band = h >> 4;
 
 	if(coping < 1)
 		coping = 1;
+
+	if(band < 1)
+		band = 1;
+
+	if(fp2int(hit->f_wallDist) >= WALL_DETAIL_DEPTH)
+	{
+		bmFillRect4(x, top, lowH, blackBm);
+
+		return FALSE;
+	}
 
 	bmClearRect4(x, top, lowH, blackBm);
 	bmFillRect4(x, top, lowH, greyBm);
 	bmFillRect4(x, top, coping, blackBm);
 
-	/* Kick plate under the worktop. */
-	if(fp2int(hit->f_wallDist) < WALL_DETAIL_DEPTH)
-		bmFillPattern4(x, y + h - (lowH >> 2), lowH >> 2, blackBm);
+	/* The panel skirting along its foot, on the panel's gating. */
+	if(fp2int(hit->f_wallDist) < LAB_PANEL_NEAR)
+		bmFillRect4(x, y + h - band, band, blackBm);
 
 	return FALSE;
 }
 
 /* A structural strut standing in the cell. Not solid, so the columns either
    side of it keep whatever the ray found behind. The strut is opaque and writes
-   both planes outright rather than going through labDepthWall, whose dither
-   would let the wall behind show through it. */
+   both planes outright rather than with a dither, which would let the wall
+   behind show through it. */
 static u16 drawLabStrut(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
 	s16 wallx = hit->f_wallX;
@@ -741,48 +931,118 @@ static u16 drawLabStrut(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	return TRUE;
 }
 
-/* Control panel set into the wall. Thrown state lives in the cell id field,
-   which every wall cell otherwise leaves at zero, and shows as a lit panel
-   rather than a dark one. Drawn at every distance: a switch the player cannot
-   pick out across a room is a switch they will never find. */
+/* Control box set into the concrete panel wall, fed by a conduit. A black
+   framed, white faced housing centred on eye level, three eighths of the
+   wall high and over the panel stripes, holding two things side by side: on
+   the left a black slot with a pale lever block in it, on the right a grey
+   panel with a lamp in a white bezel at its top and a small white label
+   below. Thrown state lives in the cell id field, which every wall cell
+   otherwise leaves at zero: unthrown the lever is at the top of its slot and
+   the lamp's glass is black, thrown the lever is at the bottom and the glass
+   is lit white. The conduit runs floor to ceiling a little to one side, a
+   column wide by footprint like a locker upright, and a branch runs from it
+   into the box at mid height. Both are near detail only, and the conduit is
+   dropped past LAB_LINE_HALF for the reason given there. The box is drawn at
+   every distance: a switch the player cannot pick out across a room is a
+   switch they will never find. */
+
+#define SWITCH_BOX_L 88    /* wallX extent of the box */
+#define SWITCH_BOX_R 168
+#define SWITCH_FRAME 8     /* frame width inside the box's edges */
+#define SWITCH_SLOT_R 136  /* lever slot from the face's left edge to here */
+#define SWITCH_LAMP_L 140  /* lamp and label, centred in the right panel */
+#define SWITCH_LAMP_R 156
+#define SWITCH_CONDUIT 184 /* face position of the conduit */
+
 static u16 drawLabControlPanel(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
+	s16 depth = fp2int(hit->f_wallDist);
 	s16 wallx = hit->f_wallX;
-	s16 plateY, plateH, rail;
+	s16 boxY, boxH, rail, faceY, faceH, slotY, slotH, leverH, lampH;
+	u16 thrown = mapCellId(hit->cell) == WALL_SWITCH_THROWN;
 
-	labDepthWall(x, y, h, hit);
+	drawConcretePanels(x, y, h, hit);
 
-	if(wallx < 104 || wallx >= 152)
-	{
-		if(fp2int(hit->f_wallDist) < WALL_DETAIL_DEPTH)
-			panelSeams(x, y, h, hit);
+	boxH = (h >> 2) + (h >> 3);
 
-		return TRUE;
-	}
+	if(boxH < 8)
+		boxH = 8;
 
-	/* Row 80 is eye level, so the plate sits a little under it. */
-	plateH = h >> 3;
-
-	if(plateH < 3)
-		plateH = 3;
-
-	plateY = 80 - (plateH >> 1) + (h >> 4);
-	rail = plateH >> 2;
+	/* Row 80 is eye level; the box is centred on it, over the stripes. */
+	boxY = 80 - (boxH >> 1);
+	rail = boxH >> 3;
 
 	if(rail < 1)
 		rail = 1;
 
-	bmFillRect4(x, plateY, plateH, blackBm);
+	if(depth < LAB_PANEL_NEAR)
+	{
+		if(hit->f_wallXHalf <= LAB_LINE_HALF &&
+			wallSpans(hit, SWITCH_CONDUIT, SWITCH_CONDUIT + 1))
+		{
+			bmFillRect4(x, y, h, blackBm);
 
-	if(wallx < 112 || wallx >= 144)
+			return TRUE;
+		}
+
+		if(wallx >= SWITCH_BOX_R && wallx < SWITCH_CONDUIT)
+			bmFillRect4(x, boxY + (boxH >> 1) - (rail >> 1), rail, blackBm);
+	}
+
+	if(wallx < SWITCH_BOX_L || wallx >= SWITCH_BOX_R)
 		return TRUE;
 
-	bmClearRect4(x, plateY + rail, plateH - rail - rail, blackBm);
+	bmFillRect4(x, boxY, boxH, blackBm);
 
-	if(mapCellId(hit->cell) == WALL_SWITCH_THROWN)
-		bmClearRect4(x, plateY + rail, plateH - rail - rail, greyBm);
-	else
-		bmFillRect4(x, plateY + rail, plateH - rail - rail, greyBm);
+	if(wallx < SWITCH_BOX_L + SWITCH_FRAME || wallx >= SWITCH_BOX_R - SWITCH_FRAME)
+		return TRUE;
+
+	faceY = boxY + rail;
+	faceH = boxH - rail - rail;
+	slotY = faceY + rail;
+	slotH = faceH - rail - rail;
+
+	bmClearRect4(x, faceY, faceH, blackBm);
+	bmClearRect4(x, faceY, faceH, greyBm);
+
+	if(wallx < SWITCH_SLOT_R)
+	{
+		/* Lever slot: black, with the pale lever block at one end and its
+		   handle a line across the block. */
+		leverH = slotH >> 2;
+
+		if(leverH < 3)
+			leverH = 3;
+
+		bmFillRect4(x, slotY, slotH, blackBm);
+
+		if(thrown)
+			slotY += slotH - leverH;
+
+		bmClearRect4(x, slotY, leverH, blackBm);
+		bmFillRect4(x, slotY + (leverH >> 1), 1, blackBm);
+
+		return TRUE;
+	}
+
+	/* Lamp panel: grey, the lamp in its white bezel at the top and the label
+	   below. */
+	bmFillRect4(x, faceY, faceH, greyBm);
+
+	if(wallx < SWITCH_LAMP_L || wallx >= SWITCH_LAMP_R)
+		return TRUE;
+
+	lampH = boxH >> 2;
+
+	if(lampH < 3)
+		lampH = 3;
+
+	bmClearRect4(x, slotY, lampH, greyBm);
+
+	if(!thrown)
+		bmFillRect4(x, slotY + 1, lampH - 2, blackBm);
+
+	bmClearRect4(x, slotY + lampH + (slotH >> 2), rail, greyBm);
 
 	return TRUE;
 }
@@ -795,19 +1055,12 @@ u16 drawWallLab(u16 x, wallhit_t* hit)
 
 	y = 80 - (h >> 1);
 
-	if(wallType == WALL_TYPE_SHOOTABLE)
-	{
-		y += 2;
-		h -= 4;
-		hit->side = 1 - hit->side;
-	}
-
 	switch(wallType)
 	{
 		case WALL_TYPE_SOLID:
 			return drawConcretePanels(x, y, h, hit);
 		case WALL_TYPE_SHOOTABLE:
-			return drawShootablePanel(x, y, h, hit);
+			return drawVentPanel(x, y, h, hit);
 		case WALL_TYPE_ARCH:
 			return drawLabPassage(x, y, h, hit);
 		case WALL_TYPE_UNLOCKED_DOOR:
@@ -815,25 +1068,23 @@ u16 drawWallLab(u16 x, wallhit_t* hit)
 		case WALL_TYPE_LOCKED_DOOR:
 			return drawLockedAirlockDoor(x, y, h, hit);
 		case WALL_TYPE_DARK:
-			return drawHazardBulkhead(x, y, h, hit);
+			return drawLockers(x, y, h, hit);
 		case WALL_TYPE_BARS:
 			return drawServiceGrille(x, y, h, hit);
 		case WALL_TYPE_WINDOW:
 			return drawObservationWindow(x, y, h, hit);
 		case WALL_TYPE_VOID:
 			return drawLabVoid(x);
-
 		case WALL_TYPE_SIGN:
 			return drawLabDisplay(x, y, h, hit);
-
 		case WALL_TYPE_LIGHT:
 			return drawLabStripLight(x, y, h, hit);
-
 		case WALL_TYPE_PIPES:
 			return drawLabConduit(x, y, h, hit);
-
-		case WALL_TYPE_SHELF:
-			return drawLabRack(x, y, h, hit);
+        case WALL_TYPE_SWITCH:
+            return drawLabControlPanel(x, y, h, hit);
+		case WALL_TYPE_DADO:
+			return drawLabTiles(x, y, h, hit);
 
 		case WALL_TYPE_LOW:
 			return drawLabBench(x, y, h, hit);
@@ -841,8 +1092,7 @@ u16 drawWallLab(u16 x, wallhit_t* hit)
 		case WALL_TYPE_PILLAR:
 			return drawLabStrut(x, y, h, hit);
 
-		case WALL_TYPE_SWITCH:
-			return drawLabControlPanel(x, y, h, hit);
+
 	}
 
 	return TRUE;

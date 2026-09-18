@@ -20,6 +20,7 @@ void loadMapData(const u8 mapId)
 	switch (mapId)
 	{
 	case 1:
+	case 98: /* the showcase corridor in this style, see golden/views.txt */
 		drawWall = drawWallLab;
 		break;
 	default:
@@ -68,8 +69,8 @@ u16 getCellEncoding(u16 x, u16 y, s8 cell)
 	case 'T': // Locked Door
 		return (MAP_MASK_WALL | SET_CELL_TYPE_ID(WALL_TYPE_LOCKED_DOOR));
 
-	case 'S': // Shootable wall
-		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_SHOOTABLE));
+	case 'S': // Shootable wall. Seen through, so the ray runs on and the wall style draws what is behind it as the tell.
+		return (MAP_MASK_WALL | SET_CELL_TYPE_ID(WALL_TYPE_SHOOTABLE));
 
 	case 'B': // Iron Bars
 		return (MAP_MASK_WALL | SET_CELL_TYPE_ID(WALL_TYPE_BARS));
@@ -86,8 +87,8 @@ u16 getCellEncoding(u16 x, u16 y, s8 cell)
 	case ':': // Pipe and cable runs
 		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_PIPES));
 
-	case '#': // Shelving and racking
-		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_SHELF));
+	case '#': // Dado: a wall finished differently below than above. Tiles in the lab style, shelving in the default
+		return (MAP_MASK_WALL | MAP_MASK_SOLID | SET_CELL_TYPE_ID(WALL_TYPE_DADO));
 
 	// Not solid, so the ray runs on past these two and draws what is behind
 	// them first.

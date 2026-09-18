@@ -448,6 +448,10 @@ u16 drawWallDefault(u16 x, wallhit_t* hit)
 			return drawWallX(x, y, w, h, hit);
 
 		case WALL_TYPE_SHOOTABLE:
+			/* Not solid, so whatever the ray found behind was drawn into this
+			   column first and would show in the rows the inset leaves. */
+			bmClearRect4(x, y, h, blackBm);
+			bmClearRect4(x, y, h, greyBm);
 			y += 2;
 			h -= 4;
 			hit->side = 1 - hit->side;
@@ -484,7 +488,7 @@ u16 drawWallDefault(u16 x, wallhit_t* hit)
 		case WALL_TYPE_PIPES:
 			return drawWallPipes(x, y, w, h, hit);
 
-		case WALL_TYPE_SHELF:
+		case WALL_TYPE_DADO:
 			return drawWallShelf(x, y, w, h, hit);
 
 		case WALL_TYPE_LOW:

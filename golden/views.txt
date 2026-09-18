@@ -12,8 +12,33 @@ map1_spawn         --map 1
 # two ticks with fire held: muzzle flash and the impact marker on the far wall
 map1_fire          --map 1 --frames 2 --fire
 # map 99 is the showcase corridor, numbered out of the way of real levels.
-# Default style: signs, lights, pipes, shelves and switch along the top wall;
+# Default style: signs, lights, pipes, dado and switch along the top wall;
 # doors, windows, bars, parapet and pillars below
 showcase_corridor  --map 99 --pos 7040,384 --angle 0
 # the same lower run seen face-on from the room beneath it
 showcase_room      --map 99 --pos 9344,1152 --angle 1206
+# map 98 is the same corridor rendered in the lab style (see loadMapData)
+lab_corridor       --map 98 --pos 7040,384 --angle 0
+lab_room           --map 98 --pos 9344,1152 --angle 1206
+# the shootable vent panel at the corridor end, face on at 2.5 cells
+lab_vent           --map 98 --pos 7808,384 --angle 0
+# map 1, two shootable walls down one line: a grille seen through a grille, which
+# interleaves two faces in every column and once combed the frame and joints
+map1_grilles       --map 1 --pos 8513,297 --angle 321
+# map 1, the airlock with the shootable wall behind it: the grille frame once
+# drew its right bar back into a column the door leaf had already covered
+map1_door_grille   --map 1 --pos 7690,294 --angle 88
+# the dark wall run in the lab room's south wall, face on at 2.5 cells
+lab_dark           --map 98 --pos 7424,896 --angle 402
+# the arch run beside it, face on at 2.5 cells with the panel wall beyond
+lab_arch           --map 98 --pos 8448,896 --angle 402
+# the switch run beside the arches, face on at 2.5 cells
+lab_switch         --map 98 --pos 9344,896 --angle 402
+# the sign run beside the switches, face on at 2.5 cells
+lab_sign           --map 98 --pos 10368,896 --angle 402
+# the strip light run at the end of the south wall, face on at 2.5 cells
+lab_light          --map 98 --pos 11392,896 --angle 402
+# the pipe runs on the lab room's west wall, face on at 2.5 cells
+lab_pipes          --map 98 --pos 7296,1152 --angle 804
+# the tiled wall on the lab room's east wall, face on at 2.5 cells
+lab_tiles          --map 98 --pos 11392,1152 --angle 0
