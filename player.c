@@ -12,9 +12,9 @@ player_t player = {0};
 const weapon_t weapons[] = 
 {
 	{24, 40, 240, AMMO_TYPE_NONE, SPRITE_SLOT_PISTOL, 35, 96}, //Pistol
-	{6, 15, 160, AMMO_TYPE_SMG, SPRITE_SLOT_SMG, 35, 96}, //SMG
-	{8, 16, 208, AMMO_TYPE_AR, SPRITE_SLOT_AR, 35, 96}, //AR
-	{5, 20, 192, AMMO_TYPE_LMG, SPRITE_SLOT_LMG, 35, 96}, //LMG
+    {6, 15, 160, AMMO_TYPE_SMG, SPRITE_SLOT_SMG, 38, 96}, //SMG
+    {8, 16, 208, AMMO_TYPE_AR, SPRITE_SLOT_AR, 40, 96}, //AR
+    {5, 20, 192, AMMO_TYPE_LMG, SPRITE_SLOT_LMG, 40, 96}, //LMG
 };
 
 /* Pickup is twice what it costs to kill the enemy that drops that weapon at
