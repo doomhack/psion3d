@@ -352,17 +352,15 @@ static u16 drawWallLow(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 	return FALSE;
 }
 
-/* A post standing in the cell - pillar, strut, tree, machinery stack. Not
-   solid, so the columns either side of it keep whatever the ray found behind.
-   The post itself is opaque and both planes are written outright rather than
-   through depthWall, whose dither would let the far wall show through it. */
+/* A post standing in the cell - pillar, strut, tree, machinery stack. The ray
+   caster finds the post itself, a square in the cell's middle, so every column
+   that arrives here is post; see pillarHit() in draw.c. The post is opaque and
+   both planes are written outright rather than through depthWall, whose
+   dither would let anything drawn before it show through. */
 static u16 drawWallPillar(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 {
 	s16 wallx = hit->f_wallX;
 	s16 band;
-
-	if(wallx < 96 || wallx >= 160)
-		return FALSE;
 
 	bmClearRect4(x, y, h, blackBm);
 	bmFillRect4(x, y, h, greyBm);
@@ -380,7 +378,7 @@ static u16 drawWallPillar(s16 x, s16 y, s16 w, s16 h, const wallhit_t* hit)
 	bmFillRect4(x, y + h - band, band, blackBm);
 
 	/* A lit edge down one side, so the post reads as round rather than flat. */
-	if(wallx >= 144)
+	if(wallx >= 192)
 		bmClearRect4(x, y + band, h - band - band, greyBm);
 
 	return TRUE;

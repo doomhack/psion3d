@@ -195,9 +195,16 @@ static u16 drawVentPanel(s16 x, s16 y, s16 h, const wallhit_t* hit)
    the opening is framed even when the wall beyond is the same grey as the
    jambs. The cell is not solid, so the opening's columns are otherwise left
    as the ray drew what stands behind them. Gated as the panels are: beyond
-   WALL_DETAIL_DEPTH the lintel is one black span and there are no stiles. */
+   WALL_DETAIL_DEPTH the lintel is one black span and there are no stiles.
+
+   The jambs are drawn on the cell face, so the arch has no depth: seen
+   obliquely it is a flat opening. Real jambs, found by the ray caster as
+   boxes in the cell, were tried and taken out again: from in front of a
+   doorway their reveals fill both sides of the screen with full height
+   wall, which measured 13fps against 20 on the device. */
 
 #define ARCH_JAMB 32 /* wallX of jamb at each side of the cell */
+
 
 static u16 drawLabPassage(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
@@ -890,23 +897,30 @@ static u16 drawLabBench(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	return FALSE;
 }
 
-/* A structural strut standing in the cell. Not solid, so the columns either
-   side of it keep whatever the ray found behind. The strut is opaque and writes
-   both planes outright rather than with a dither, which would let the wall
-   behind show through it. */
+/* A structural strut standing in the cell. The ray caster finds the post
+   itself, a square in the cell's middle, so every column that arrives here
+   is post and the cell's open part never does; see pillarHit() in draw.c.
+   The post is opaque, so the column occludes. Its faces are shaded as the
+   panels are - grey, or the pale dither face on and near - so where two
+   faces meet at a corner the change of shade draws the edge. */
 static u16 drawLabStrut(s16 x, s16 y, s16 h, const wallhit_t* hit)
 {
-	s16 wallx = hit->f_wallX;
+	s16 depth = fp2int(hit->f_wallDist);
 	s16 band, flange;
 
-	if(wallx < 96 || wallx >= 160)
-		return FALSE;
+	if(depth >= WALL_DETAIL_DEPTH)
+	{
+		bmFillRect4(x, y, h, blackBm);
+
+		return TRUE;
+	}
 
 	bmClearRect4(x, y, h, blackBm);
-	bmFillRect4(x, y, h, greyBm);
 
-	if(fp2int(hit->f_wallDist) >= WALL_DETAIL_DEPTH)
-		return TRUE;
+	if(depth >= LAB_PANEL_NEAR || hit->side)
+		bmFillRect4(x, y, h, greyBm);
+	else
+		bmFillPattern4(x, y, h, greyBm);
 
 	band = h >> 4;
 
@@ -923,10 +937,6 @@ static u16 drawLabStrut(s16 x, s16 y, s16 h, const wallhit_t* hit)
 	bmFillRect4(x, y + h - band, band, blackBm);
 	bmFillRect4(x, y + (h >> 2), flange, blackBm);
 	bmFillRect4(x, y + h - (h >> 2), flange, blackBm);
-
-	/* A lit edge down one side, so the strut reads as round rather than flat. */
-	if(wallx >= 144)
-		bmClearRect4(x, y + band, h - band - band, greyBm);
 
 	return TRUE;
 }
@@ -1085,14 +1095,10 @@ u16 drawWallLab(u16 x, wallhit_t* hit)
             return drawLabControlPanel(x, y, h, hit);
 		case WALL_TYPE_DADO:
 			return drawLabTiles(x, y, h, hit);
-
 		case WALL_TYPE_LOW:
 			return drawLabBench(x, y, h, hit);
-
 		case WALL_TYPE_PILLAR:
 			return drawLabStrut(x, y, h, hit);
-
-
 	}
 
 	return TRUE;

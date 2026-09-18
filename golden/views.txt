@@ -42,3 +42,5 @@ lab_light          --map 98 --pos 11392,896 --angle 402
 lab_pipes          --map 98 --pos 7296,1152 --angle 804
 # the tiled wall on the lab room's east wall, face on at 2.5 cells
 lab_tiles          --map 98 --pos 11392,1152 --angle 0
+# the pillar run seen diagonally from the room, posts showing two faces each
+lab_pillars        --map 98 --pos 10624,1152 --angle 1400

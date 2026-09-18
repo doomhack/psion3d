@@ -444,6 +444,137 @@ static u16 rayDelta(const f16 f_dir)
 	return delta;
 }
 
+/* A pillar cell holds its wall inside the cell rather than on its faces: a
+   square post in the cell's middle. Drawn on the cell faces it came apart,
+   two slabs on the cell's edges with a gap at the corner. So when the DDA
+   steps into a pillar cell the ray is tested against the post itself, the
+   standard slab test, written for any box in the cell. At that point sidedx and
+   sidedy are the ray lengths to the far x and y faces of the cell and
+   deltax, deltay the lengths per cell, so a box spanning lo..hi in x is
+   entered at sidedx - deltax * (256 - lo) / 256 and left at
+   sidedx - deltax * (256 - hi) / 256 for a ray travelling +x, and at
+   sidedx - deltax * hi / 256 and sidedx - deltax * lo / 256 travelling -x;
+   likewise for y. The ray is in the box where the two intervals overlap,
+   entering through whichever slab it entered last, which gives the face and
+   the distance; wallX along that face falls out of the other coordinate as
+   it does for a cell face, scaled up to a whole face so the wall style sees
+   0..255 as on any other.
+
+   A ray parallel to an axis has no delta on it (sidedx is DDA_NEVER and the
+   subtraction would wrap), but its coordinate on that axis never changes, so
+   it is in that slab for the whole cell or not at all. And a ray that starts
+   inside a slab's range - the player standing in the same row or column of
+   cells as the box - has that slab's entry behind it: the subtraction would
+   go negative and wrap, so an entry behind the origin is an entry at zero,
+   and an exit behind the origin is a miss.
+
+   A miss lets the DDA carry on out of the cell, as it does today through the
+   open part of any non solid cell. A hit is solid: the post has four faces
+   and hides what stands behind it. Only run when a ray hits a pillar cell,
+   so it costs the DDA loop one compare per wall hit and nothing per step.
+
+   An archway with real jambs was built on the same test and taken out
+   again: standing in front of a doorway and looking through, the reveals
+   fill both sides of the screen with full height wall at a grazing angle,
+   and that measured 13fps against 20 on the device. */
+
+#define PILLAR_LO 96 /* the post, in both axes */
+#define PILLAR_HI 160
+
+typedef struct boxhit_t
+{
+	f16 f_dist;
+	u16 side;
+	s16 lo;    /* the hit face's start along wallX, to subtract */
+	u16 shift; /* and its scale up to a whole face */
+} boxhit_t;
+
+static u16 slabHit(const u16 sided, const u16 delta, const s16 step, const f16 f_d,
+	const f16 f_pos, const s16 lo, const s16 hi, u16* in, u16* out)
+{
+	u16 toIn, toOut;
+
+	if(f_d == 0)
+	{
+		if(f_pos < lo || f_pos >= hi)
+			return FALSE;
+
+		*in = 0;
+		*out = DDA_NEVER;
+
+		return TRUE;
+	}
+
+	if(step > 0)
+	{
+		toIn = (u16)fpmul((f16)delta, 256 - lo);
+		toOut = (u16)fpmul((f16)delta, 256 - hi);
+	}
+	else
+	{
+		toIn = (u16)fpmul((f16)delta, hi);
+		toOut = (u16)fpmul((f16)delta, lo);
+	}
+
+	if(sided <= toOut)
+		return FALSE;
+
+	*in = sided > toIn ? sided - toIn : 0;
+	*out = sided - toOut;
+
+	return TRUE;
+}
+
+static u16 boxHit(const u16 sidedx, const u16 sidedy, const u16 deltax, const u16 deltay,
+	const s16 stepx, const s16 stepy, const f16 f_dx, const f16 f_dy,
+	const s16 mapx, const s16 mapy,
+	const s16 xlo, const s16 xhi, const s16 ylo, const s16 yhi, boxhit_t* box)
+{
+	u16 xin, xout, yin, yout, in, out;
+	s16 w;
+
+	if(!slabHit(sidedx, deltax, stepx, f_dx, player.pos.x - int2fp(mapx), xlo, xhi, &xin, &xout))
+		return FALSE;
+
+	if(!slabHit(sidedy, deltay, stepy, f_dy, player.pos.y - int2fp(mapy), ylo, yhi, &yin, &yout))
+		return FALSE;
+
+	in = xin > yin ? xin : yin;
+	out = xout < yout ? xout : yout;
+
+	/* Equal is a ray through the box's corner, entering one slab as it leaves
+	   the other. That is a hit on the corner: called a miss, the ray steps on
+	   into the solid cell beyond and draws a face of it that is buried inside
+	   the box, a column of the wrong shade bleeding through. */
+	if(in > out)
+		return FALSE;
+
+	box->f_dist = (f16)in;
+	box->side = xin > yin ? 0 : 1;
+
+	/* An x face runs along y, so wallX on it is the y coordinate. */
+	if(box->side == 0)
+	{
+		box->lo = ylo;
+		w = yhi - ylo;
+	}
+	else
+	{
+		box->lo = xlo;
+		w = xhi - xlo;
+	}
+
+	box->shift = 0;
+
+	while(w < 256)
+	{
+		w <<= 1;
+		box->shift++;
+	}
+
+	return TRUE;
+}
+
 void draw()
 {
 	u16 i;
@@ -486,6 +617,8 @@ void draw()
 		u16 side;
 		
 		u16 solid, hits;
+
+		boxhit_t box;
 	
 		const s16 rayIdx = baseIdx + rayIdxOffset[i];
 		const u16 cosIdx = (u16)((rayIdx + TRIG_COS_OFFSET) & TRIG_TABLE_MASK);
@@ -547,75 +680,93 @@ void draw()
 			f16 f_step;
 			u16 delta;
 
-			do
+			for(;;)
 			{
-				if(sidedx < sidedy)
+				do
 				{
-					sidedx = sidedx + deltax;
-					mapx += stepx;
-					side = 0;
-				}
-				else
-				{
-					sidedy = sidedy + deltay;
-					mapy += stepy;
-					side = 1;
-				}
-
-				hitcell = mapCell(mapx, mapy);
-				hit = isWall(hitcell);
-
-				/* Sprites are gathered from every cell the ray can see into, which
-				   is every cell that is not solid - an enemy standing in an archway
-				   or doorway is in a wall cell and used to be skipped here, so it
-				   simply was not drawn. Same single mask test as the old hit == 0. */
-				if(!isSolid(hitcell))
-				{
-					if(isSprite(hitcell) && !isMarked(hitcell) &&
-						spritesMarked < MAX_VISIBLE_SPRITES)
+					if(sidedx < sidedy)
 					{
-						markSprite(mapx, mapy);
-						markedSprites[spritesMarked].x = mapx;
-						markedSprites[spritesMarked].y = mapy;
-						spritesMarked++;
-						
-						if(isEnemy(hitcell))
-						{
-							enemy_t* enemy = getEnemy(GET_CELL_ID(hitcell));
+						sidedx = sidedx + deltax;
+						mapx += stepx;
+						side = 0;
+					}
+					else
+					{
+						sidedy = sidedy + deltay;
+						mapy += stepy;
+						side = 1;
+					}
 
-							if(enemy && spritesHit < MAX_VISIBLE_SPRITES &&
-								projectSprite(enemy->x, enemy->y, &spriteHits[spritesHit], f_viewCos, f_viewSin))
+					hitcell = mapCell(mapx, mapy);
+					hit = isWall(hitcell);
+
+					/* Sprites are gathered from every cell the ray can see into, which
+					   is every cell that is not solid - an enemy standing in an archway
+					   or doorway is in a wall cell and used to be skipped here, so it
+					   simply was not drawn. Same single mask test as the old hit == 0. */
+					if(!isSolid(hitcell))
+					{
+						if(isSprite(hitcell) && !isMarked(hitcell) &&
+							spritesMarked < MAX_VISIBLE_SPRITES)
+						{
+							markSprite(mapx, mapy);
+							markedSprites[spritesMarked].x = mapx;
+							markedSprites[spritesMarked].y = mapy;
+							spritesMarked++;
+							
+							if(isEnemy(hitcell))
 							{
-								spriteHits[spritesHit].enemyId = (u8)GET_CELL_ID(hitcell);
-								spriteHits[spritesHit].spriteId = ((enemy->enemyStats->spriteId << 3) | enemy->spriteFrame);
-								spriteHits[spritesHit].mirrored = enemy->spriteMirrored &&
-									(enemy->spriteFrame == ENEMY_FRAME_WALK_R1 ||
-									 enemy->spriteFrame == ENEMY_FRAME_WALK_R2);
-								spritesHit++;
+								enemy_t* enemy = getEnemy(GET_CELL_ID(hitcell));
+
+								if(enemy && spritesHit < MAX_VISIBLE_SPRITES &&
+									projectSprite(enemy->x, enemy->y, &spriteHits[spritesHit], f_viewCos, f_viewSin))
+								{
+									spriteHits[spritesHit].enemyId = (u8)GET_CELL_ID(hitcell);
+									spriteHits[spritesHit].spriteId = ((enemy->enemyStats->spriteId << 3) | enemy->spriteFrame);
+									spriteHits[spritesHit].mirrored = enemy->spriteMirrored &&
+										(enemy->spriteFrame == ENEMY_FRAME_WALK_R1 ||
+										 enemy->spriteFrame == ENEMY_FRAME_WALK_R2);
+									spritesHit++;
+								}
 							}
-						}
-						else
-						{
-							if(spritesHit < MAX_VISIBLE_SPRITES &&
-								projectSprite(int2fp(mapx) + flt2fp(0.5f), int2fp(mapy) + flt2fp(0.5f), &spriteHits[spritesHit], f_viewCos, f_viewSin))
+							else
 							{
-								/* A non enemy sprite cell is a pickup or a decoration. The
-								   low three bits of the type nibble are the frame within the
-								   slot, and DECOR_TYPE_BIT says which slot that is. */
-								const u16 type = GET_CELL_TYPE_ID(hitcell);
-								const u8 slot = (type & DECOR_TYPE_BIT) ? SPRITE_SLOT_DECORATIONS : SPRITE_SLOT_PICKUPS;
+								if(spritesHit < MAX_VISIBLE_SPRITES &&
+									projectSprite(int2fp(mapx) + flt2fp(0.5f), int2fp(mapy) + flt2fp(0.5f), &spriteHits[spritesHit], f_viewCos, f_viewSin))
+								{
+									/* A non enemy sprite cell is a pickup or a decoration. The
+									   low three bits of the type nibble are the frame within the
+									   slot, and DECOR_TYPE_BIT says which slot that is. */
+									const u16 type = GET_CELL_TYPE_ID(hitcell);
+									const u8 slot = (type & DECOR_TYPE_BIT) ? SPRITE_SLOT_DECORATIONS : SPRITE_SLOT_PICKUPS;
 
-								spriteHits[spritesHit].spriteId = (u8)((slot << 3) | (type & 7));
-								spriteHits[spritesHit].mirrored = FALSE;
-								spriteHits[spritesHit].enemyId = SPRITE_NO_ENEMY;
-								spritesHit++;
+									spriteHits[spritesHit].spriteId = (u8)((slot << 3) | (type & 7));
+									spriteHits[spritesHit].mirrored = FALSE;
+									spriteHits[spritesHit].enemyId = SPRITE_NO_ENEMY;
+									spritesHit++;
+								}
 							}
 						}
 					}
+				} while(hit == 0);
+
+				/* A pillar cell's wall is the post in its middle, not its faces:
+				   hit 2 is a hit on the post, a miss sends the ray on. Tested
+				   here, once per wall hit, and not in the step loop above: a
+				   compare per DDA step measured a frame a second. */
+				if(mapCellType(hitcell) == WALL_TYPE_PILLAR)
+				{
+					if(!boxHit(sidedx, sidedy, deltax, deltay, stepx, stepy, f_dx, f_dy,
+						mapx, mapy, PILLAR_LO, PILLAR_HI, PILLAR_LO, PILLAR_HI, &box))
+						continue;
+
+					hit = 2;
 				}
-			} while(hit == 0);
+
+				break;
+			}
 			
-			solid = isSolid(hitcell) || hits >= 2;
+			solid = isSolid(hitcell) || hits >= 2 || hit == 2;
 			
 			wallhits[hits].cell = hitcell;
 			wallhits[hits].mapX = (u8)mapx;
@@ -628,7 +779,29 @@ void draw()
 			   now that the accumulators are unsigned: the difference is the
 			   distance the ray has actually travelled, so it fits f16 whatever
 			   the delta was. */
-			if(side == 0)
+			if(hit == 2)
+			{
+				/* A box face: wallX along it is scaled up to a whole face so the
+				   wall style sees 0..255 as on any other, and the footprint below
+				   is scaled with it. */
+				f_dist = box.f_dist;
+				side = box.side;
+				wallhits[hits].side = (u8)side;
+
+				if(side == 0)
+				{
+					f_wallx = player.pos.y + fpmul(f_dist, f_dy) - int2fp(mapy) - box.lo;
+					delta = deltax;
+				}
+				else
+				{
+					f_wallx = player.pos.x + fpmul(f_dist, f_dx) - int2fp(mapx) - box.lo;
+					delta = deltay;
+				}
+
+				f_wallx <<= box.shift;
+			}
+			else if(side == 0)
 			{
 				f_dist = (f16)(sidedx - deltax);
 
@@ -667,6 +840,9 @@ void draw()
 			   256 cells wraps it. The clamp also bounds the 16 bit product
 			   below: 1024 * 50 fits. */
 			f_step = fpmul(f_dist, (f16)delta);
+
+			if(hit == 2)
+				f_step = (u16)f_step >= (16384 >> box.shift) ? 16384 : (f_step << box.shift);
 
 			if((u16)f_step >= 16384)
 				f_step = 16384;
