@@ -14,6 +14,7 @@ const char *pcGetAssetRoot(void);
 /* Report every failed p_open. Off by default: loadSprite probes past the last
    frame of every sprite, so failures are routine rather than faults. */
 void pcSetIoVerbose(int on);
+int  pcGetIoVerbose(void);
 
 /* The tick source behind p_returntickcount() is virtual so that pausing the
    host does not cause an avalanche of catch-up ticks on resume. */

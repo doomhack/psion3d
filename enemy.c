@@ -5,6 +5,7 @@
 #include "units.h"
 #include "draw.h"
 #include "pickup.h"
+#include "mission.h"
 
 #define ENEMY_LEASH_DIST_METERS 28
 #define ENEMY_ATTACK_DIST_MER_METERS 4
@@ -471,7 +472,7 @@ static void enemyShootPlayer(const u16 id, const enemy_t* enemy)
        firing back wake the next one. */
     alertEnemies((u8)fp2int(enemy->x), (u8)fp2int(enemy->y));
 
-    onTarget = enemyRandomChance(enemy->enemyStats->accuracy) && player.health > 0;
+    onTarget = enemyRandomChance(difficultyAccuracy(enemy->enemyStats->accuracy)) && player.health > 0;
 
     /* Every round leaves a streak, so a near miss reads as a near miss rather
        than as nothing having happened. */
@@ -481,7 +482,7 @@ static void enemyShootPlayer(const u16 id, const enemy_t* enemy)
     if(!onTarget)
         return;
 
-    damage = enemy->enemyStats->damage;
+    damage = difficultyDamage(enemy->enemyStats->damage);
 
     hurtPlayer(damage, enemy->x, enemy->y);
 }

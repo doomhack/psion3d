@@ -9,6 +9,7 @@
 extern "C" {
 #include "host.h"
 #include "plib_pc.h"
+#include "ui.h"
 }
 
 int main(int argc, char **argv)
@@ -22,7 +23,13 @@ int main(int argc, char **argv)
 
 	QCommandLineOption assetsOpt({"a", "assets"},
 		"Directory holding map/ and spr/. Defaults to the source tree.", "dir");
-	QCommandLineOption mapOpt({"m", "map"}, "Map to load. Default 1.", "n", "1");
+	QCommandLineOption mapOpt({"m", "map"},
+		"Start playing this map straight away, skipping the menus. Without it "
+		"the program opens at the main menu, as the device does.", "n", "0");
+	QCommandLineOption screenOpt("screen",
+		"Open at a menu screen, for screenshots: main, select, briefing or "
+		"objectives (the front end, from the first mission), or pause, abort, "
+		"pobjectives or map (the pause set, which need --map).", "name");
 	QCommandLineOption tickOpt("tick-start",
 		"Seed the 16-bit tick counter, e.g. 65520, to exercise its wraparound "
 		"in the first second rather than after 34 minutes.", "ticks");
@@ -54,6 +61,7 @@ int main(int argc, char **argv)
 
 	parser.addOption(assetsOpt);
 	parser.addOption(mapOpt);
+	parser.addOption(screenOpt);
 	parser.addOption(tickOpt);
 	parser.addOption(shotOpt);
 	parser.addOption(gutterOpt);
@@ -126,10 +134,76 @@ int main(int argc, char **argv)
 	if(parser.isSet(tickOpt))
 		pcTickSetStart((unsigned short)parser.value(tickOpt).toUInt());
 
-	if(!hostInit(assetRoot, parser.value(mapOpt).toInt()))
+	const int mapId = parser.value(mapOpt).toInt();
+
+	/*  --screen is a key sequence played into the menus from where hostInit
+	    leaves them: the main menu, or the game when --map is given. */
+	struct ScreenRoute { const char *name; bool inPlay; const char *keys; };
+
+	static const ScreenRoute routes[] =
+	{
+		{ "main",        false, ""     },
+		{ "select",      false, "e"    },
+		{ "briefing",    false, "ee"   },
+		{ "objectives",  false, "eee"  },
+		{ "pause",       true,  "x"    },
+		{ "abort",       true,  "xddde" },
+		{ "pobjectives", true,  "xde"  },
+		{ "map",         true,  "xdde" }
+	};
+
+	const ScreenRoute *route = nullptr;
+
+	if(parser.isSet(screenOpt))
+	{
+		const QString name = parser.value(screenOpt);
+
+		for(const auto &r : routes)
+			if(name == r.name)
+				route = &r;
+
+		if(!route)
+		{
+			std::fprintf(stderr, "--screen: unknown screen %s\n", qPrintable(name));
+			return 1;
+		}
+
+		if(route->inPlay != (mapId != 0))
+		{
+			std::fprintf(stderr, "--screen %s %s --map\n", route->name,
+			             route->inPlay ? "needs" : "does not take");
+			return 1;
+		}
+	}
+
+	if(!hostInit(assetRoot, mapId))
 	{
 		std::fprintf(stderr, "hostInit failed.\n");
 		return 1;
+	}
+
+	if(route)
+	{
+		for(const char *k = route->keys; *k; ++k)
+		{
+			int uk = UI_KEY_NONE;
+
+			switch(*k)
+			{
+				case 'e': uk = UI_KEY_ENTER; break;
+				case 'x': uk = UI_KEY_ESC; break;
+				case 'd': uk = UI_KEY_DOWN; break;
+				case 'u': uk = UI_KEY_UP; break;
+			}
+
+			hostMenuKey(uk);
+		}
+
+		if(hostMode() != HOST_MODE_MENU)
+		{
+			std::fprintf(stderr, "--screen %s: the menu did not open (no missions?)\n", route->name);
+			return 1;
+		}
 	}
 
 	if(placePlayer)

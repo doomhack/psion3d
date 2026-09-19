@@ -44,3 +44,14 @@ lab_pipes          --map 98 --pos 7296,1152 --angle 804
 lab_tiles          --map 98 --pos 11392,1152 --angle 0
 # the pillar run seen diagonally from the room, posts showing two faces each
 lab_pillars        --map 98 --pos 10624,1152 --angle 1400
+# the menu screens, rendered by pc/src/menu_pc.cpp's QPainter stand-in for the
+# device's WLIB fonts - layout and logic, not a pixel match for the ROM Swiss fonts
+menu_main          --screen main
+menu_select        --screen select
+menu_briefing      --screen briefing
+menu_objectives    --screen objectives
+# the pause set needs a level loaded; Esc from play opens the pause dialog
+pause_menu         --map 1 --screen pause
+pause_abort        --map 1 --screen abort
+pause_objectives   --map 1 --screen pobjectives
+pause_map          --map 1 --screen map

@@ -1,3 +1,4 @@
+[MAP]
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXV000000000000000000000D0C00A00A00XXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXU|R#:*!BBSWWPPXXXAXBXXXSXXXXXXX0XXXXXXXXXXXXXXXXXXXXXX
@@ -62,3 +63,35 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+[LEVEL]
+start    = 27, 1        ; cell the player spawns in, 0-based x, y
+angle    = 90           ; compass bearing: 0 north (up the grid), 90 east, 180 south, 270 west
+end      = 23, 16       ; cell that ends the level
+title    = Cold Storage
+location = Hamburg, Germany
+mappos   = 130, 44      ; pixel position on the world map screen
+
+[BRIEFING]
+A shipping company on the Hamburg docks has been moving more than freight.
+Customs flagged a refrigerated warehouse that draws three times the power its
+manifest justifies, and the night shift is armed. We believe the basement holds
+a laboratory producing the nerve agent recovered in Vienna last month.
+
+Get in through the service corridor, find the laboratory and secure the
+research before it can be moved. The site manager's keycard opens the cold
+store at the back of the building. Expect hired guards on the upper floor and
+trained men below. Civilians work the day shift only, so anyone you meet
+after dark is there for a reason.
+
+[OBJECTIVE]
+Locate the laboratory
+Find the hidden lab in the basement below the cold store.
+
+[OBJECTIVE]
+Recover the research
+Take the sample case and the production notes from the lab.
+
+[OBJECTIVE]
+Reach the cold store
+Use the manager's keycard to get through the locked door at the back.

@@ -181,6 +181,9 @@ how hard a hit lands — not by whether rounds land.
 - HP is `u8` — 255 is the ceiling without a type change.
 - Enemies give up the chase beyond 14 cells (28 m). Now that doors and arches no longer stop a
   pursuit, this leash is the only thing that ends one.
+- **Difficulty** scales Dmg and Hit chance at the shot (`difficultyDamage` / `difficultyAccuracy`
+  in `mission.c`) and nothing else: Agent x3/4, Senior x1, Elite x5/4. The table above is Senior.
+  The other two multipliers are first guesses and have not been played.
 
 ### Movement and sight
 

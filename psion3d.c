@@ -10,6 +10,8 @@
 #include "units.h"
 #include "videomem.h"
 #include "gameloop.h"
+#include "ui.h"
+#include "ui_psion.h"
 
 /*  Were in psion3d.h until it was made SDK-free; only this file reads them. */
 static const P_RECT gameWinRect = {{0,0}, {240,160}};
@@ -116,48 +118,110 @@ static u16 runTicks(u16 gameTime)
 	return gameTime;
 }
 
+/*  A window server key event to the UI_KEY_* the menus take. Everything else
+    is UI_KEY_NONE, including the letters that drive the game, which are read
+    as levels from the scancodes rather than as events. */
+static u16 uiKeyFor(u16 keycode)
+{
+	keycode &= (u16)~W_KEY_REPEATED;
+
+	switch(keycode)
+	{
+	case W_KEY_UP:
+		return UI_KEY_UP;
+	case W_KEY_DOWN:
+		return UI_KEY_DOWN;
+	case W_KEY_LEFT:
+		return UI_KEY_LEFT;
+	case W_KEY_RIGHT:
+		return UI_KEY_RIGHT;
+	case W_KEY_RETURN:
+		return UI_KEY_ENTER;
+	case W_KEY_ESCAPE:
+		return UI_KEY_ESC;
+	case ' ':
+		return UI_KEY_SPACE;
+	}
+
+	return UI_KEY_NONE;
+}
+
 static void mainLoop()
 {
 	WS_EV event;
-		
+
 	u16 frames = 0;
 	u16 gameTime = p_returntickcount();
 	u16 lastTick = gameTime, t = 0;
 	TEXT buf[32];
 	u16 isForground = TRUE;
+	u8 modeBefore;
 
-	initPlayer();
-		
 	wInvalidateWin(debugWindowId);
 
 	while(1)
 	{
-		if(isForground)
-			wGetEventSpecial(&event, WE_REDRAW | WE_STATUS);
+		/* Only play polls: the frame loop below runs while the event is
+		   pending. A menu waits for its next key without spinning. */
+		if(isForground && gameMode == GAME_MODE_PLAYING)
+			wGetEventSpecial(&event, WE_KEY | WE_REDRAW | WE_STATUS);
 		else
 			wGetEventWait(&event);
 
 		while(event.type == E_FILE_PENDING)
 		{
 			gameTime = runTicks(gameTime);
-			
+
 			wFlush();
 
 			frames++;
-			
+
 			t = p_returntickcount();
-			
+
 			if(tickElapsed(t, lastTick) >= TICKS_PER_SECOND)
 			{
 				wInvalidateWin(debugWindowId);
-				
+
 				lastTick = t;
 			}
 		}
-		
-		if (event.type == WM_REDRAW)
+
+		if (event.type == WM_KEY)
 		{
-			if(event.handle == DEBUG_WIN)
+			u16 key = uiKeyFor(event.p.key.keycode);
+
+			if(key != UI_KEY_NONE)
+			{
+				u16 action;
+
+				modeBefore = gameMode;
+				action = gameKey(key);
+
+				if(action == GAME_KEY_QUIT)
+					p_exit(0);
+
+				if(gameMode != modeBefore)
+				{
+					/* Into play: drop the menu window so the server repaints
+					   the game window under it, and restart the clock so the
+					   time spent in the menu is not caught up in one frame.
+					   Out of play: the menu comes up and paints itself. */
+					menuWindowShow(gameMode == GAME_MODE_MENU);
+					gameTime = p_returntickcount();
+				}
+				else if(action == GAME_KEY_REDRAW)
+				{
+					menuWindowInvalidate();
+				}
+			}
+		}
+		else if (event.type == WM_REDRAW)
+		{
+			if(event.handle == MENU_WIN)
+			{
+				menuWindowRedraw();
+			}
+			else if(event.handle == DEBUG_WIN)
 			{
 				wBeginRedrawWinGC0(debugWindowId);
 
@@ -182,8 +246,11 @@ static void mainLoop()
 			else if(event.handle == GAME_WIN)
 			{
 				wValidateWin(gameWindowId);
-				
-				updateScreen();
+
+				/* The direct blit ignores window clipping, so it must not
+				   run while the menu window is over the game window. */
+				if(gameMode == GAME_MODE_PLAYING)
+					updateScreen();
 			}
 		}
 		else if(event.type == WM_BACKGROUND)
@@ -248,7 +315,11 @@ void main()
 	
 	createGameWindow();
 
-	loadMap(1);
-	
+	/* Created last, so it sits over the other two while it is visible. */
+	createMenuWindow();
+
+	gameInit();
+	menuWindowInvalidate();
+
 	mainLoop();
 }

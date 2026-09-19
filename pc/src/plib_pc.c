@@ -30,6 +30,11 @@ void pcSetIoVerbose(int on)
 	g_ioVerbose = on;
 }
 
+int pcGetIoVerbose(void)
+{
+	return g_ioVerbose;
+}
+
 void pcSetAssetRoot(const char *root)
 {
 	if(root && *root)

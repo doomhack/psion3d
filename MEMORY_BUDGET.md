@@ -60,6 +60,7 @@ the declarations.
 | `spriteLoadBuffer` | 1,024 | `sprite.c` | file staging, used only during `loadSprite` |
 | sprite masks | 768 | `sprite.c` | three 256-entry LUTs |
 | `spriteColByte` / `ColShift` | 480 | `sprite.c` | per-column blit LUTs |
+| `menuText` and line table | 1,504 | `menu.c` | 1,280 byte copy of the briefing or objective text being shown, 48 line starts/lengths, two 40 byte strings. Added 2026-09-19; the `_CONST` menu labels are another ~570. The mission index itself is far (`MISIDX`, 1,360 bytes) |
 | everything else | ~340 | | row masks, segment handles, cache entries, `dbgTxt`, window statics, runtime |
 
 Sprite working set total (`drawWall` through `map` in the map): 13,804.
@@ -130,6 +131,8 @@ The OS, window server and file system take their own share on top.
 | 2026-09-11 | 22,760 | 42,400 | 49,152 | pickups, decorations, tracers, `gameloop.c` |
 | 2026-09-12 | 24,634 | 42,816 | 49,152 | AI memory fields, player collision, hit feedback |
 | 2026-09-16 | 25,385 | 42,864 | 49,152 | detail walls, strafe keys, memcheck script |
+| 2026-09-19 | 28,885 | 42,992 | 49,152 | map format: mapInfo + text segment handle |
+| 2026-09-19 | 37,731 | 45,120 | 49,152 | menu system: menu.c buffers, mission index, automap, ui seam |
 
 Code has grown ~9 KB in a week; data has barely moved. That is the intended
 shape — features should land as code and far data, not as near arrays.

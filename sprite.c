@@ -248,6 +248,17 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 	u16 frameCount;
 	u8 spriteNum = id & SPRITE_NUM_MASK;
 
+	/* A slot loaded for an earlier mission still holds its segment. Release
+	   it first: the new one is created under the same SPR<n> name, and a
+	   leaked segment per slot per mission would run the machine dry. */
+	if(spriteSegs[spriteNum] > 0)
+	{
+		p_sgclose(spriteSegs[spriteNum]);
+		spriteSegs[spriteNum] = 0;
+		spriteFrameCounts[spriteNum] = 0;
+		invalidateSpriteCache(spriteNum);
+	}
+
 	for(frame = 0; frame < SPRITE_MAX_FRAMES; frame++)
 	{
 		INT bytesRead;

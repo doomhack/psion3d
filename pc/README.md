@@ -58,16 +58,24 @@ pc\build\psion3d_pc.exe
 
 Arrows move and turn, W/S move and A/D strafe (as do `,` and `.`, matching the
 device), Ctrl or Return fires, space or E is the use key, 1-4 select weapons,
-P pauses. Space is the use key on the device too (`kbScan[4] & 0x1`),
-which is why it no longer fires here. Assets are read from the working tree's
-`map/` and `spr/`, so an edited sprite shows up on the next run without
-deploying anything.
+Esc opens the pause menu, P freezes the clock. Space is the use key on the
+device too (`kbScan[4] & 0x1`), which is why it no longer fires here. Assets
+are read from the working tree's `map/` and `spr/`, so an edited sprite shows
+up on the next run without deploying anything.
+
+With no options the program opens at the main menu, as the device does: the
+menus are the portable `menu.c` drawn through `ui.h`, which `src/menu_pc.cpp`
+implements with QPainter into a 480x160 image (the window widens to match).
+Its Helvetica, stretched 10% to match the ROM Swiss 13/16 widths measured
+off device grabs, is a stand-in for those fonts, so a menu golden frame
+checks layout and logic, not the device's exact pixels.
 
 Useful options:
 
 | Option | |
 | --- | --- |
-| `--map <n>` | load a different level |
+| `--map <n>` | skip the menus and start playing this level; what every gameplay golden view passes |
+| `--screen <name>` | open at a menu screen for a `--screenshot`: `main`, `select`, `briefing`, `objectives` (the front end, from the first mission), or with `--map`: `pause`, `abort`, `pobjectives`, `map` |
 | `--assets <dir>` | read `map/` and `spr/` from somewhere else (or set `PSION3D_ASSETS`) |
 | `--screenshot <file>` | render one frame to a PNG at 1:1 and exit, without opening a window |
 | `--pos <x,y>` | start the player here instead of the map's spawn. Q8 map units (256 per cell), the same numbers the HUD shows, so `7040,384` is cell 27.5,1.5. Warns if the cell is not walkable |
@@ -104,9 +112,12 @@ still the one class of bug where "works on PC" can mislead. Configure with
 | `src/fpasm_pc.c` | `fpmul`, plus the layout assertions `fpdiv` depends on |
 | `src/debug_pc.c` | stands in for `debug.c` |
 | `src/host.c` | the frame driver; the only PC file that includes game headers |
-| `src/GameView.cpp` | plane unpack, palette, integer scaling, key handling |
+| `src/menu_pc.cpp` | stands in for `ui_psion.c`: the `ui.h` primitives with QPainter. Not `ui_pc.*` - Qt's AutoUic claims any `ui_*.h` as a generated form header |
+| `src/GameView.cpp` | plane unpack, palette, integer scaling, key handling, the menu image |
 | `src/MainWindow.cpp` | HUD, pacing and view menus |
 
 No `.cpp` may include a game header: `fp_types.h` puns `fpsplit_t` through a
 union, which is legal C but formally undefined in C++. `src/host.h` is the
-entire surface the Qt layer sees, and it deliberately includes nothing.
+entire surface the Qt layer sees, and it deliberately includes nothing. The
+one exception is `ui.h`, which has no includes and plain C types for exactly
+this reason.

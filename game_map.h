@@ -56,9 +56,42 @@
 
 extern u16 map[MAP_Y][MAP_X];
 
+/* Everything a level file says beyond the grid. The numbers live here; the
+   text (title, location, briefing, objectives) lives in a far segment and is
+   reached by offset through mapTextCopy, so a level's prose costs no near
+   data. MAP_TEXT_NONE marks an item the file did not give. The format is
+   documented in map/README.md. */
+#define MAP_MAX_OBJECTIVES 5
+#define MAP_TEXT_NONE 0xFFFF
+
+typedef struct mapinfo_t
+{
+	u8 startX, startY;	/* cell the player spawns in */
+	u8 endX, endY;	/* cell that ends the level */
+	u16 mapPosX, mapPosY;	/* where the level sits on the world map screen */
+	f16 f_startAngle;	/* Q8 radians, engine convention (0 is +x) */
+	u8 objectiveCount;
+	u16 titleOfs, locationOfs, briefingOfs;
+	u16 objectiveOfs[MAP_MAX_OBJECTIVES];	/* one title string each */
+	u16 objectiveBriefOfs[MAP_MAX_OBJECTIVES];	/* and one briefing */
+	u16 textLen;	/* bytes used in the text segment */
+} mapinfo_t;
+
+extern mapinfo_t mapInfo;
+
+/* loadMap is the two halves in turn: loadMapFile parses the file into map[][],
+   mapInfo and the text segment (and resets the enemy list), loadMapData
+   then picks the wall style and loads the sprites. The mission index calls
+   only the first, to read titles without loading a level's assets. */
+u16 loadMapFile(const u8 mapId);
 void loadMapData(const u8 mapId);
 u16 loadMap(const u8 mapId);
 void unlockDoors(void);
+
+/* Copy the string at ofs out of the level text into a near buffer, always NUL
+   terminated. Paragraph breaks inside it are '\n'. Returns the length copied;
+   MAP_TEXT_NONE gives an empty string. */
+u16 mapTextCopy(const u16 ofs, char *buf, const u16 bufLen);
 
 static u16 mapCell(const u16 x, const u16 y)
 {

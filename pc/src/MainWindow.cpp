@@ -20,6 +20,14 @@ MainWindow::MainWindow(QWidget *parent)
 
 	m_view = new GameView(this);
 	connect(m_view, &GameView::pauseToggled, this, &MainWindow::togglePause);
+	connect(m_view, &GameView::modeChanged, this, [this]()
+	{
+		/*  The view's sizeHint just doubled (480 wide) or halved. The layout
+		    only recomputes on its next LayoutRequest event, so activating it
+		    here makes sizeHint() current before the resize reads it. */
+		centralWidget()->layout()->activate();
+		resize(sizeHint());
+	});
 
 	/*  The device draws fps, position, health, angle and the debug slot into a
 	    separate 120x160 window through gPrintText. Same content, but as a real
@@ -203,7 +211,8 @@ void MainWindow::refreshHud()
 		"arrows/WASD move\n"
 		"space fire\n"
 		"1-4 weapons\n"
-		"P pause")
+		"Esc pause menu\n"
+		"P freeze clock")
 		.arg(m_fps)
 		.arg(m_paused ? "  (paused)" : "")
 		.arg(paceName)

@@ -374,10 +374,11 @@ static void updatePlayerWeapon(u16 keys)
 
 void initPlayer()
 {
-	player.pos.x = flt2fp(27.5f);
-	player.pos.y = flt2fp(1.5f);
+	/* Spawn where the level file says, in the middle of the cell. */
+	player.pos.x = int2fp(mapInfo.startX) + flt2fp(0.5f);
+	player.pos.y = int2fp(mapInfo.startY) + flt2fp(0.5f);
 
-	player.pos.angle = 0;
+	player.pos.angle = mapInfo.f_startAngle;
 	player.health = 100;
 	f_moveVel = 0;
 	f_strafeVel = 0;

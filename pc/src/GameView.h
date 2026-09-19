@@ -9,12 +9,14 @@ extern "C" {
 }
 
 /*  Builds a QImage of the current host framebuffer, applying the 4-entry LCD
-    palette. Shared by the widget and by the --screenshot path, so there is
-    only ever one copy of the plane-to-shade mapping. */
+    palette - or of the menu, when that is what the game is showing. Shared
+    by the widget and by the --screenshot path, so there is only ever one
+    copy of the plane-to-shade mapping. */
 QImage psion3dFrameImage(bool showGutter);
 
 /*  Shows the game's two-plane 1bpp backbuffer as an integer-scaled image and
-    turns Qt key events into host key state. */
+    turns Qt key events into host key state. In the menu it shows the 480x160
+    menu image instead and turns key presses into UI_KEY_* edges. */
 class GameView : public QWidget
 {
 	Q_OBJECT
@@ -30,8 +32,15 @@ public:
 
 	QSize sizeHint() const override;
 
+	/*  Re-fit to the host's mode if it changed. Cheap when it did not. */
+	void syncMode();
+
 signals:
 	void pauseToggled();
+
+	/*  The image is 480 wide in the menu and 240 in play, so the window
+	    re-fits itself when the mode switches. */
+	void modeChanged();
 
 protected:
 	void paintEvent(QPaintEvent *) override;
@@ -43,12 +52,15 @@ protected:
 private:
 	void rebuildImage();
 	void recomputeTarget();
+	int  imageWidth() const;
 	static int hostKeyFor(int qtKey);
+	static int uiKeyFor(int qtKey);
 
 	QImage m_img;
 	QRect  m_dst;
 	int    m_scale = 3;
 	bool   m_showGutter = false;
+	int    m_mode = -1;             /* HOST_MODE_* the image was built for */
 };
 
 #endif

@@ -48,7 +48,12 @@ Working-tree line endings are mixed (git stores LF, some files are CRLF on disk)
 
 | File | Owns |
 | --- | --- |
-| `psion3d.c` | `main()`, WLIB windows, keyboard scancodes, fixed-tick main loop, screen blit |
+| `psion3d.c` | `main()`, WLIB windows, keyboard scancodes, key events, fixed-tick main loop, screen blit |
+| `gameloop.c` | The mode above the frame (`gameMode`: menu or playing), `gameInit`/`gameKey`/`gameStartMission`, and the tick catch-up loop both platforms call |
+| `menu.c` | The menu screens (main, mission select, briefing, objectives, pause, abort, pause objectives, map): state, keys and drawing through `ui.h` |
+| `ui.h` / `ui_psion.c` | The drawing seam the menus use, and its WLIB implementation: the 480x160 menu window, ROM Swiss 13/16 fonts. `pc/src/menu_pc.cpp` is the QPainter one |
+| `mission.c` | Mission index (titles/locations parsed from `map1..map20.map` at startup into a far segment), `difficulty`, `objectiveState[]` |
+| `automap.c` | The pause menu's level plan, rendered into `screenBm` with `bitmap.c` and copied out with `uiBlitMap` |
 | `draw.c` | DDA ray cast, per-span wall depth buffer, sprite collection/sorting, player shot resolution |
 | `walls.c` | Default wall style + `drawWall` function-pointer global |
 | `labwall.c` | Lab environment wall style (`drawWallLab`) |
@@ -90,7 +95,9 @@ grep -aoi "N.\{0,1\}\(SgnMol\|SgnDiv\|LngShr\|LngShl\)" *.OBJ | sort | uniq -c
 
 **Map cells are packed `u16`.** Flag bits (`MAP_MASK_SOLID`, `WALL`, `SPRITE`, `ENEMY`, `WALK`, `MARKED`) plus a 4-bit type in `MAP_BLOCK_TYPE_MASK` and a 6-bit id. `game_map.h` exposes `static` inline-style accessors (`mapCell`, `isWall`, `isSolid`, `canWalk`, …); out-of-range cells return a solid `WALL_TYPE_VOID` cell so callers never bounds-check. Map ASCII characters are decoded in `getCellEncoding()`; `C`/`E`/`F`/`G` delegate to `getEnemyCell()`.
 
-**Timing.** 32 ticks per second (`units.h`). `runTicks()` catches up game state in whole ticks against `p_returntickcount()` before rendering once, so `updatePlayer()`/`runAI()` may run zero or many times per frame. `units.h` also carries the meters-per-second-to-map-units conversions (1 cell = 2 metres).
+**Timing.** 32 ticks per second (`units.h`). `runTicks()` catches up game state in whole ticks against `p_returntickcount()` before rendering once, so `updatePlayer()`/`runAI()` may run zero or many times per frame. `units.h` also carries the meters-per-second-to-map-units conversions (1 cell = 2 metres). Whenever the mode switches back to playing (mission start, resume from pause), the platform restarts `gameTime` from the tick counter, or the time spent in the menu is caught up in one frame.
+
+**Two input paths.** Play reads key *levels* from `p_getscancodes` into the `keys` mask once a frame. Menus, and Esc during play, are key *events* from the window server (`WM_KEY`, mapped to `UI_KEY_*` in `psion3d.c`), which is why the play loop asks for `WE_KEY` and why the menus never touch `keys`. The PC host mirrors both: `hostSetKey` for levels, `hostMenuKey` for events. `menu.c` is portable and draws only through `ui.h`; the menu window is created last so it stacks over the game and debug windows, is hidden while playing (`blitVideoMem` writes video RAM underneath it), and repaints by `wInvalidateWin` so there is one draw path.
 
 ## Performance
 
@@ -123,7 +130,7 @@ Never isolate ray-loop internals by *substituting* values: everything downstream
 
 ## Assets
 
-Files are opened from full Psion paths: maps from `LOC::M:\IMG\MAP\map<N>.map`, sprites from `LOC::M:\IMG\SPR\<base><frame>.spr`. `p_read()` signals EOF with `E_FILE_EOF`, not `0` — treat any other short read as an error. Map loading writes straight into `map[][]`; do not add a second load buffer.
+Files are opened from full Psion paths: maps from `LOC::M:\IMG\MAP\map<N>.map`, sprites from `LOC::M:\IMG\SPR\<base><frame>.spr`. `p_read()` signals EOF with `E_FILE_EOF`, not `0` — treat any other short read as an error. Map loading writes straight into `map[][]`; do not add a second load buffer. The file is sectioned text - `[MAP]` grid, `[LEVEL]` key=value (start cell, compass bearing, end cell, title, location, map position), `[BRIEFING]` and up to five `[OBJECTIVE]` blocks - specified in `map/README.md`. Numbers land in `mapInfo`; the prose streams into a far segment and is read back with `mapTextCopy()`, so level text costs no DGROUP. `psion3d_pc --map N -v` prints what was parsed, and a malformed file fails the load with the line number.
 
 Sprites are 64x64, one frame per file, `base0.spr` … `base7.spr`; `loadSprite("sci", slot)` loads frame 0 then consecutive frames until one is missing, and sizes the segment to the frames actually loaded. Slot ids are in `sprslot.h`. A frame file is 1040 bytes — 16-byte header + 1024-byte row-major 2bpp payload; only the paragraph-aligned payload is copied into the segment. Pixel values: `0` transparent, `1` grey, `2` black, `3` white.
 

@@ -14,6 +14,10 @@
 #compile decor
 #compile fp_math
 #compile gameloop
+#compile menu
+#compile mission
+#compile automap
+#compile ui_psion
 #compile videomem
 #compile fpasm
 #compile %main

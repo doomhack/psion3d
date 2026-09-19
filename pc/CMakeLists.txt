@@ -31,6 +31,9 @@ set(GAME_SOURCES
     ${GAME_ROOT}/decor.c
     ${GAME_ROOT}/fp_math.c
     ${GAME_ROOT}/gameloop.c
+    ${GAME_ROOT}/menu.c
+    ${GAME_ROOT}/mission.c
+    ${GAME_ROOT}/automap.c
 )
 
 set(PC_SOURCES
@@ -39,6 +42,7 @@ set(PC_SOURCES
     src/fpasm_pc.c      # fpmul, plus the layout assertions fpdiv depends on
     src/debug_pc.c      # stands in for debug.c
     src/host.c          # the frame driver; the only PC file that includes game headers
+    src/menu_pc.cpp     # ui.h with QPainter: the menu screens (not ui_*.h, which AutoUic claims)
     src/main_pc.cpp
     src/GameView.cpp
     src/MainWindow.cpp

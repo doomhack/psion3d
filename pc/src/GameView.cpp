@@ -1,10 +1,16 @@
 #include "GameView.h"
+#include "menu_pc.h"
 
 #include <QPainter>
 #include <QKeyEvent>
 #include <QResizeEvent>
+#include <QCoreApplication>
 
 #include <cstring>
+
+extern "C" {
+#include "ui.h"
+}
 
 /*  The two planes are independent bitmasks over the same pixel, indexed here
     as (black << 1) | grey. The black plane sits on top of the grey one, so a
@@ -33,6 +39,9 @@ static const QRgb kPalette[4] =
 
 QImage psion3dFrameImage(bool showGutter)
 {
+	if(hostMode() == HOST_MODE_MENU)
+		return uiPcImage().copy();
+
 	int stride = 0;
 	const unsigned char *fb = hostFramebuffer(showGutter ? 1 : 0, &stride);
 
@@ -56,20 +65,44 @@ GameView::GameView(QWidget *parent)
 	setAutoFillBackground(false);
 	setMinimumSize(HOST_W, HOST_H);
 
+	m_mode = hostMode();
 	rebuildImage();
+}
+
+int GameView::imageWidth() const
+{
+	if(m_mode == HOST_MODE_MENU)
+		return UI_W;
+
+	return m_showGutter ? HOST_W_FULL : HOST_W;
 }
 
 void GameView::rebuildImage()
 {
-	const int w = m_showGutter ? HOST_W_FULL : HOST_W;
-
-	m_img = QImage(w, HOST_H, QImage::Format_Indexed8);
+	m_img = QImage(imageWidth(), HOST_H, QImage::Format_Indexed8);
 	m_img.setColorCount(4);
 
 	for(int i = 0; i < 4; ++i)
 		m_img.setColor(i, kPalette[i]);
 
 	recomputeTarget();
+}
+
+void GameView::syncMode()
+{
+	const int mode = hostMode();
+
+	if(mode == m_mode)
+		return;
+
+	m_mode = mode;
+	rebuildImage();
+	updateGeometry();
+	update();
+
+	/* Queued: syncMode also runs from paintEvent, and the window resizing
+	   itself in the middle of a paint is not allowed. */
+	QMetaObject::invokeMethod(this, [this]() { emit modeChanged(); }, Qt::QueuedConnection);
 }
 
 void GameView::setScale(int scale)
@@ -93,16 +126,15 @@ void GameView::setShowGutter(bool show)
 
 QSize GameView::sizeHint() const
 {
-	const int w = m_showGutter ? HOST_W_FULL : HOST_W;
 	const int s = m_scale > 0 ? m_scale : 3;
 
-	return QSize(w * s, HOST_H * s);
+	return QSize(imageWidth() * s, HOST_H * s);
 }
 
 void GameView::recomputeTarget()
 {
-	const int iw = m_img.width();
-	const int ih = m_img.height();
+	const int iw = imageWidth();
+	const int ih = HOST_H;
 
 	int s = m_scale;
 
@@ -123,15 +155,24 @@ void GameView::resizeEvent(QResizeEvent *)
 
 void GameView::paintEvent(QPaintEvent *)
 {
+	syncMode();
+
+	QPainter p(this);
+	p.fillRect(rect(), QColor(24, 24, 24));
+	p.setRenderHint(QPainter::SmoothPixmapTransform, false);
+
+	if(m_mode == HOST_MODE_MENU)
+	{
+		p.drawImage(m_dst, uiPcImage());
+		return;
+	}
+
 	int stride = 0;
 	const unsigned char *fb = hostFramebuffer(m_showGutter ? 1 : 0, &stride);
 
 	for(int y = 0; y < HOST_H; ++y)
 		std::memcpy(m_img.scanLine(y), fb + (size_t)y * stride, (size_t)stride);
 
-	QPainter p(this);
-	p.fillRect(rect(), QColor(24, 24, 24));
-	p.setRenderHint(QPainter::SmoothPixmapTransform, false);
 	p.drawImage(m_dst, m_img);
 }
 
@@ -161,11 +202,51 @@ int GameView::hostKeyFor(int qtKey)
 	}
 }
 
+/*  The menu keys, the same set the device reads from its key events. */
+int GameView::uiKeyFor(int qtKey)
+{
+	switch(qtKey)
+	{
+		case Qt::Key_Up:                        return UI_KEY_UP;
+		case Qt::Key_Down:                      return UI_KEY_DOWN;
+		case Qt::Key_Left:                      return UI_KEY_LEFT;
+		case Qt::Key_Right:                     return UI_KEY_RIGHT;
+		case Qt::Key_Return:                    return UI_KEY_ENTER;
+		case Qt::Key_Enter:                     return UI_KEY_ENTER;
+		case Qt::Key_Escape:                    return UI_KEY_ESC;
+		case Qt::Key_Space:                     return UI_KEY_SPACE;
+		default:                                return UI_KEY_NONE;
+	}
+}
+
 void GameView::keyPressEvent(QKeyEvent *e)
 {
 	if(e->key() == Qt::Key_P && !e->isAutoRepeat())
 	{
 		emit pauseToggled();
+		return;
+	}
+
+	/*  Menus take every press, auto-repeat included, so a held arrow scrolls
+	    a list; in play only Esc is an event, and it opens the pause menu. */
+	const int uk = uiKeyFor(e->key());
+
+	if(uk != UI_KEY_NONE && (hostMode() == HOST_MODE_MENU || uk == UI_KEY_ESC))
+	{
+		const int r = hostMenuKey(uk);
+
+		if(r == HOST_MENU_QUIT)
+		{
+			QCoreApplication::quit();
+			return;
+		}
+
+		if(r == HOST_MENU_REPAINT)
+		{
+			syncMode();
+			update();
+		}
+
 		return;
 	}
 

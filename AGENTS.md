@@ -14,6 +14,9 @@ This is a Psion 3a/c/mx PLIB/WLIB C raycaster. Source is split by subsystem in t
 - `fp_math.c` stores the 1024-entry combined sine/cosine table; `fp_math.h` exposes lookup helpers.
 - `fp_types.h` defines `u8/s16/s32`, Q8 fixed-point `f16`, `fpmul`, and checked `fpdiv`.
 - `psion3d.h` shares renderer globals such as `pos`, `gameWinRect`, and `gameBitmapRect`.
+- `gameloop.c` owns the mode above the frame (`gameMode`, `gameInit`, `gameKey`, `gameStartMission`) and the tick catch-up loop; both platforms drive it.
+- `menu.c` owns the menu screens and draws only through `ui.h`, whose device implementation is `ui_psion.c` (a full-screen 480x160 WLIB window, ROM Swiss fonts) and whose PC one is `pc/src/menu_pc.cpp`. Menus read window-server key events, not scancodes.
+- `mission.c` owns the mission index (built at startup from `map1..map20.map` into a far segment), the difficulty setting, and objective state. `automap.c` renders the pause-menu map into `screenBm`.
 
 Generated outputs (`*.OBJ`, `*.MAP`, `PSION3D.EXE`, `PSION3D.IMG`) currently live beside source files.
 
@@ -27,6 +30,8 @@ The build requires the Psion/SIBO SDK tools (`checkvid`, `tsc`) on `PATH`. `unna
 Sprite assets are converted with `tools\convert_sprite.bat`. For raw `.spr` files, avoid PowerShell redirection because it can alter binary output; use `.\tools\convert_sprite.bat /f tools\health.png health0.spr` or `-OutputPath`. A 64x64 sprite frame is 1040 bytes: a 16-byte metadata header followed by a 1024-byte row-major 2bpp payload. Only the paragraph-aligned payload is copied into the sprite segment. Runtime sprites are stored as one frame per file named `baseName0.spr` through `baseName7.spr`; `loadSprite("sci", 0)` loads `sci0.spr`, then optional subsequent frames until the first missing file. Sprite segments are sized to the number of loaded frames, not the 8-frame maximum.
 
 Sprite pixels are packed 2bpp with values `0=transparent`, `1=grey`, `2=black`, and `3=white`. The converter preserves near-white pixels as white by default; pass `-WhiteTransparent true` only when near-white should be transparent.
+
+Psion screen grabs (`.pic`) are converted with `tools\picconv.bat`; the direction follows the input extension: `.\tools\picconv.bat Screen.pic screen.png` decodes, `.\tools\picconv.bat screen.png screen.pic` encodes. A `.pic` is an 8-byte `PIC` header, 12-byte descriptors (CRC, width, height, size, offset from the end of that descriptor to the data), then row-major 1bpp data with rows padded to an even byte count and bit 0 as the leftmost pixel. The CRC is CRC-16/XMODEM (poly 0x1021, init 0) over the bitmap data only. A screen grab holds two 480x160 bitmaps, black plane then grey plane, which the converter composites into a white/grey/black PNG (black wins where both are set); `-Split` writes each bitmap to its own PNG instead. Encoding quantises luminance into three levels and writes two planes; `-Mono` writes a single bitmap of every pixel under 128. A decode-encode round trip of an unmodified grab is byte-identical.
 
 There is no automated test suite. Verify by building, running the resulting `PSION3D.EXE` or `PSION3D.IMG` in the target emulator/device, and checking rendering, movement, sprite occlusion, and map boundary behavior.
 
@@ -56,7 +61,7 @@ Avoid direct application-level manipulation of `DS`/`ES`, `cli`/`sti`, write-pro
 
 The DDA ray loop in `draw.c` handles exact grid-corner crossings specially to prevent one-column wall gaps. Be cautious when changing `f_sidedx/f_sidedy`, `side`, or `mapx/mapy` stepping.
 
-Map and sprite files are opened from full Psion paths under `LOC::M:\IMG\` (for example `LOC::M:\IMG\map1.map` and `LOC::M:\IMG\h0.spr`). `p_read()` reports EOF with `E_FILE_EOF`, not `0`; treat `E_FILE_EOF` as the normal loop terminator and any other unexpected byte count as an error. Map loading writes directly into `map[MAP_Y][MAP_X]`; do not reintroduce a second 64x64 load buffer.
+Map and sprite files are opened from full Psion paths under `LOC::M:\IMG\` (for example `LOC::M:\IMG\MAP\map1.map` and `LOC::M:\IMG\SPR\sci0.spr`). The map file format - the grid plus `[LEVEL]`, `[BRIEFING]` and `[OBJECTIVE]` sections - is documented in `map/README.md`; level text is stored in a far segment and read through `mapTextCopy()`. `p_read()` reports EOF with `E_FILE_EOF`, not `0`; treat `E_FILE_EOF` as the normal loop terminator and any other unexpected byte count as an error. Map loading writes directly into `map[MAP_Y][MAP_X]`; do not reintroduce a second 64x64 load buffer.
 
 ## Commit & PR Guidelines
 

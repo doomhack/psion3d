@@ -35,10 +35,33 @@ typedef struct
 	unsigned char  health;
 } HostStats;
 
-/*  assetRoot may be NULL to keep the compiled-in default. Returns 0 on
+/*  assetRoot may be NULL to keep the compiled-in default. mapId 0 opens at
+    the main menu, as the device does; any other map starts play in that
+    level straight away, which is what the golden views want. Returns 0 on
     failure, having already printed why. */
 int  hostInit(const char *assetRoot, int mapId);
 void hostShutdown(void);
+
+/*  Menus. The game runs in one of two modes: in the menu the platform shows
+    the 480x160 menu image and feeds it key events; in play it shows the
+    240x160 game framebuffer and runs frames. ui.h is the one game header
+    the Qt layer may see: it has no includes and plain C types by design. */
+#define HOST_MODE_MENU 0
+#define HOST_MODE_PLAYING 1
+
+int  hostMode(void);
+
+/*  A UI_KEY_* (ui.h) edge from the platform, in either mode. REPAINT means
+    the display changed - the menu redrew, or the mode switched; QUIT is
+    Exit from the main menu, which the device answers with p_exit. */
+#define HOST_MENU_NONE 0
+#define HOST_MENU_REPAINT 1
+#define HOST_MENU_QUIT 2
+
+int  hostMenuKey(int uiKey);
+
+/*  The menu drawn from scratch into the menu_pc image. */
+void hostMenuDraw(void);
 
 void hostSetKey(HostKey k, int down);
 void hostClearKeys(void);           /* on focus loss, so nothing sticks down */

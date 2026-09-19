@@ -11,31 +11,84 @@ prediction.
 ## Open
 
 ### 1. Menu system
-- [ ] Front-end menu with options and level select.
+- [x] Front-end menu with level select and a pause menu.
+- [ ] Options screen (sound level - nothing to play yet, task 12).
+- [ ] Cheats screen, unlocks and the Cheat Unlocked dialog.
+- [ ] Mission outcome screens (complete / failed / killed in action), mission
+      timer, best times - wait on tasks 3, 9 and 10 and a save file.
 
-`main()` in [psion3d.c](psion3d.c:220) currently goes straight from window
-creation to `loadMap(1)` and `mainLoop()`, so there is no state above the game
-loop. This needs a mode above `gameRunTicks` that owns menu / briefing / playing
-and decides which one gets the frame. Level select depends on task 16 having more
-than one map to select.
+Done 2026-09-19 from the Design artifact (14 artboards at 480x160; the
+screens that shipped are Main Menu, Mission Select, Mission Briefing, Mission
+Objectives, Pause, Abort Confirm, Pause Objectives, Pause Map). How it is put
+together:
 
-Open questions: whether the menu draws into the same 240x160 bitmap through
-`bitmap.c` primitives, or uses WLIB text drawing straight into the window.
+- **Mode.** `gameMode` in [gameloop.c](gameloop.c) is `GAME_MODE_MENU` or
+  `GAME_MODE_PLAYING`. `gameInit()` scans the missions and opens the main
+  menu; `gameKey()` takes a `UI_KEY_*` event in either mode (Esc in play
+  pauses) and returns whether to repaint or quit; `gameStartMission(mapId)`
+  loads the level and switches to play. The platform watches `gameMode`
+  change under a `gameKey` call, shows or hides the menu window, and
+  restarts `gameTime` from the tick counter so the pause is not caught up.
+- **Drawing.** The menus draw with WLIB into a third, full-screen 480x160
+  window (`ui_psion.c`) through the eight primitives in [ui.h](ui.h), using
+  the ROM Swiss 13 and Swiss 16 fonts the design's Helvetica sizes map to.
+  [menu.c](menu.c) is portable and knows nothing of WLIB; the PC host has a
+  QPainter implementation in `pc/src/menu_pc.cpp`, so every screen has a
+  golden frame (`--screen <name>`), with the caveat that those frames are of
+  Qt's Helvetica, not the ROM fonts. Menus are event driven on the device
+  (`wGetEventWait`), so a menu on screen costs no CPU.
+- **Input.** Play still reads scancode levels; menus and the in-game Esc are
+  window server key events (`WM_KEY`), so no new scancodes were guessed.
+  Esc is the pause key (task 13).
+- **Missions.** [mission.c](mission.c) parses `map1.map` .. `map20.map` at
+  startup (stopping at the first missing, which keeps 98 and 99 out) with
+  the new `loadMapFile()` - `loadMap()` minus the sprite loading - and keeps
+  title, location and `mappos` per mission in a far segment. So adding a
+  level to the list is adding the file (task 16). `loadMapFile` reads the
+  file in 64 byte chunks now; it was a `p_read` per byte.
+- **Difficulty** (task 15): Agent / Senior / Elite on the select screen,
+  applied in `enemyShootPlayer` to damage and accuracy (x3/4, x1, x5/4;
+  first guesses, see BALANCE.md). Not saved anywhere yet.
+- **Pause Map** (task 7): [automap.c](automap.c) renders 26 rows of the
+  level at 4x4 pixels a cell into `screenBm` with the `bitmap.c` primitives
+  and `uiBlitMap` copies it into the menu window (on the device through the
+  same segment-backed bitmap the compatibility blit uses). The whole level
+  is shown; the design has no unexplored state, and `isMarked()` is the
+  one-line change if it ever wants one.
+- **Objectives**: `objectiveState[]` in `mission.c` is reset at mission
+  start and read by the pause screen; nothing sets it until task 3.
+- **Near data**: `menu.c` holds a 1,280 byte text buffer for the briefing,
+  the line table and two 40 byte strings, about 1.5 KB; the string literals
+  are another ~600 bytes of `_CONST`. DGROUP is at 45,120 with 4 KB to the
+  48 KB limit - see MEMORY_BUDGET.md.
+- Not in this pass, by choice: the main menu clock, the world map ROM image
+  (a dithered box with the `mappos` crosshair stands in), the coordinates
+  line under it (nothing in the map file holds them), and the Cheats and
+  Options entries on the main menu, which are left out until their screens
+  exist rather than shown as dead items.
+
+The three `lab_room` / `lab_pipes` / `lab_pillars` golden frames were
+already failing at the commit before this work (checked by stashing) and
+were left alone.
 
 ### 2. Mission briefings
-- [ ] Per-level briefing screen shown before the level starts.
+- [x] Per-level briefing screen shown before the level starts.
 
-Needs a text source per level (a `.txt` beside `map<N>.map`, or a table compiled
-in - note the near-data budget is the binding memory limit, so file-loaded text
-is likely the better choice) and a text renderer that can wrap into the game
-window. Sits between menu and gameplay in the mode machine from task 1.
+Done with task 1: the briefing screen word-wraps the `[BRIEFING]` text (a
+greedy layout in `menu.c` measuring with `uiTextWidth`) into five 19px lines
+a page under the location line, with up/down scrolling and space paging.
+Mission Select parses the chosen file with `loadMapFile()` before opening it,
+so the text is the level's own; the assets load when the mission starts.
 
 ### 3. Mission objectives (GoldenEye pattern)
 - [ ] Per-level objective list; all must be complete to finish the level.
 
-Needs: an objective type set (reach an exit, destroy a target, retrieve an item,
-protect an NPC), per-level objective data, a completion check on the tick path,
-and end-of-level handling. Touches [enemy.c](enemy.c), [pickup.c](pickup.c) and
+The per-level data is done: up to five `[OBJECTIVE]` sections per map file,
+each a title line and a briefing, reached through `mapInfo.objectiveOfs[]` /
+`objectiveBriefOfs[]` and `mapTextCopy()`. Still needed: an objective type
+set (reach an exit, destroy a target, retrieve an item, protect an NPC), a way
+for an objective to point at a cell or enemy, a completion check on the tick
+path, and end-of-level handling. Touches [enemy.c](enemy.c), [pickup.c](pickup.c) and
 the map encoding - some objectives will want map cells or enemy ids to point at.
 The briefing screen from task 2 is the natural place to list them.
 
@@ -125,15 +178,17 @@ Notes for whoever touches this next:
   (`SHELF`, `LIGHT`) are the ones to watch on the fps counter.
 
 ### 7. Automap
-- [ ] In-game map of the areas the player has explored.
+- [x] In-game map, as the pause menu's Map screen.
+- [ ] Explored-only display, if wanted.
 
-The visited-cell plumbing is already in place and unused: `MAP_MASK_MARKED`,
-`isMarked`, `markCell` and `unmarkCell` are defined in
-[game_map.h](game_map.h:88) and called from nowhere. Needs a mark on the
-player's cell each tick and a view that draws marked cells - either a screen
-reached from the menu (task 1), or a persistent panel in the unused right-hand
-120x160 of the 480x160 LCD. Note task 8 wants that same region, so the two need
-deciding together.
+Done with task 1 as [automap.c](automap.c): a 26 row window of the whole
+level, panned with up/down, with the player as an arrow along their facing.
+Solid cells are black, see-through walls grey, walk-through walls a grey
+ring, locked doors grey with a black core. The visited-cell plumbing
+(`MAP_MASK_MARKED`, `isMarked`, `markCell`, `unmarkCell` in
+[game_map.h](game_map.h)) is still unused: an explored-only map is a mark
+on the player's cell each tick plus an `isMarked` test in `drawCell`. The
+right-hand 120x160 of the LCD is still free for task 8.
 
 ### 8. Status bars
 - [ ] On-screen health, ammo, weapon and objective status.
@@ -161,13 +216,15 @@ a death screen or fade, and a route back to the menu or a restart. Objectives
 ### 10. Level exit and completion
 - [ ] A way to finish a level.
 
-There is no exit cell type in `getCellEncoding()` and no completion path, so a
-level runs until the player quits. Needs an exit encoding, a check that
-objectives are satisfied before it opens, and a transition to the next level or
-the debrief. Pairs directly with tasks 3 and 16.
+The exit cell is now map data: `end = x, y` in the file's `[LEVEL]` section lands
+in `mapInfo.endX` / `endY` (the spawn is `start` and `angle` the same way, and
+`initPlayer()` reads them). Nothing tests it yet, so a level still runs until
+the player quits. Needs a check that the player's cell is the end cell and the
+objectives are satisfied, and a transition to the next level or the debrief.
+Pairs directly with tasks 3 and 16.
 
-Start and exit are settled as map data rather than wall types: task 6 spent all
-sixteen ids and deliberately left none for them.
+Start and exit are map data rather than wall types: task 6 spent all sixteen
+ids and deliberately left none for them.
 
 ### 11. Ammunition
 - [x] Track and consume ammo.
@@ -195,7 +252,7 @@ without moving the fps counter, then decide how far to take it. Treat any cost
 estimate as a guess until measured.
 
 ### 13. Control scheme
-- [ ] A menu/pause key. ~~A use key.~~ ~~Strafing.~~
+- [x] ~~A menu/pause key.~~ ~~A use key.~~ ~~Strafing.~~
 
 The use key is done: `KEY_USE` is bit 9 of the `keys` mask, read from
 `kbScan[4] & 0x1` (the device spacebar) in [psion3d.c](psion3d.c), and space or
@@ -215,9 +272,11 @@ facing and its right vector `(-sin, cos)`. Diagonal movement is deliberately
 not normalised: forward plus strafe is a 3-4-5 triangle, 5 m/s or 1.25x
 walking speed - the classic strafe-run. Keep it.
 
-`KEY_13` through `KEY_16` in [psion3d.h](psion3d.h) are still defined and
-unbound. A pause/menu key (needed by task 1) wants a scancode in
-[psion3d.c](psion3d.c) and a matching key on the PC host.
+The pause key is Esc, and it is not a scancode at all: the play loop asks
+the window server for key events (`WE_KEY`) and `W_KEY_ESCAPE` opens the
+pause menu through `gameKey()` (task 1). The menus read all their keys the
+same way. `KEY_13` through `KEY_16` in [psion3d.h](psion3d.h) are still
+defined and unbound.
 
 ### 14. Per-level asset loading
 - [ ] Load only the sprites a level actually uses.
@@ -229,23 +288,28 @@ sprites (task 4) and more levels (task 16) both push on this. Wants per-level
 asset lists driven off the same `mapId` switch that picks the wall style.
 
 ### 15. Difficulty levels
-- [ ] Selectable difficulty.
+- [x] Selectable difficulty.
+- [ ] Tune the multipliers by feel; persist the choice once there is a save file.
 
-`enemystats_t` is a per-type table in [enemy.h](enemy.h), so scaling enemy
-health, damage and accuracy is cheap to apply at level load. The menu (task 1)
-is the natural home for the setting. Since the combat pass (task 22) the
-table also carries stagger threshold, wind-up, burst interval and reposition
-chance - accuracy and damage are the two to scale for difficulty, since the
-others define the archetype rather than the threat. The tuned baseline and
-what each number does are in [BALANCE.md](BALANCE.md).
+Done with task 1: Agent / Senior / Elite, chosen with left/right on Mission
+Select, held in `difficulty` ([mission.c](mission.c)) and applied at the
+shot in `enemyShootPlayer` through `difficultyDamage()` and
+`difficultyAccuracy()` - x3/4, x1 and x5/4 on the two numbers BALANCE.md
+names as the threat rather than the archetype. Senior is the tuned baseline
+and the default; the other two are untested first guesses. The setting
+resets to Senior every launch.
 
 ### 16. More levels
 - [ ] Levels beyond `map/map1.map`.
 
 There is one map today. `loadMap(mapId)` already formats
 `LOC::M:\IMG\MAP\map<N>.map` and `loadMapData()` switches wall style on `mapId`,
-so adding a level is: author the ASCII map, add the style case, ship the file.
-Level select (task 1) has nothing to select from until this happens, and it is
+so adding a level is: author the file to `map/README.md` (grid, `[LEVEL]`,
+briefing, objectives), add the style case, ship the file. Mission Select
+(task 1) lists `map1.map` upward until the first missing number, so a new
+`map2.map` appears in the list with no code change; the showcase maps 98 and
+99 stay out of it for the same reason.
+Level select has one entry until this happens, and it is
 the reason objectives (task 3) and the level exit (task 10) matter.
 `Psion Levels.xlsx` in the repo root appears to be the level design workbook.
 

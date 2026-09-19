@@ -18,6 +18,8 @@
 #include "player.h"
 #include "enemy.h"
 #include "units.h"
+#include "mission.h"
+#include "menu.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -38,7 +40,55 @@ static u16 g_lastTicks = 0;
 static int g_started = 0;
 
 static unsigned char g_fb[HOST_H * HOST_W_FULL];
+
+/* Large enough for the whole briefing; the segment cap is 3072. */
+#define MAP_TEXT_PRINT_MAX 3072
 static int           g_fbWidth = HOST_W;
+
+/* ------------------------------------------------------------- level info */
+
+/*  What loadMap read from the file beyond the grid, for checking a level by
+    eye: psion3d_pc --map N -v. The text comes back out of the far segment
+    the way a briefing screen would fetch it, so this also exercises
+    mapTextCopy. Paragraph breaks are shown as a blank line. */
+static void printText(const char *label, u16 ofs)
+{
+	char buf[MAP_TEXT_PRINT_MAX];
+	u16 i;
+
+	mapTextCopy(ofs, buf, sizeof(buf));
+	fprintf(stderr, "  %-10s ", label);
+
+	for(i = 0; buf[i]; i++)
+	{
+		if(buf[i] == '\n')
+			fputs("\n\n             ", stderr);
+		else
+			fputc(buf[i], stderr);
+	}
+
+	fputc('\n', stderr);
+}
+
+static void printLevelInfo(void)
+{
+	u8 i;
+
+	fprintf(stderr, "level: start %u,%u angle %d end %u,%u mappos %u,%u text %u bytes\n",
+	        mapInfo.startX, mapInfo.startY, mapInfo.f_startAngle,
+	        mapInfo.endX, mapInfo.endY, mapInfo.mapPosX, mapInfo.mapPosY,
+	        mapInfo.textLen);
+	printText("title", mapInfo.titleOfs);
+	printText("location", mapInfo.locationOfs);
+	printText("briefing", mapInfo.briefingOfs);
+
+	for(i = 0; i < mapInfo.objectiveCount; i++)
+	{
+		fprintf(stderr, "  objective %u\n", i + 1);
+		printText("  title", mapInfo.objectiveOfs[i]);
+		printText("  brief", mapInfo.objectiveBriefOfs[i]);
+	}
+}
 
 /* ------------------------------------------------------------------- init */
 
@@ -54,13 +104,29 @@ int hostInit(const char *assetRoot, int mapId)
 
 	pcSetAssetRoot(assetRoot);
 
-	if(!loadMap((u8)mapId))
+	/* The mission index scan parses every level file, so a missing map
+	   directory shows up here as an empty mission list, not a crash. */
+	gameInit();
+
+	if(mapId == 0)
+	{
+		if(missionCount == 0)
+			fprintf(stderr, "warning: no missions found. Asset root is %s\n", pcGetAssetRoot());
+
+		g_started = 1;
+		hostMenuDraw();
+
+		return 1;
+	}
+
+	if(!gameStartMission((u8)mapId))
 	{
 		fprintf(stderr, "loadMap(%d) failed. Asset root is %s\n", mapId, pcGetAssetRoot());
 		return 0;
 	}
 
-	initPlayer();
+	if(pcGetIoVerbose())
+		printLevelInfo();
 
 	pcTickResync();
 	g_gameTime = p_returntickcount();
@@ -72,6 +138,59 @@ int hostInit(const char *assetRoot, int mapId)
 	draw();
 
 	return 1;
+}
+
+/* ------------------------------------------------------------------ menus */
+
+int hostMode(void)
+{
+	return gameMode == GAME_MODE_PLAYING ? HOST_MODE_PLAYING : HOST_MODE_MENU;
+}
+
+int hostMenuKey(int uiKey)
+{
+	const u8 modeBefore = gameMode;
+	u16 action;
+
+	if(!g_started)
+		return HOST_MENU_NONE;
+
+	action = gameKey((u16)uiKey);
+
+	if(action == GAME_KEY_QUIT)
+		return HOST_MENU_QUIT;
+
+	if(gameMode != modeBefore)
+	{
+		if(gameMode == GAME_MODE_PLAYING)
+		{
+			/* The same resync the device does: nothing that happened while
+			   the menu was up is caught up in one frame. */
+			pcTickResync();
+			g_gameTime = p_returntickcount();
+			bmClearScreen();
+			draw();
+		}
+		else
+		{
+			hostMenuDraw();
+		}
+
+		return HOST_MENU_REPAINT;
+	}
+
+	if(action == GAME_KEY_REDRAW)
+	{
+		hostMenuDraw();
+		return HOST_MENU_REPAINT;
+	}
+
+	return HOST_MENU_NONE;
+}
+
+void hostMenuDraw(void)
+{
+	menuDraw();
 }
 
 void hostShutdown(void)
@@ -126,7 +245,7 @@ void hostFrame(void)
 {
 	u16 before;
 
-	if(!g_started)
+	if(!g_started || gameMode != GAME_MODE_PLAYING)
 		return;
 
 	before = g_gameTime;
