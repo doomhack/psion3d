@@ -182,30 +182,6 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if(route)
-	{
-		for(const char *k = route->keys; *k; ++k)
-		{
-			int uk = UI_KEY_NONE;
-
-			switch(*k)
-			{
-				case 'e': uk = UI_KEY_ENTER; break;
-				case 'x': uk = UI_KEY_ESC; break;
-				case 'd': uk = UI_KEY_DOWN; break;
-				case 'u': uk = UI_KEY_UP; break;
-			}
-
-			hostMenuKey(uk);
-		}
-
-		if(hostMode() != HOST_MODE_MENU)
-		{
-			std::fprintf(stderr, "--screen %s: the menu did not open (no missions?)\n", route->name);
-			return 1;
-		}
-	}
-
 	if(placePlayer)
 	{
 		/* Either option alone keeps the spawn's value for the other. */
@@ -237,6 +213,34 @@ int main(int argc, char **argv)
 	{
 		pcTickAdvance(1);
 		hostFrame();
+	}
+
+	/*  After the frames, so a pause screen can show what play changed: --use
+	    or --fire held through --frames and then --screen pobjectives shows
+	    the objective it moved. With no --frames this is straight from
+	    hostInit, as before. */
+	if(route)
+	{
+		for(const char *k = route->keys; *k; ++k)
+		{
+			int uk = UI_KEY_NONE;
+
+			switch(*k)
+			{
+				case 'e': uk = UI_KEY_ENTER; break;
+				case 'x': uk = UI_KEY_ESC; break;
+				case 'd': uk = UI_KEY_DOWN; break;
+				case 'u': uk = UI_KEY_UP; break;
+			}
+
+			hostMenuKey(uk);
+		}
+
+		if(hostMode() != HOST_MODE_MENU)
+		{
+			std::fprintf(stderr, "--screen %s: the menu did not open (no missions?)\n", route->name);
+			return 1;
+		}
 	}
 
 	if(parser.isSet(shotOpt))

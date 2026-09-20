@@ -90,6 +90,12 @@ psion3d_pc --map 1 -v
 The menus read this file: Mission Select lists every `map<N>.map` from 1
 upward until the first missing number (title and location per entry, and
 `mappos` marks the world map), the briefing screen shows `[BRIEFING]`, and
-the objectives screens list the `[OBJECTIVE]` titles and briefs. Level
-completion and objective tracking are still open items in
-[TASKS.md](../TASKS.md) (tasks 3 and 10).
+the objectives screens list the `[OBJECTIVE]` titles and briefs.
+
+What the cells *do* on a given level is not in the file. Picking up an item,
+using or shooting a decoration sprite, using a switch and killing an enemy each
+report the cell to the level's handler in [level.c](../level.c), which is where
+a keycard is tied to one door or a computer to an objective; a level with no
+handler gets the defaults (keycard and switch open every locked door, the rest
+do nothing). Level completion is still open in [TASKS.md](../TASKS.md)
+(task 10).

@@ -75,7 +75,7 @@ Useful options:
 | Option | |
 | --- | --- |
 | `--map <n>` | skip the menus and start playing this level; what every gameplay golden view passes |
-| `--screen <name>` | open at a menu screen for a `--screenshot`: `main`, `select`, `briefing`, `objectives` (the front end, from the first mission), or with `--map`: `pause`, `abort`, `pobjectives`, `map` |
+| `--screen <name>` | open at a menu screen for a `--screenshot`: `main`, `select`, `briefing`, `objectives` (the front end, from the first mission), or with `--map`: `pause`, `abort`, `pobjectives`, `map`. Applied after `--frames`, so `--frames 2 --use --screen pobjectives` shows what the use did |
 | `--assets <dir>` | read `map/` and `spr/` from somewhere else (or set `PSION3D_ASSETS`) |
 | `--screenshot <file>` | render one frame to a PNG at 1:1 and exit, without opening a window |
 | `--pos <x,y>` | start the player here instead of the map's spawn. Q8 map units (256 per cell), the same numbers the HUD shows, so `7040,384` is cell 27.5,1.5. Warns if the cell is not walkable |

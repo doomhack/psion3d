@@ -86,6 +86,7 @@ extern mapinfo_t mapInfo;
 u16 loadMapFile(const u8 mapId);
 void loadMapData(const u8 mapId);
 u16 loadMap(const u8 mapId);
+void unlockDoor(const u16 x, const u16 y);
 void unlockDoors(void);
 
 /* Copy the string at ofs out of the level text into a near buffer, always NUL

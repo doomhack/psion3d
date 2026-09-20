@@ -20,6 +20,7 @@ typedef struct spritehit_t
 	u8 spriteId;
 	u8 mirrored;
 	u8 enemyId;
+	u8 cellX, cellY; //The map cell, for pickups and decorations only: an enemy is found by enemyId.
 } spritehit_t;
 
 #define SPRITE_NO_ENEMY 255

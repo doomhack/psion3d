@@ -6,6 +6,7 @@
 #include "draw.h"
 #include "pickup.h"
 #include "mission.h"
+#include "level.h"
 
 #define ENEMY_LEASH_DIST_METERS 28
 #define ENEMY_ATTACK_DIST_MER_METERS 4
@@ -922,6 +923,11 @@ void damageEnemy(u16 id, u8 damage)
         enemy->state = ENEMY_STATE_DYING;
         enemy->stateCounter = ENEMY_DYING_DELAY;
         enemy->spriteFrame = ENEMY_FRAME_DYING;
+
+        /* Only the player deals damage, so this is always a player kill. The
+           cell keeps the enemy until the corpse releases it, so a level after
+           this one in particular can still find it from x, y. */
+        levelEvent(LEVEL_EVENT_KILL, enemy->type, enemy->cellX, enemy->cellY);
         return;
     }
 

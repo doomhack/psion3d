@@ -9,6 +9,7 @@
 #include "pickup.h"
 #include "decor.h"
 #include "walls.h"
+#include "level.h"
 
 #define MAP_FILE_NAME_LEN 64
 
@@ -26,6 +27,18 @@ void loadMapData(const u8 mapId)
 		break;
 	default:
 		drawWall = drawWallDefault;
+		break;
+	}
+
+	/* And its script. Separate from the style switch because the showcase
+	   corridor shares map 1's look but not its objectives. */
+	switch (mapId)
+	{
+	case 1:
+		levelEvent = levelEventMap1;
+		break;
+	default:
+		levelEvent = levelEventNone;
 		break;
 	}
 
@@ -820,28 +833,33 @@ u16 mapTextCopy(const u16 ofs, char *buf, const u16 bufLen)
 	return i;
 }
 
-/* Open every locked door on the level. The keycard is not checked at the door
-   and neither is the switch: the cells are rewritten to the unlocked encoding,
-   which is what 'D' produces, so both the MAP_MASK_WALK that lets the player
-   through and the open-on-approach door drawing follow with no further test in
-   the hot paths. */
+/* Open the locked door at x, y, if that is what the cell is. The keycard is
+   not checked at the door and neither is the switch: the cell is rewritten to
+   the unlocked encoding, which is what 'D' produces, so both the MAP_MASK_WALK
+   that lets the player through and the open-on-approach door drawing follow
+   with no further test in the hot paths. Anything else is left alone, so a
+   level script can name a cell without checking it first. */
+void unlockDoor(const u16 x, const u16 y)
+{
+	const u16 cell = mapCell(x, y);
+
+	/* Enemy cells carry type values 0..3 as well, so the wall bit is what
+	   makes this a door rather than a sprite. */
+	if (!isWall(cell) || mapCellType(cell) != WALL_TYPE_LOCKED_DOOR)
+		return;
+
+	updateCell(x, y, (MAP_MASK_WALL | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_UNLOCKED_DOOR)));
+}
+
+/* Every locked door on the level: the default for a keycard or a switch on a
+   level whose script does not say otherwise. */
 void unlockDoors(void)
 {
 	u16 x, y;
-	u16 cell;
 
 	for (y = 0; y < MAP_Y; y++)
 	{
 		for (x = 0; x < MAP_X; x++)
-		{
-			cell = mapCell(x, y);
-
-			/* Enemy cells carry type values 0..3 as well, so the wall bit is
-			   what makes this a door rather than a sprite. */
-			if (!isWall(cell) || mapCellType(cell) != WALL_TYPE_LOCKED_DOOR)
-				continue;
-
-			updateCell(x, y, (MAP_MASK_WALL | MAP_MASK_WALK | SET_CELL_TYPE_ID(WALL_TYPE_UNLOCKED_DOOR)));
-		}
+			unlockDoor(x, y);
 	}
 }

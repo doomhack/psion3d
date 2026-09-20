@@ -2,6 +2,7 @@
 #include "pickup.h"
 #include "game_map.h"
 #include "player.h"
+#include "level.h"
 
 /* Every weapon pickup is also that weapon's ammo, so the pool is topped up
    on each one. The weapon itself is granted and raised only on the first of
@@ -19,17 +20,17 @@ static void giveWeapon(const u8 index)
 	selectWeapon(index);
 }
 
-/* The keycard is not checked at the door: picking it up opens every locked door
-   on the level outright. A wall switch does the same thing, so the rewrite loop
-   lives in game_map.c. */
 static void giveKeycard(void)
 {
 	player.items |= PLAYER_ITEM_KEYCARD;
-
-	unlockDoors();
 }
 
-void collectPickup(const u8 type)
+/* The effect of the pickup, then the level's say on it. A script that handles
+   the event replaces the default; the only default is the keycard, which is
+   not checked at any door: unless the level says which one, it opens every
+   locked door on the level outright. A wall switch does the same thing, so
+   the rewrite loop lives in game_map.c. */
+void collectPickup(const u8 type, const u16 x, const u16 y)
 {
 	switch(type)
 	{
@@ -49,6 +50,12 @@ void collectPickup(const u8 type)
 			giveKeycard();
 			break;
 	}
+
+	if(levelEvent(LEVEL_EVENT_PICKUP, type, (u8)x, (u8)y))
+		return;
+
+	if(type == PICKUP_TYPE_KEYCARD)
+		unlockDoors();
 }
 
 void checkPickup(void)
@@ -65,7 +72,7 @@ void checkPickup(void)
 	   map cannot be undone by the removal. */
 	updateCell(x, y, MAP_MASK_WALK);
 
-	collectPickup(mapCellType(cell));
+	collectPickup(mapCellType(cell), x, y);
 }
 
 /* No wall bit: the ray cast only collects sprites from cells it can see

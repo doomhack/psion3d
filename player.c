@@ -6,6 +6,8 @@
 #include "units.h"
 #include "psion3d.h"
 #include "pickup.h"
+#include "decor.h"
+#include "level.h"
 
 player_t player = {0};
 
@@ -145,11 +147,16 @@ static void tryMove(const f16 dx, const f16 dy)
 }
 
 /*  The use key, on the cell the player is facing. Stepping forward in quarter
-    cells and stopping at the first wall means the reach cannot pass through a
-    wall into whatever stands behind it, and that a player hard up against the
-    wall and one standing back in the middle of their own cell both reach it.
-    Three steps is 0.75 cells, so the far side of the player's own cell is out
-    of reach and they have to walk up to the thing.
+    cells and stopping at the first wall or decoration means the reach cannot
+    pass through either into whatever stands behind it, and that a player hard
+    up against the thing and one standing back in the middle of their own cell
+    both reach it. Three steps is 0.75 cells, so the far side of the player's
+    own cell is out of reach and they have to walk up to the thing. Pickups
+    and enemies are not used, so the probe runs on through them as before.
+
+    What using a decoration means is the level's business (level.h); a switch
+    is thrown here and then offered to the level, which can name the door it
+    opens, the default being every locked door.
 
     Runs on a key press rather than every tick, so its cost never reaches the
     frame budget. */
@@ -178,7 +185,17 @@ static void tryUse(void)
 		cell = mapCell((u16)x, (u16)y);
 
 		if(!isWall(cell))
+		{
+			/* Enemies share the sprite bit and carry types 0..3, so both tests
+			   are needed to make this a decoration. */
+			if(isSprite(cell) && !isEnemy(cell) && (mapCellType(cell) & DECOR_TYPE_BIT))
+			{
+				levelEvent(LEVEL_EVENT_USE_DECOR, (u8)(mapCellType(cell) & 7), (u8)x, (u8)y);
+				return;
+			}
+
 			continue;
+		}
 
 		if(mapCellType(cell) == WALL_TYPE_SWITCH &&
 			mapCellId(cell) != WALL_SWITCH_THROWN)
@@ -186,7 +203,9 @@ static void tryUse(void)
 			/* Wall cells leave the id field at zero, so the thrown flag goes
 			   there rather than in a table of its own. */
 			updateCell((u16)x, (u16)y, (u16)(cell | WALL_SWITCH_THROWN));
-			unlockDoors();
+
+			if(!levelEvent(LEVEL_EVENT_USE_SWITCH, 0, (u8)x, (u8)y))
+				unlockDoors();
 		}
 
 		/* The first wall in reach is the one being used, whatever it turned

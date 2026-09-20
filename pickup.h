@@ -16,6 +16,6 @@
 u16 makePickupCell(const u8 type);
 u16 getPickupCell(u16 x, u16 y, s8 cell);
 void checkPickup(void);
-void collectPickup(const u8 type);
+void collectPickup(const u8 type, const u16 x, const u16 y);
 
 #endif

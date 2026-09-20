@@ -85,12 +85,30 @@ so the text is the level's own; the assets load when the mission starts.
 
 The per-level data is done: up to five `[OBJECTIVE]` sections per map file,
 each a title line and a briefing, reached through `mapInfo.objectiveOfs[]` /
-`objectiveBriefOfs[]` and `mapTextCopy()`. Still needed: an objective type
-set (reach an exit, destroy a target, retrieve an item, protect an NPC), a way
-for an objective to point at a cell or enemy, a completion check on the tick
-path, and end-of-level handling. Touches [enemy.c](enemy.c), [pickup.c](pickup.c) and
-the map encoding - some objectives will want map cells or enemy ids to point at.
-The briefing screen from task 2 is the natural place to list them.
+`objectiveBriefOfs[]` and `mapTextCopy()`.
+
+- [x] Level event callbacks (2026-09-20). [level.c](level.c) holds one
+      handler per level, `levelEvent(event, item, x, y)`, selected in
+      `loadMapData()` next to the wall style and `levelEventNone` for a level
+      without one. Five events: `PICKUP` (from `collectPickup`), `USE_DECOR`
+      and `USE_SWITCH` (from `tryUse`), `SHOOT_DECOR` (from
+      `resolvePlayerShot`) and `KILL` (from `damageEnemy`). A handler returns
+      TRUE to replace the default; the only defaults are keycard and switch
+      opening every locked door (`unlockDoors()`; `unlockDoor(x, y)` is the
+      single-door version for scripts). Decorations now stop the player's
+      round like an enemy does - marker on the sprite, nothing behind it hit
+      - and `spritehit_t` carries the cell for that. Map 1's handler
+      completes objective 2 on any computer (narrow to the director's desk
+      once the map decides which) and fails objective 3 on a civilian kill.
+      Three golden views cover the shot, the use and the kill; the last two
+      needed `--screen` to run after `--frames` in the PC host, which it now
+      does. Not hooked: shooting a `SHOOTABLE` wall, reaching `end`.
+      Cost: `_levelEvent` is 2 bytes of DGROUP; every call is per event, not
+      per frame.
+
+Still needed: a completion check on the tick path (all objectives complete
+and the player on `end`) and end-of-level handling. The briefing screen from
+task 2 is the natural place to list them.
 
 ### 4. Decoration sprites
 - [x] Computer desks, security cameras, and similar set dressing.
@@ -161,7 +179,8 @@ Notes for whoever touches this next:
   [draw.c](draw.c) steps forward from `f_wallDepth` in sixteenths of a cell to
   find the wall a shot landed on, and only `SHOOTABLE` reacts. `tryUse` in
   [player.c](player.c) steps forward from the player in quarter cells, up to
-  0.75, to find the wall being used, and only `SWITCH` reacts. Both stop at the
+  0.75, to find the wall being used; `SWITCH` reacts, and since the level
+  event callbacks (task 3) a decoration sprite in reach does too. Both stop at the
   first wall so they cannot reach through one.
 - `unlockDoors()` moved out of `giveKeycard()` into
   [game_map.c](game_map.c); the keycard and the switch both call it.

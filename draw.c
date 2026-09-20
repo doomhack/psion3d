@@ -5,6 +5,7 @@
 #include "game_map.h"
 #include "enemy.h"
 #include "decor.h"
+#include "level.h"
 #include "walls.h"
 #include "draw.h"
 
@@ -284,6 +285,15 @@ static void hitWallCell(const f16 f_depth, const f16 f_dx, const f16 f_dy)
 	}
 }
 
+/* A sprite the round can land on: an enemy, or a decoration, which is solid
+   to a shot as it is to a step. Pickups are neither - a round goes over them
+   to whatever is behind. */
+static u16 spriteStopsShot(const spritehit_t* hit)
+{
+	return hit->enemyId != SPRITE_NO_ENEMY ||
+		(hit->spriteId >> 3) == SPRITE_SLOT_DECORATIONS;
+}
+
 static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHit,
 	const f16* f_wallDepth, const s16 baseIdx)
 {
@@ -291,7 +301,7 @@ static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHi
 	u8 aimSpan;
 	s16 aimX;
 	f16 f_targetDepth;
-	u8 targetId = SPRITE_NO_ENEMY;
+	const spritehit_t* target = 0;
 	s16 targetWidth = 1;
 	s16 targetCentreX = 0;
 
@@ -308,7 +318,7 @@ static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHi
 		s16 width;
 		s16 left;
 
-		if(hit->enemyId == SPRITE_NO_ENEMY || hit->spriteHeight <= 0)
+		if(!spriteStopsShot(hit) || hit->spriteHeight <= 0)
 			continue;
 
 		width = hit->spriteHeight;
@@ -324,7 +334,7 @@ static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHi
 			hit->f_spriteDist >= f_targetDepth)
 			continue;
 
-		targetId = hit->enemyId;
+		target = hit;
 		f_targetDepth = hit->f_spriteDist;
 		targetWidth = width;
 		targetCentreX = (hit->spanX << 2) + 2;
@@ -332,25 +342,37 @@ static void resolvePlayerShot(const spritehit_t* spriteHits, const u16 spritesHi
 
 	player.weaponState.shotPending = FALSE;
 
-	if(targetId != SPRITE_NO_ENEMY)
+	if(target)
 	{
-		/* Read the position before damaging, so a killing blow still marks
-		   where the enemy was standing. */
-		const enemy_t* enemy = getEnemy(targetId);
+		/* Where the round actually crossed the silhouette. The hit test above
+		   already proved aimX lies within the target, so this is at most half
+		   a width either side and the shift stays inside s16. */
+		const s8 offsetFrac = (s8)(((aimX - targetCentreX) << 6) / targetWidth);
+		const s8 fracY = impactFracY(player.currentWeapon->accuracy);
 
-		if(enemy)
+		if(target->enemyId != SPRITE_NO_ENEMY)
 		{
-			/* Where the round actually crossed the silhouette. The hit test
-			   above already proved aimX lies within the target, so this is at
-			   most half a width either side and the shift stays inside s16. */
-			const s16 offsetPx = aimX - targetCentreX;
+			/* Read the position before damaging, so a killing blow still
+			   marks where the enemy was standing. */
+			const enemy_t* enemy = getEnemy(target->enemyId);
 
-			setImpact(enemy->x, enemy->y, IMPACT_FRAME_ENEMY,
-				(s8)((offsetPx << 6) / targetWidth),
-				impactFracY(player.currentWeapon->accuracy));
+			if(enemy)
+				setImpact(enemy->x, enemy->y, IMPACT_FRAME_ENEMY, offsetFrac, fracY);
+
+			damageEnemy(target->enemyId, player.currentWeapon->damage);
+		}
+		else
+		{
+			/* A decoration, drawn from the middle of its cell, which is where
+			   the marker goes. Then the level says what a shot does to it: it
+			   may rewrite the cell, and this frame's sprite list still draws
+			   the old one, under the marker, one last time. */
+			setImpact(int2fp(target->cellX) + flt2fp(0.5f), int2fp(target->cellY) + flt2fp(0.5f),
+				IMPACT_FRAME_ENEMY, offsetFrac, fracY);
+
+			levelEvent(LEVEL_EVENT_SHOOT_DECOR, (u8)(target->spriteId & 7), target->cellX, target->cellY);
 		}
 
-		damageEnemy(targetId, player.currentWeapon->damage);
 		return;
 	}
 
@@ -743,6 +765,8 @@ void draw()
 									spriteHits[spritesHit].spriteId = (u8)((slot << 3) | (type & 7));
 									spriteHits[spritesHit].mirrored = FALSE;
 									spriteHits[spritesHit].enemyId = SPRITE_NO_ENEMY;
+									spriteHits[spritesHit].cellX = (u8)mapx;
+									spriteHits[spritesHit].cellY = (u8)mapy;
 									spritesHit++;
 								}
 							}

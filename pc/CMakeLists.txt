@@ -29,6 +29,7 @@ set(GAME_SOURCES
     ${GAME_ROOT}/game_map.c
     ${GAME_ROOT}/pickup.c
     ${GAME_ROOT}/decor.c
+    ${GAME_ROOT}/level.c
     ${GAME_ROOT}/fp_math.c
     ${GAME_ROOT}/gameloop.c
     ${GAME_ROOT}/menu.c
