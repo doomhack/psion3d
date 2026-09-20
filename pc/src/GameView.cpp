@@ -37,6 +37,31 @@ static const QRgb kPalette[4] =
 	LCD_BLACK
 };
 
+QImage psion3dScreenImage(bool showGutter)
+{
+	if(hostMode() == HOST_MODE_MENU)
+		return uiPcImage().copy();
+
+	/* The HUD panels with the game view over the middle 240 columns - the
+	   whole LCD as the device shows it. With the gutter the view is 256 wide
+	   and the hidden 16 columns cover the start of the right panel, which
+	   is what makes them visible. */
+	QImage out = uiPcHudImage().copy();
+	int stride = 0;
+	const unsigned char *fb = hostFramebuffer(showGutter ? 1 : 0, &stride);
+
+	for(int y = 0; y < HOST_H; ++y)
+	{
+		QRgb *row = reinterpret_cast<QRgb *>(out.scanLine(y));
+		const unsigned char *src = fb + (size_t)y * stride;
+
+		for(int x = 0; x < stride && HOST_HUD_X + x < out.width(); ++x)
+			row[HOST_HUD_X + x] = kPalette[src[x] & 3];
+	}
+
+	return out;
+}
+
 QImage psion3dFrameImage(bool showGutter)
 {
 	if(hostMode() == HOST_MODE_MENU)
@@ -71,20 +96,13 @@ GameView::GameView(QWidget *parent)
 
 int GameView::imageWidth() const
 {
-	if(m_mode == HOST_MODE_MENU)
-		return UI_W;
-
-	return m_showGutter ? HOST_W_FULL : HOST_W;
+	/* The whole LCD in both modes: the menu window, or the HUD panels with
+	   the game view between them. */
+	return UI_W;
 }
 
 void GameView::rebuildImage()
 {
-	m_img = QImage(imageWidth(), HOST_H, QImage::Format_Indexed8);
-	m_img.setColorCount(4);
-
-	for(int i = 0; i < 4; ++i)
-		m_img.setColor(i, kPalette[i]);
-
 	recomputeTarget();
 }
 
@@ -161,19 +179,7 @@ void GameView::paintEvent(QPaintEvent *)
 	p.fillRect(rect(), QColor(24, 24, 24));
 	p.setRenderHint(QPainter::SmoothPixmapTransform, false);
 
-	if(m_mode == HOST_MODE_MENU)
-	{
-		p.drawImage(m_dst, uiPcImage());
-		return;
-	}
-
-	int stride = 0;
-	const unsigned char *fb = hostFramebuffer(m_showGutter ? 1 : 0, &stride);
-
-	for(int y = 0; y < HOST_H; ++y)
-		std::memcpy(m_img.scanLine(y), fb + (size_t)y * stride, (size_t)stride);
-
-	p.drawImage(m_dst, m_img);
+	p.drawImage(m_dst, psion3dScreenImage(m_showGutter));
 }
 
 int GameView::hostKeyFor(int qtKey)

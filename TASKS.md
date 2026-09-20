@@ -12,10 +12,16 @@ prediction.
 
 ### 1. Menu system
 - [x] Front-end menu with level select and a pause menu.
-- [ ] Options screen (sound level - nothing to play yet, task 12).
+- [x] Options screen (2026-09-20): Sound 0-10 as the design's segment bar
+      and Show FPS On/Off, edited with left/right, held in [settings.c](settings.c)
+      (`soundLevel`, `showFps`). Nothing plays a sound yet (task 12); Show FPS
+      gates the device debug window's fps line, and will gate the HUD's FPS
+      row (the design's new HUD artboard) when there is a HUD. Not saved -
+      every launch is 7 / Off - until there is a save file. Cheats stays off
+      the main menu.
 - [ ] Cheats screen, unlocks and the Cheat Unlocked dialog.
-- [ ] Mission outcome screens (complete / failed / killed in action), mission
-      timer, best times - wait on tasks 3, 9 and 10 and a save file.
+- [x] Mission outcome screens (complete / failed / killed in action), mission
+      timer, best times - see tasks 9 and 10. Best times still want a save file.
 
 Done 2026-09-19 from the Design artifact (14 artboards at 480x160; the
 screens that shipped are Main Menu, Mission Select, Mission Briefing, Mission
@@ -63,9 +69,9 @@ together:
   48 KB limit - see MEMORY_BUDGET.md.
 - Not in this pass, by choice: the main menu clock, the world map ROM image
   (a dithered box with the `mappos` crosshair stands in), the coordinates
-  line under it (nothing in the map file holds them), and the Cheats and
-  Options entries on the main menu, which are left out until their screens
-  exist rather than shown as dead items.
+  line under it (nothing in the map file holds them), and the Cheats entry
+  on the main menu, left out until its screen exists rather than shown as a
+  dead item (Options joined the menu on 2026-09-20).
 
 The three `lab_room` / `lab_pipes` / `lab_pillars` golden frames were
 already failing at the commit before this work (checked by stashing) and
@@ -90,25 +96,31 @@ each a title line and a briefing, reached through `mapInfo.objectiveOfs[]` /
 - [x] Level event callbacks (2026-09-20). [level.c](level.c) holds one
       handler per level, `levelEvent(event, item, x, y)`, selected in
       `loadMapData()` next to the wall style and `levelEventNone` for a level
-      without one. Five events: `PICKUP` (from `collectPickup`), `USE_DECOR`
+      without one. Six events: `PICKUP` (from `collectPickup`), `USE_DECOR`
       and `USE_SWITCH` (from `tryUse`), `SHOOT_DECOR` (from
-      `resolvePlayerShot`) and `KILL` (from `damageEnemy`). A handler returns
-      TRUE to replace the default; the only defaults are keycard and switch
+      `resolvePlayerShot`), `KILL` (from `damageEnemy`) and `EXIT` (from
+      `updatePlayer`, once on entering `mapInfo.endX/endY` - the place for
+      objectives that are only known to have held at the end). A handler returns
+      TRUE to replace the default; scripts move objectives through
+      `missionSetObjective(i, state)`, which pops "Objective N Completed" /
+      "Failed" through `uiInfoMsg` (`wInfoMsg` on the device, stderr on the
+      PC) on a real change and is silent otherwise. The only defaults are keycard and switch
       opening every locked door (`unlockDoors()`; `unlockDoor(x, y)` is the
       single-door version for scripts). Decorations now stop the player's
       round like an enemy does - marker on the sprite, nothing behind it hit
       - and `spritehit_t` carries the cell for that. Map 1's handler
       completes objective 2 on any computer (narrow to the director's desk
-      once the map decides which) and fails objective 3 on a civilian kill.
-      Three golden views cover the shot, the use and the kill; the last two
-      needed `--screen` to run after `--frames` in the PC host, which it now
-      does. Not hooked: shooting a `SHOOTABLE` wall, reaching `end`.
+      once the map decides which), fails objective 3 on a civilian kill and
+      completes it on exit if it has not failed.
+      Four golden views cover the shot, the use, the kill and the exit; the
+      pause-screen ones needed `--screen` to run after `--frames` in the PC
+      host, which it now does. Not hooked: shooting a `SHOOTABLE` wall.
       Cost: `_levelEvent` is 2 bytes of DGROUP; every call is per event, not
       per frame.
 
-Still needed: a completion check on the tick path (all objectives complete
-and the player on `end`) and end-of-level handling. The briefing screen from
-task 2 is the natural place to list them.
+- [x] Completion check and end-of-level handling (2026-09-20, task 10):
+      `missionTick()` judges the objectives the tick the player stands on the
+      end cell, after `LEVEL_EVENT_EXIT`, and opens the outcome screen.
 
 ### 4. Decoration sprites
 - [x] Computer desks, security cameras, and similar set dressing.
@@ -210,37 +222,78 @@ on the player's cell each tick plus an `isMarked` test in `drawCell`. The
 right-hand 120x160 of the LCD is still free for task 8.
 
 ### 8. Status bars
-- [ ] On-screen health, ammo, weapon and objective status.
+- [x] On-screen health, ammo, weapon and objective status.
 
-The player already carries `health`, `weaponsOwned`, `items`, current weapon
-and, since task 11, `ammo[]` per pool in [player.h](player.h). Ammo is the
-most pressing thing to show: today the only sign a pool is dry is the weapon
-swapping itself for the pistol. The display question is where it goes: the game window
-is the 240x160 region at x=120, the debug window is the 120x160 region at x=0,
-and the right-hand 120x160 of the 480x160 LCD is unused. Putting status in a
-side window costs no game-view rows and no per-frame raycast work, but the
-status window is not part of the `blitVideoMem` path, so it needs its own draw
-route and should only redraw when a value changes.
+Done 2026-09-20 as the HUD from the design's HUD artboard: [hud.c](hud.c)
+draws the two 120px side panels - Health (the number in the 16px face at
+double height, `G_STY_DOUBLE`, over a ten-segment bar), Objectives done /
+total, the FPS row when the option is on; Weapons 1-4 with the key box, name
+and `ammo/cap` (a dash for the pistol, nothing for a weapon not yet picked
+up), the current one inverse. It draws through `ui.h` into a new
+`UI_TARGET_HUD`: on the device a full-screen window created first, so the
+game window sits over its middle 240 columns and `blitVideoMem` writes the
+view between the panels; on the PC an image the view is composited over, so
+the window now shows the whole 480x160 LCD in play as well as in the menus
+(`--hud` screenshots it; the bare 240 view stays what the gameplay goldens
+compare). The old debug window is gone; `debug.c`'s `drawDbgText` has no
+caller on the device now (the PC HUD label still shows the slot).
+
+Redraw cost, measured 2026-09-21: the first version invalidated the whole
+HUD window whenever a value moved and repainted both panels from a redraw
+event - about 45 buffered calls plus the event round trip and the
+server's background clear - and that read as a visible hitch once a second
+with the fps counter on and 17 -> 9 fps while firing. Now the values are
+*cells*: `hudUpdate()` runs once a frame with the HUD target selected,
+compares each value with the one on screen, and replaces only the cells
+that moved, drawn straight into the window (no invalidation, no redraw
+event - the calls ride in the frame's client buffer). A cell is one
+`uiTextBox` call, `gPrintBoxText` on the device: it clears or fills its
+box, aligns and prints in a single message, so a shot costs exactly one
+message for its ammo cell, a hit one for the number plus one or two segment
+interiors, and the fps counter one per second. A weapon switch redraws its
+two rows (about seven calls each). `hudDraw()` still paints everything and
+is what a `WM_REDRAW` (the window uncovered after a menu) gets. Measured on
+the device after the change: 17 -> 16 fps while firing, and that remaining
+frame is the shot itself (the muzzle flash sprite and the hit test), not the
+HUD.
 
 ### 9. Player death and game over
-- [ ] Handle `player.health` reaching zero.
+- [x] Handle `player.health` reaching zero.
 
-`hurtPlayer` in [player.c](player.c) already clamps health to 0 (and applies
-the knockback, view kick and hurt flash), and `enemyShootPlayer` in
-[enemy.c](enemy.c) stops enemies firing at a dead player, but nothing else
-reacts - the player keeps walking and shooting at 0 health. Needs a death state,
-a death screen or fade, and a route back to the menu or a restart. Objectives
-(task 3) mean little until failure is possible.
+Done 2026-09-20 with task 10. `missionTick()` in [mission.c](mission.c),
+called per tick from `gameRunTicks`, sees health at zero, lets 16 ticks pass
+so the last hit's flash and shove are seen (the dead player takes no input:
+`updatePlayer` gets an empty key mask), then ends the mission as
+`OUTCOME_KIA` and opens the outcome screen: Killed in Action, the
+objectives as they stood, Enter to retry the level, Esc to Mission Select.
+No fade; the menu window comes up over the last frame.
 
 ### 10. Level exit and completion
 - [ ] A way to finish a level.
+- [x] Judge the mission on the end cell and show the outcome.
+- [ ] Persist best times (they live in the far mission index and go with the
+      process).
 
-The exit cell is now map data: `end = x, y` in the file's `[LEVEL]` section lands
-in `mapInfo.endX` / `endY` (the spawn is `start` and `angle` the same way, and
-`initPlayer()` reads them). Nothing tests it yet, so a level still runs until
-the player quits. Needs a check that the player's cell is the end cell and the
-objectives are satisfied, and a transition to the next level or the debrief.
-Pairs directly with tasks 3 and 16.
+Done 2026-09-20. `missionTick()` tests the player's cell against
+`mapInfo.endX` / `endY` every tick, after `updatePlayer` has raised the level
+script's `LEVEL_EVENT_EXIT` (so "still true at the end" objectives complete
+first). Every objective complete is `OUTCOME_COMPLETE`, anything failed or
+still open is `OUTCOME_FAILED`; a failure earlier in the mission does not end
+it - the player plays on to the exit, as the objectives screen shows. The
+outcome screen (`MENU_OUTCOME` in [menu.c](menu.c), from the design's
+Outcome artboards) has the 28 row title bar with mission, difficulty, time
+and best time, the objective list with the failed one picked out, and Enter
+Continue (complete) or Enter Retry (failed / KIA); Esc is Mission Select
+either way, so a mission always comes back to the list. The mission clock is
+`missionTicks`; best times per mission and difficulty sit in the `MISIDX`
+segment record, set on completion with the "new" flag the design shows -
+this session only, until there is a save file. The device brings the menu
+window up from inside `runTicks` when the mode changes under it; the frame
+loop then spins without frames until the menu window's redraw event ends the
+outstanding event request (see `mainLoop`). Golden views: `map1_exit` (the
+failed outcome, from the end cell with objectives open) and `map1_kia`
+(`--dead`, a new PC option that zeroes health). A complete outcome cannot be
+reached headlessly until `--keys` (task 17) can play a level.
 
 Start and exit are map data rather than wall types: task 6 spent all sixteen
 ids and deliberately left none for them.

@@ -55,12 +55,24 @@ pause_menu         --map 1 --screen pause
 pause_abort        --map 1 --screen abort
 pause_objectives   --map 1 --screen pobjectives
 pause_map          --map 1 --screen map
-# map 1, the computer desk one cell south with fire held: the round stops at the
-# decoration (hit splash on the monitor), and levelEvent(SHOOT_DECOR) has fired
-map1_decor_shot    --map 1 --pos 7552,1408 --angle 402 --frames 2 --fire
-# the same desk with use held instead, then the pause objectives: map 1's script
-# completes "Install the network backdoor" on a computer (levelEventMap1)
-map1_use_computer  --map 1 --pos 7552,1408 --angle 402 --frames 2 --use --screen pobjectives
-# two cells west of the civilian at (33,1), fire held for 120 ticks: the kill
-# event fails "Avoid harming research staff"
-map1_kill_civ      --map 1 --pos 8064,384 --angle 0 --frames 120 --fire --screen pobjectives
+# map 1, the computer desk at (26,7) one cell south with fire held: the round
+# stops at the decoration (hit splash on the monitor) and SHOOT_DECOR has fired
+map1_decor_shot    --map 1 --pos 6784,1664 --angle 402 --frames 2 --fire
+# the director's computer at (7,32), used from the cell south of it, then the
+# pause objectives: map 1's script completes "Install the network backdoor"
+map1_use_computer  --map 1 --pos 1920,8576 --angle 1206 --frames 2 --use --screen pobjectives
+# the civilian at (11,26) from two cells north, fire held for 120 ticks: it can
+# only flee along the aim line there, and the kill fails "Avoid harming research staff"
+map1_kill_civ      --map 1 --pos 2944,6272 --angle 402 --frames 120 --fire --screen pobjectives
+# placed on the end cell (27,2) for one tick (a locked door, so the host warns
+# it is not walkable): the exit event completes "Avoid harming research staff",
+# then the same tick ends the mission - failed, the other objectives still open -
+# so this is the outcome screen, not the pause one
+map1_exit          --map 1 --pos 7040,640 --angle 402 --frames 1
+# health zeroed, then the sixteen ticks the death waits for the last hit to show:
+# the Killed in Action outcome
+map1_kia           --map 1 --frames 20 --dead
+# the options screen, from the main menu
+menu_options       --screen options
+# the in-game HUD around the spawn view, the whole LCD (--hud)
+hud_spawn          --map 1 --hud

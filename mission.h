@@ -22,16 +22,56 @@
 #define OBJECTIVE_COMPLETE 1
 #define OBJECTIVE_FAILED 2
 
+/*  How the mission in play ended. KIA is health at zero. The other two are
+    judged on the end cell: COMPLETE when every objective is complete,
+    FAILED when any is failed or still open. */
+#define OUTCOME_NONE 0
+#define OUTCOME_COMPLETE 1
+#define OUTCOME_FAILED 2
+#define OUTCOME_KIA 3
+
+/*  missionIndex when the level in play is not in the index (map 98, 99). */
+#define MISSION_NONE 0xff
+
+/*  A best time that has never been set. */
+#define MISSION_TIME_NONE 0xffff
+
 extern u8 missionCount;
 extern u8 difficulty;
 
-/*  One state per mapInfo objective, OBJECTIVE_*. Reset at mission start;
-    nothing advances them yet (TASKS.md task 3), so the pause screen shows
-    every objective incomplete. */
+/*  The mission in play: its index (or MISSION_NONE), ticks since it began,
+    and how it ended. */
+extern u8 missionIndex;
+extern u16 missionTicks;
+extern u8 missionOutcome;
+extern u8 missionNewBest;	/* the last outcome set a best time */
+
+/*  One state per mapInfo objective, OBJECTIVE_*. Reset at mission start and
+    moved by the level script (level.c) as the player acts; read by the
+    objectives screens and judged by missionTick at the exit. */
 extern u8 objectiveState[MAP_MAX_OBJECTIVES];
 
+/*  Move objective i (0-based) to OBJECTIVE_COMPLETE or OBJECTIVE_FAILED and
+    tell the player with an info message, "Objective 2 Completed". A change
+    to the state it already has is silent, so a script can set it freely.
+    Level scripts go through this rather than writing objectiveState[]. */
+void missionSetObjective(const u8 i, const u8 state);
+
 void missionScan(void);
-void missionReset(void);
+
+/*  A mission has begun: mapId's index (if it has one), the clock and the
+    objectives all reset. */
+void missionStart(const u8 mapId);
+
+/*  One tick of the mission in play. Counts the time and tests for the end
+    cell and for death, returning OUTCOME_NONE while play goes on and the
+    outcome once it does not; on an outcome the best time is updated. */
+u8 missionTick(void);
+
+/*  The best time (ticks) for a mission at a difficulty this session, or
+    MISSION_TIME_NONE. Best times live in the index segment, so they cost no
+    near data - and no persistence yet: they go with the process. */
+u16 missionBest(const u8 mission, const u8 d);
 
 static u8 missionMapId(const u8 mission)
 {

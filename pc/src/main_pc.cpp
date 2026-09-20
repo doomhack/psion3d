@@ -28,8 +28,8 @@ int main(int argc, char **argv)
 		"the program opens at the main menu, as the device does.", "n", "0");
 	QCommandLineOption screenOpt("screen",
 		"Open at a menu screen, for screenshots: main, select, briefing or "
-		"objectives (the front end, from the first mission), or pause, abort, "
-		"pobjectives or map (the pause set, which need --map).", "name");
+		"objectives (the front end, from the first mission), options, or pause, "
+		"abort, pobjectives or map (the pause set, which need --map).", "name");
 	QCommandLineOption tickOpt("tick-start",
 		"Seed the 16-bit tick counter, e.g. 65520, to exercise its wraparound "
 		"in the first second rather than after 34 minutes.", "ticks");
@@ -38,6 +38,9 @@ int main(int argc, char **argv)
 		"window. Compare it against an emulator capture.", "file");
 	QCommandLineOption gutterOpt("gutter",
 		"Include backbuffer columns 240-255, which the LCD hides.");
+	QCommandLineOption hudOpt("hud",
+		"Screenshot the whole 480x160 LCD - the HUD panels with the game view "
+		"between them - rather than the bare 240x160 game view.");
 	QCommandLineOption framesOpt("frames",
 		"Advance this many game ticks before screenshotting, one per frame. "
 		"Uses the virtual clock, so the result is deterministic.", "n", "0");
@@ -48,6 +51,9 @@ int main(int argc, char **argv)
 		"Hold the use key down through the --frames loop, so a switch in reach "
 		"is thrown and its effect on the map is visible in a headless "
 		"--screenshot.");
+	QCommandLineOption deadOpt("dead",
+		"Zero the player's health before the --frames loop, so the death path "
+		"and the Killed in Action screen can be screenshotted headlessly.");
 	QCommandLineOption posOpt("pos",
 		"Start the player at X,Y instead of the map's spawn. Q8 map units "
 		"(256 per cell), as shown on the HUD - so 7040,384 is cell 27.5,1.5.",
@@ -65,9 +71,11 @@ int main(int argc, char **argv)
 	parser.addOption(tickOpt);
 	parser.addOption(shotOpt);
 	parser.addOption(gutterOpt);
+	parser.addOption(hudOpt);
 	parser.addOption(framesOpt);
 	parser.addOption(fireOpt);
 	parser.addOption(useOpt);
+	parser.addOption(deadOpt);
 	parser.addOption(posOpt);
 	parser.addOption(angleOpt);
 	parser.addOption(verboseOpt);
@@ -146,6 +154,7 @@ int main(int argc, char **argv)
 		{ "select",      false, "e"    },
 		{ "briefing",    false, "ee"   },
 		{ "objectives",  false, "eee"  },
+		{ "options",     false, "de"   },
 		{ "pause",       true,  "x"    },
 		{ "abort",       true,  "xddde" },
 		{ "pobjectives", true,  "xde"  },
@@ -207,6 +216,9 @@ int main(int argc, char **argv)
 	if(parser.isSet(useOpt))
 		hostSetKey(HOST_KEY_USE, 1);
 
+	if(parser.isSet(deadOpt))
+		hostKillPlayer();
+
 	/*  Drive the virtual clock rather than waiting on the real one, so a given
 	    tick count always produces the same frame. */
 	for(int i = 0, n = parser.value(framesOpt).toInt(); i < n; ++i)
@@ -248,7 +260,10 @@ int main(int argc, char **argv)
 		/* hostInit and the loop above have left a frame drawn. */
 		const QString path = parser.value(shotOpt);
 
-		if(!psion3dFrameImage(parser.isSet(gutterOpt)).save(path, "PNG"))
+		const QImage shot = parser.isSet(hudOpt) ? psion3dScreenImage(parser.isSet(gutterOpt))
+		                                         : psion3dFrameImage(parser.isSet(gutterOpt));
+
+		if(!shot.save(path, "PNG"))
 		{
 			std::fprintf(stderr, "could not write %s\n", qPrintable(path));
 			hostShutdown();

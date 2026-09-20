@@ -17,6 +17,8 @@
 #compile gameloop
 #compile menu
 #compile mission
+#compile settings
+#compile hud
 #compile automap
 #compile ui_psion
 #compile videomem

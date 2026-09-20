@@ -409,7 +409,12 @@ try
 				Remove-Item $rendered -Force
 			}
 
+			# The host warns on stderr and carries on (a --pos on a non-walkable
+			# cell, say). Under "Stop", 2>&1 turns that line into a terminating
+			# error and takes the whole run down, so it is relaxed for this call.
+			$ErrorActionPreference = "Continue"
 			$renderOut = & $pcExe @($view.Args) --screenshot $rendered 2>&1 | Out-String
+			$ErrorActionPreference = "Stop"
 
 			if($LASTEXITCODE -ne 0 -or -not (Test-Path $rendered))
 			{

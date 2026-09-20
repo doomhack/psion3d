@@ -51,9 +51,11 @@ Working-tree line endings are mixed (git stores LF, some files are CRLF on disk)
 | `psion3d.c` | `main()`, WLIB windows, keyboard scancodes, key events, fixed-tick main loop, screen blit |
 | `gameloop.c` | The mode above the frame (`gameMode`: menu or playing), `gameInit`/`gameKey`/`gameStartMission`, and the tick catch-up loop both platforms call |
 | `menu.c` | The menu screens (main, mission select, briefing, objectives, pause, abort, pause objectives, map): state, keys and drawing through `ui.h` |
-| `ui.h` / `ui_psion.c` | The drawing seam the menus use, and its WLIB implementation: the 480x160 menu window, ROM Swiss 13/16 fonts. `pc/src/menu_pc.cpp` is the QPainter one |
+| `ui.h` / `ui_psion.c` | The drawing seam the menus use, and its WLIB implementation: the 480x160 menu and HUD windows (`uiTarget`), ROM Swiss 13/16 fonts. `pc/src/menu_pc.cpp` is the QPainter one |
 | `mission.c` | Mission index (titles/locations parsed from `map1..map20.map` at startup into a far segment), `difficulty`, `objectiveState[]` |
 | `automap.c` | The pause menu's level plan, rendered into `screenBm` with `bitmap.c` and copied out with `uiBlitMap` |
+| `settings.c` | The Options screen's values (`soundLevel`, `showFps`); process lifetime, no save file yet |
+| `hud.c` | The in-game HUD panels (health, objectives, weapons/ammo, fps) drawn through `ui.h` into the HUD target: static parts on a redraw event, values as single-call cells replaced only when they change (never invalidate the HUD window for a value; see task 8) |
 | `draw.c` | DDA ray cast, per-span wall depth buffer, sprite collection/sorting, player shot resolution |
 | `walls.c` | Default wall style + `drawWall` function-pointer global |
 | `labwall.c` | Lab environment wall style (`drawWallLab`) |
@@ -65,7 +67,7 @@ Working-tree line endings are mixed (git stores LF, some files are CRLF on disk)
 | `player.c` | Player position/movement, weapon table and firing state |
 | `game_map.c` | 64x64 `map[][]`, ASCII-to-cell encoding, map file loading, per-level asset/wall-style selection |
 | `fp_math.c` | 1024-entry combined sine/cosine table |
-| `debug.c` | Debug text slots drawn into the left-hand 120x160 window |
+| `debug.c` | Debug text slot (`setDbg*`); the device window that drew it went with the HUD, the PC HUD label still shows it |
 
 ## Architecture invariants
 

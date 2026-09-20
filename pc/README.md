@@ -65,7 +65,8 @@ up on the next run without deploying anything.
 
 With no options the program opens at the main menu, as the device does: the
 menus are the portable `menu.c` drawn through `ui.h`, which `src/menu_pc.cpp`
-implements with QPainter into a 480x160 image (the window widens to match).
+implements with QPainter into a 480x160 image. In play the window shows the
+same 480x160: the HUD panels from `hud.c` with the game view between them.
 Its Helvetica, stretched 10% to match the ROM Swiss 13/16 widths measured
 off device grabs, is a stand-in for those fonts, so a menu golden frame
 checks layout and logic, not the device's exact pixels.
@@ -75,7 +76,7 @@ Useful options:
 | Option | |
 | --- | --- |
 | `--map <n>` | skip the menus and start playing this level; what every gameplay golden view passes |
-| `--screen <name>` | open at a menu screen for a `--screenshot`: `main`, `select`, `briefing`, `objectives` (the front end, from the first mission), or with `--map`: `pause`, `abort`, `pobjectives`, `map`. Applied after `--frames`, so `--frames 2 --use --screen pobjectives` shows what the use did |
+| `--screen <name>` | open at a menu screen for a `--screenshot`: `main`, `select`, `briefing`, `objectives`, `options` (the front end, from the first mission), or with `--map`: `pause`, `abort`, `pobjectives`, `map`. Applied after `--frames`, so `--frames 2 --use --screen pobjectives` shows what the use did |
 | `--assets <dir>` | read `map/` and `spr/` from somewhere else (or set `PSION3D_ASSETS`) |
 | `--screenshot <file>` | render one frame to a PNG at 1:1 and exit, without opening a window |
 | `--pos <x,y>` | start the player here instead of the map's spawn. Q8 map units (256 per cell), the same numbers the HUD shows, so `7040,384` is cell 27.5,1.5. Warns if the cell is not walkable |
@@ -83,7 +84,9 @@ Useful options:
 | `--frames <n>` | advance *n* ticks on the virtual clock first; deterministic, so it pairs with `--screenshot` |
 | `--fire` | hold the fire key down through the `--frames` loop, so a shot lands and its effect on the map is visible in a headless `--screenshot` |
 | `--use` | hold the use key down through the `--frames` loop, so a switch in reach is thrown and its effect on the map is visible in a headless `--screenshot` |
-| `--gutter` | include backbuffer columns 240-255, which the LCD hides — anything drawn out there is a clipping bug |
+| `--dead` | zero the player's health before the `--frames` loop; twenty frames later the Killed in Action outcome is on screen |
+| `--gutter` | include backbuffer columns 240-255, which the LCD hides — anything drawn out there is a clipping bug (in the window they cover the start of the right HUD panel) |
+| `--hud` | screenshot the whole 480x160 LCD - the HUD panels with the game view between them - instead of the bare 240x160 game view, which is what the gameplay goldens compare |
 | `--tick-start <n>` | seed the 16-bit tick counter, e.g. `65520`, to hit its wraparound in the first second rather than after 34 minutes |
 | `-v` | report every failed file open, including `loadSprite`'s routine probe past each sprite's last frame |
 

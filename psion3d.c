@@ -12,6 +12,7 @@
 #include "gameloop.h"
 #include "ui.h"
 #include "ui_psion.h"
+#include "hud.h"
 
 /*  Were in psion3d.h until it was made SDK-free; only this file reads them. */
 static const P_RECT gameWinRect = {{0,0}, {240,160}};
@@ -19,14 +20,12 @@ static const P_RECT gameBitmapRect = {{0,0}, {256,320}};
 
 static WSERV_SPEC wSpec;
 static UINT gameWindowId = 0;
-static UINT debugWindowId = 0;
 
 static UINT bitmap = 0;
 static HANDLE bmHandle = 0;
 
 static UINT wgc[2]  = {0};
 
-const INT DEBUG_WIN = 1;
 const INT GAME_WIN = 2;
 
 #define DIRECT_VIDEO_MEM_ACCESS
@@ -113,7 +112,12 @@ static u16 runTicks(u16 gameTime)
 	   presenting the bitmap stay here, because both are platform. */
 	gameTime = gameRunTicks(gameTime, realTime);
 
-	updateScreen();
+	/* A tick can end the mission. Then the outcome screen is open, and the
+	   menu window comes up over the game instead of the frame going out. */
+	if(gameMode != GAME_MODE_PLAYING)
+		menuWindowShow(TRUE);
+	else
+		updateScreen();
 
 	return gameTime;
 }
@@ -153,11 +157,10 @@ static void mainLoop()
 	u16 frames = 0;
 	u16 gameTime = p_returntickcount();
 	u16 lastTick = gameTime, t = 0;
-	TEXT buf[32];
 	u16 isForground = TRUE;
 	u8 modeBefore;
 
-	wInvalidateWin(debugWindowId);
+	hudWindowInvalidate();
 
 	while(1)
 	{
@@ -170,7 +173,12 @@ static void mainLoop()
 
 		while(event.type == E_FILE_PENDING)
 		{
-			gameTime = runTicks(gameTime);
+			/* The event request stays outstanding until it completes, so a
+			   mission ending mid-loop cannot switch to wGetEventWait here:
+			   the spin goes on, without frames, until the menu window's own
+			   redraw event (raised when it was shown) ends it. */
+			if(gameMode == GAME_MODE_PLAYING)
+				gameTime = runTicks(gameTime);
 
 			wFlush();
 
@@ -180,9 +188,19 @@ static void mainLoop()
 
 			if(tickElapsed(t, lastTick) >= TICKS_PER_SECOND)
 			{
-				wInvalidateWin(debugWindowId);
-
+				hudSetFps((u8)(frames > 255 ? 255 : frames));
+				frames = 0;
 				lastTick = t;
+			}
+
+			/* HUD cells that moved this frame are drawn straight into the
+			   window, buffered with the frame's other calls: no invalidation
+			   and no redraw event, so a shot costs its ammo cell and nothing
+			   else. */
+			if(gameMode == GAME_MODE_PLAYING)
+			{
+				uiTarget(UI_TARGET_HUD);
+				hudUpdate();
 			}
 		}
 
@@ -221,27 +239,9 @@ static void mainLoop()
 			{
 				menuWindowRedraw();
 			}
-			else if(event.handle == DEBUG_WIN)
+			else if(event.handle == HUD_WIN)
 			{
-				wBeginRedrawWinGC0(debugWindowId);
-
-				p_atos(&buf[0], "%d fps", frames);
-				gPrintText(5, 20, &buf[0], p_slen(&buf[0]));
-				
-				p_atos(&buf[0], "Pos: %d,%d", player.pos.x, player.pos.y);
-				gPrintText(5, 40, &buf[0], p_slen(&buf[0]));
-
-				p_atos(&buf[0], "Health: %d", player.health);
-				gPrintText(5, 60, &buf[0], p_slen(&buf[0]));
-				
-				p_atos(&buf[0], "Angle: %d", player.pos.angle);
-				gPrintText(5, 80, &buf[0], p_slen(&buf[0]));
-
-				drawDbgText(5, 100);
-
-				wEndRedraw();
-
-				frames = 0;
+				hudWindowRedraw();
 			}
 			else if(event.handle == GAME_WIN)
 			{
@@ -298,21 +298,13 @@ static void createGameWindow()
 
 void main()
 {
-	W_WINDATA windata = {0};
-
 	wConnect(&wSpec, 0, W_CONNECT_PRIORITY);
 	wCompatibilityMode(0, &wSpec);
-	
-	windata.flags=0;
-	windata.extent.tl.x=0;
-	windata.extent.tl.y=0;
-	windata.extent.width=120;
-	windata.extent.height=160;
-	windata.background=W_WIN_BACK_CLR;
-	
-	debugWindowId = wCreateWindow(0, W_WIN_EXTENT | W_WIN_BACKGROUND, &windata, DEBUG_WIN);	
-	wInitialiseWindowTree(debugWindowId);
-	
+
+	/* Bottom of the stack: the HUD's side panels show either side of the
+	   game window, which is created over its middle. */
+	createHudWindow();
+
 	createGameWindow();
 
 	/* Created last, so it sits over the other two while it is visible. */

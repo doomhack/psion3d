@@ -16,6 +16,7 @@ extern "C" {
 #define HOST_W      240     /* what the LCD shows */
 #define HOST_H      160
 #define HOST_W_FULL 256     /* what the backbuffer actually holds, see below */
+#define HOST_HUD_X  120     /* where the game view sits on the 480 wide LCD, between the HUD panels */
 
 /*  Named rather than a bitmask so the KEY_* values from psion3d.h are never
     duplicated on the C++ side. host.c owns the single mapping table. */
@@ -63,6 +64,10 @@ int  hostMenuKey(int uiKey);
 /*  The menu drawn from scratch into the menu_pc image. */
 void hostMenuDraw(void);
 
+/*  The frame rate the HUD shows when Show FPS is on. The PC number means
+    nothing for performance (see the README); it is here so the row draws. */
+void hostSetFps(int fps);
+
 void hostSetKey(HostKey k, int down);
 void hostClearKeys(void);           /* on focus loss, so nothing sticks down */
 
@@ -72,6 +77,10 @@ void hostClearKeys(void);           /* on focus loss, so nothing sticks down */
     a headless --screenshot with no --frames shows the new view. Warns on
     stderr if the cell is not walkable, but places the player anyway. */
 void hostSetPlayerPosition(short x, short y, short angle);
+
+/*  Zero the player's health, so the death path (and the Killed in Action
+    screen) can be reached headlessly: --dead with a few --frames. */
+void hostKillPlayer(void);
 
 /*  One frame: catch up whole ticks against the tick counter, then clear,
     draw and unpack. */

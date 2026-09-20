@@ -14,6 +14,12 @@ extern "C" {
     copy of the plane-to-shade mapping. */
 QImage psion3dFrameImage(bool showGutter);
 
+/*  The whole 480x160 LCD: the menu, or the HUD panels with the game view
+    composited over the middle - what the widget shows and what --hud
+    screenshots. psion3dFrameImage stays the bare game view, so the gameplay
+    goldens do not move with the HUD. */
+QImage psion3dScreenImage(bool showGutter);
+
 /*  Shows the game's two-plane 1bpp backbuffer as an integer-scaled image and
     turns Qt key events into host key state. In the menu it shows the 480x160
     menu image instead and turns key presses into UI_KEY_* edges. */
@@ -56,7 +62,6 @@ private:
 	static int hostKeyFor(int qtKey);
 	static int uiKeyFor(int qtKey);
 
-	QImage m_img;
 	QRect  m_dst;
 	int    m_scale = 3;
 	bool   m_showGutter = false;

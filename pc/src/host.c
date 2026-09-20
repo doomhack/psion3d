@@ -20,6 +20,8 @@
 #include "units.h"
 #include "mission.h"
 #include "menu.h"
+#include "hud.h"
+#include "ui.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -44,6 +46,8 @@ static unsigned char g_fb[HOST_H * HOST_W_FULL];
 /* Large enough for the whole briefing; the segment cap is 3072. */
 #define MAP_TEXT_PRINT_MAX 3072
 static int           g_fbWidth = HOST_W;
+
+static void hudRefresh(void);
 
 /* ------------------------------------------------------------- level info */
 
@@ -136,6 +140,7 @@ int hostInit(const char *assetRoot, int mapId)
 	   the pacing timer has fired. */
 	bmClearScreen();
 	draw();
+	hudRefresh();
 
 	return 1;
 }
@@ -170,6 +175,7 @@ int hostMenuKey(int uiKey)
 			g_gameTime = p_returntickcount();
 			bmClearScreen();
 			draw();
+			hudRefresh();
 		}
 		else
 		{
@@ -190,7 +196,21 @@ int hostMenuKey(int uiKey)
 
 void hostMenuDraw(void)
 {
+	uiTarget(UI_TARGET_MENU);
 	menuDraw();
+}
+
+/*  Redraw the HUD cells whose values moved, as the device does each frame. */
+static void hudRefresh(void)
+{
+	uiTarget(UI_TARGET_HUD);
+	hudUpdate();
+	uiTarget(UI_TARGET_MENU);
+}
+
+void hostSetFps(int fps)
+{
+	hudSetFps((u8)(fps > 255 ? 255 : (fps < 0 ? 0 : fps)));
 }
 
 void hostShutdown(void)
@@ -253,6 +273,18 @@ void hostFrame(void)
 	g_gameTime = gameRunTicks(g_gameTime, p_returntickcount());
 
 	g_lastTicks = (u16)(g_gameTime - before);
+
+	/* A tick can end the mission; the outcome screen is then open. */
+	if(gameMode != GAME_MODE_PLAYING)
+		hostMenuDraw();
+	else
+		hudRefresh();
+}
+
+void hostKillPlayer(void)
+{
+	if(g_started)
+		player.health = 0;
 }
 
 void hostSetPaused(int paused)

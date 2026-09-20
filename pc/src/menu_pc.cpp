@@ -22,23 +22,37 @@ extern "C" {
 #include <QFontMetrics>
 #include <QString>
 
+#include <cstring>
+#include <cstdio>
+
 #define LCD_BACKGROUND qRgb(0xC7, 0xCB, 0xA8)
 #define LCD_GREY       qRgb(0x8A, 0x92, 0x74)
 #define LCD_BLACK      qRgb(0x3C, 0x42, 0x30)
 
 /*  The two planes are kept apart, as on the device, and composed on demand:
-    the black plane sits over the grey one, so both set reads as black. */
-static QImage g_black;
-static QImage g_grey;
-static QImage g_composed;
+    the black plane sits over the grey one, so both set reads as black. One
+    pair per target - the menu window and the HUD window - with references
+    that follow uiTarget, so the primitives below never care which. */
+struct Planes
+{
+	QImage black;
+	QImage grey;
+	QImage composed;
+};
+
+static Planes g_planes[2];
+static int    g_target = UI_TARGET_MENU;
 static bool   g_ready = false;
+
+#define g_black (g_planes[g_target].black)
+#define g_grey (g_planes[g_target].grey)
 
 static QFont fontFor(int font)
 {
 	QFont f("Helvetica");
 
 	f.setStyleStrategy(QFont::NoAntialias);
-	f.setPixelSize(font == UI_FONT_HEAD_BOLD ? 16 : 13);
+	f.setPixelSize((font == UI_FONT_HEAD_BOLD || font == UI_FONT_BIG) ? 16 : 13);
 	f.setBold(font != UI_FONT_BODY);
 
 	/* The ROM Swiss fonts run about a tenth wider than Helvetica at the
@@ -55,11 +69,15 @@ static void ensure()
 	if(g_ready)
 		return;
 
-	g_black = QImage(UI_W, UI_H, QImage::Format_Grayscale8);
-	g_grey = QImage(UI_W, UI_H, QImage::Format_Grayscale8);
-	g_composed = QImage(UI_W, UI_H, QImage::Format_RGB32);
-	g_black.fill(0);
-	g_grey.fill(0);
+	for(Planes &p : g_planes)
+	{
+		p.black = QImage(UI_W, UI_H, QImage::Format_Grayscale8);
+		p.grey = QImage(UI_W, UI_H, QImage::Format_Grayscale8);
+		p.composed = QImage(UI_W, UI_H, QImage::Format_RGB32);
+		p.black.fill(0);
+		p.grey.fill(0);
+	}
+
 	g_ready = true;
 }
 
@@ -90,24 +108,39 @@ static void fillPlane(QImage &plane, short x, short y, short w, short h, int val
 	p.fillRect(x, y, w, h, QColor(value, value, value));
 }
 
-const QImage &uiPcImage()
+static const QImage &compose(Planes &p)
 {
 	ensure();
 
 	for(int y = 0; y < UI_H; ++y)
 	{
-		const uchar *b = g_black.constScanLine(y);
-		const uchar *g = g_grey.constScanLine(y);
-		QRgb *out = reinterpret_cast<QRgb *>(g_composed.scanLine(y));
+		const uchar *b = p.black.constScanLine(y);
+		const uchar *g = p.grey.constScanLine(y);
+		QRgb *out = reinterpret_cast<QRgb *>(p.composed.scanLine(y));
 
 		for(int x = 0; x < UI_W; ++x)
 			out[x] = b[x] ? LCD_BLACK : (g[x] ? LCD_GREY : LCD_BACKGROUND);
 	}
 
-	return g_composed;
+	return p.composed;
+}
+
+const QImage &uiPcImage()
+{
+	return compose(g_planes[UI_TARGET_MENU]);
+}
+
+const QImage &uiPcHudImage()
+{
+	return compose(g_planes[UI_TARGET_HUD]);
 }
 
 extern "C" {
+
+void uiTarget(short target)
+{
+	g_target = (target == UI_TARGET_HUD) ? UI_TARGET_HUD : UI_TARGET_MENU;
+}
 
 void uiClear(void)
 {
@@ -203,13 +236,20 @@ void uiText(short x, short y, short font, short inverse, const char *s, short le
 		p.setRenderHint(QPainter::TextAntialiasing, false);
 		p.setFont(f);
 		p.setPen(QColor(255, 255, 255));
-		/* y is the row centre; centre the capitals on it as the device does. */
-		p.drawText(x, y + fm.capHeight() / 2, str);
+		/* y is the row centre; centre the capitals on it as the device does.
+		   The big face is the head face with every row doubled, so its mask
+		   is painted at half scale about the same centre and stretched below. */
+		const int capHalf = (font == UI_FONT_BIG) ? fm.capHeight() : fm.capHeight() / 2;
+		const int baseline = (font == UI_FONT_BIG) ? (y / 2 + capHalf / 2) : (y + capHalf);
+		p.drawText(x, baseline, str);
 	}
 
 	for(int yy = 0; yy < UI_H; ++yy)
 	{
-		const uchar *m = mask.constScanLine(yy);
+		/* Doubled rows: screen row yy reads mask row yy / 2, positioned so the
+		   caps straddle y as the device's G_STY_DOUBLE output does. */
+		const int my = (font == UI_FONT_BIG) ? (yy / 2) : yy;
+		const uchar *m = mask.constScanLine(my);
 		uchar *b = g_black.scanLine(yy);
 
 		for(int xx = 0; xx < UI_W; ++xx)
@@ -228,6 +268,54 @@ short uiTextWidth(short font, const char *s, short len)
 	const QFontMetrics fm(fontFor(font));
 
 	return (short)fm.horizontalAdvance(decode(s, len));
+}
+
+void uiTextBox(short x, short y, short w, short h, short font, short inverse, short align, const char *s, short len)
+{
+	ensure();
+
+	if(w <= 0 || h <= 0)
+		return;
+
+	/* The device replaces the whole box in one call; here it is the fill and
+	   the text, clipped to the box, the text placed by its measured width. */
+	fillPlane(g_black, x, y, w, h, inverse ? 255 : 0);
+
+	if(len <= 0)
+		return;
+
+	const short tw = uiTextWidth(font, s, len);
+	short tx = x;
+
+	if(align == UI_ALIGN_RIGHT)
+		tx = (short)(x + w - tw);
+	else if(align == UI_ALIGN_CENTRE)
+		tx = (short)(x + ((w - tw) >> 1));
+
+	/* Clip by drawing through a copy of the plane and taking only the box. */
+	QImage before = g_black.copy();
+	uiText(tx, (short)(y + (h >> 1)), font, inverse, s, len);
+
+	for(int yy = 0; yy < UI_H; ++yy)
+	{
+		if(yy >= y && yy < y + h)
+			continue;
+
+		std::memcpy(g_black.scanLine(yy), before.constScanLine(yy), UI_W);
+	}
+
+	for(int yy = y; yy < y + h && yy < UI_H; ++yy)
+	{
+		if(yy < 0)
+			continue;
+
+		uchar *row = g_black.scanLine(yy);
+		const uchar *old = before.constScanLine(yy);
+
+		for(int xx = 0; xx < UI_W; ++xx)
+			if(xx < x || xx >= x + w)
+				row[xx] = old[xx];
+	}
 }
 
 void uiBlitMap(short dstX, short dstY, short srcY, short w, short h)
@@ -261,6 +349,13 @@ void uiBlitMap(short dstX, short dstY, short srcY, short w, short h)
 			g[dx] = (src[xx] & 1) ? 255 : 0;
 		}
 	}
+}
+
+/*  The device pops the window server's info message; the PC has no such
+    thing, and a line on stderr is what a headless run can see. */
+void uiInfoMsg(const char *s)
+{
+	std::fprintf(stderr, "info: %s\n", s);
 }
 
 } /* extern "C" */

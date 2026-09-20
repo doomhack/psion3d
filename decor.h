@@ -11,6 +11,8 @@
 
 #define DECOR_TYPE_CAMERA 0
 #define DECOR_TYPE_COMPUTER 1
+#define DECOR_TYPE_LAB_DESK 2
+
 
 /* Types 2 through 7 are reserved for map characters '3'..'8'. */
 

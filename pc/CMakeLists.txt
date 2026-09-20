@@ -34,6 +34,8 @@ set(GAME_SOURCES
     ${GAME_ROOT}/gameloop.c
     ${GAME_ROOT}/menu.c
     ${GAME_ROOT}/mission.c
+    ${GAME_ROOT}/settings.c
+    ${GAME_ROOT}/hud.c
     ${GAME_ROOT}/automap.c
 )
 

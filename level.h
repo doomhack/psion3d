@@ -32,20 +32,27 @@
                              enemy until the corpse releases it, so a script
                              after a particular enemy can recover it with
                              getEnemy(GET_CELL_ID(mapCell(x, y))).
+    LEVEL_EVENT_EXIT         item = 0, x, y = the level's end cell, on the tick
+                             the player enters it (once per entry, not every
+                             tick standing there). This is where an objective
+                             that is "still true at the end" - nobody harmed,
+                             nothing tripped - is completed. It does not end
+                             the level; that is TASKS.md task 10.
 
     What a handler has to work with, all of it existing code:
     updateCell(x, y, MAP_MASK_WALK) removes a sprite cell (a decoration that
     is destroyed, or a pickup); updateCell(x, y, makeDecorCell(t)) swaps a
     decoration for another frame (a wrecked version of itself);
     unlockDoor(x, y) opens one door and unlockDoors() all of them;
-    objectiveState[i] = OBJECTIVE_COMPLETE / OBJECTIVE_FAILED moves the
-    objective the pause screen shows. */
+    missionSetObjective(i, OBJECTIVE_COMPLETE / OBJECTIVE_FAILED) moves the
+    objective the pause screen shows and tells the player so. */
 
 #define LEVEL_EVENT_PICKUP 0
 #define LEVEL_EVENT_USE_DECOR 1
 #define LEVEL_EVENT_SHOOT_DECOR 2
 #define LEVEL_EVENT_USE_SWITCH 3
 #define LEVEL_EVENT_KILL 4
+#define LEVEL_EVENT_EXIT 5
 
 typedef u16 (*level_event_fn)(const u8 event, const u8 item, const u8 x, const u8 y);
 

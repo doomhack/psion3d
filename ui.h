@@ -21,6 +21,14 @@
 #define UI_FONT_BODY 0
 #define UI_FONT_BODY_BOLD 1
 #define UI_FONT_HEAD_BOLD 2
+#define UI_FONT_BIG 3	/* the head face at double height: 32 rows, for the HUD numbers */
+
+/*  Where the primitives draw. The menu window covers the screen while a
+    menu is up; the HUD window is the full screen too but sits under the
+    game view, and only its two side panels are ever drawn. The platform
+    selects one before a menuDraw or hudDraw. */
+#define UI_TARGET_MENU 0
+#define UI_TARGET_HUD 1
 
 /*  Keys, as the platform reports them from its key events. The play loop
     still reads levels through the KEY_* scancode mask; these are edges. */
@@ -36,6 +44,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+void uiTarget(short target);
 
 /*  Whole window to the LCD background, both planes. */
 void uiClear(void);
@@ -61,10 +71,29 @@ void uiLine(short x0, short y0, short x1, short y1);
 void uiText(short x, short y, short font, short inverse, const char *s, short len);
 short uiTextWidth(short font, const char *s, short len);
 
+/*  A text cell: clear the box (or fill it, when inverse) and print s in it,
+    capitals centred vertically, aligned left, right or centred. One buffered
+    window server call on the device (gPrintBoxText), which is what makes it
+    the primitive for anything that changes while playing: a HUD cell
+    updates for the cost of one message, no invalidation, no redraw event.
+    Black plane only: the box must not sit over grey. */
+#define UI_ALIGN_LEFT 0
+#define UI_ALIGN_RIGHT 1
+#define UI_ALIGN_CENTRE 2
+
+void uiTextBox(short x, short y, short w, short h, short font, short inverse, short align, const char *s, short len);
+
 /*  Copy rows srcY..srcY+h of the game bitmap (screenBm, both planes, x from
     0) into the menu window at dstX, dstY. The automap renders through
     bitmap.c and arrives on screen through this. */
 void uiBlitMap(short dstX, short dstY, short srcY, short w, short h);
+
+/*  A short transient notice over whatever is on screen, play included: the
+    window server's info message on the device (wInfoMsg, bottom right, gone
+    on its own after a moment), a line on stderr on the PC. NUL terminated.
+    The one ui call the game makes outside the menus, so it must not assume
+    the menu window is up. */
+void uiInfoMsg(const char *s);
 
 #ifdef __cplusplus
 }

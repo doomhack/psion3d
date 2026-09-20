@@ -47,7 +47,11 @@ u16 tickElapsed(const u16 later, const u16 earlier);
 
 /*  Catch the simulation up to realTime in whole ticks, then render one frame
     into the bitmap. Returns the new game time. Presenting the bitmap is the
-    platform's job and is deliberately not done here. */
+    platform's job and is deliberately not done here.
+
+    A tick can end the mission (end cell reached, player dead), on which the
+    mode switches to GAME_MODE_MENU with the outcome screen open. The
+    platform checks gameMode after this call as it does after gameKey. */
 u16 gameRunTicks(u16 gameTime, const u16 realTime);
 
 #endif

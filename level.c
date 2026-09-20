@@ -4,6 +4,7 @@
 #include "decor.h"
 #include "enemy.h"
 #include "mission.h"
+#include "pickup.h"
 
 level_event_fn levelEvent = levelEventNone;
 
@@ -19,6 +20,7 @@ u16 levelEventNone(const u8 event, const u8 item, const u8 x, const u8 y)
    Any computer completes the rootkit objective until the map settles on
    which desk is the director's - narrow it to that cell then. The keycard
    and the switch take the default and open every locked door. */
+#define MAP1_OBJECTIVE_LAB_ACCESS 0
 #define MAP1_OBJECTIVE_ROOTKIT 1
 #define MAP1_OBJECTIVE_STAFF 2
 
@@ -26,10 +28,24 @@ u16 levelEventMap1(const u8 event, const u8 item, const u8 x, const u8 y)
 {
 	switch(event)
 	{
+        case LEVEL_EVENT_PICKUP:
+        {
+            if(item == PICKUP_TYPE_KEYCARD)
+            {
+                if(x == 19 && y == 26)
+                {
+                    missionSetObjective(MAP1_OBJECTIVE_LAB_ACCESS, OBJECTIVE_COMPLETE);
+                    unlockDoors(); //Unlock the lab door and exit door.
+                    return TRUE;
+                }
+            }
+        }
+        break;
+
 		case LEVEL_EVENT_USE_DECOR:
-			if(item == DECOR_TYPE_COMPUTER)
+        if( (item == DECOR_TYPE_COMPUTER) && (x == 7) && (y == 32) )
 			{
-				objectiveState[MAP1_OBJECTIVE_ROOTKIT] = OBJECTIVE_COMPLETE;
+				missionSetObjective(MAP1_OBJECTIVE_ROOTKIT, OBJECTIVE_COMPLETE);
 				return TRUE;
 			}
 			break;
@@ -37,10 +53,18 @@ u16 levelEventMap1(const u8 event, const u8 item, const u8 x, const u8 y)
 		case LEVEL_EVENT_KILL:
 			if(item == ENEMY_TYPE_CIV)
 			{
-				objectiveState[MAP1_OBJECTIVE_STAFF] = OBJECTIVE_FAILED;
+				missionSetObjective(MAP1_OBJECTIVE_STAFF, OBJECTIVE_FAILED);
 				return TRUE;
 			}
 			break;
+
+		case LEVEL_EVENT_EXIT:
+			/* Not harming the staff is only known to have held once the level
+			   is over, so it completes here - unless a kill already failed it. */
+			if(objectiveState[MAP1_OBJECTIVE_STAFF] == OBJECTIVE_INCOMPLETE)
+				missionSetObjective(MAP1_OBJECTIVE_STAFF, OBJECTIVE_COMPLETE);
+
+			return TRUE;
 	}
 
 	return FALSE;

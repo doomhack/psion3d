@@ -6,6 +6,8 @@
 #include "game_map.h"
 #include "player.h"
 #include "automap.h"
+#include "units.h"
+#include "settings.h"
 
 /*  Geometry shared by every screen, from the design artboards: a 20 row
     title bar, an 18 row footer under a rule at 142, 13px body text on a
@@ -39,7 +41,16 @@ static u8 first = 0;	/* the first visible row of a scrolling list */
 static u8 mapTop = 0;	/* the first map row the automap shows */
 static u8 abortChoice = 1;	/* 0 Abort, 1 Cancel */
 
-#define MAIN_ITEMS 2
+#define MAIN_ITEMS 3
+#define MAIN_ITEM_SELECT 0
+#define MAIN_ITEM_OPTIONS 1
+#define MAIN_ITEM_EXIT 2
+/*  The Options rows, 22 tall on a 26 pitch, and their width: the design's
+    content column less its 6px right spacer. */
+#define OPTION_ITEMS 2
+#define OPTION_SOUND 0
+#define OPTION_FPS 1
+#define OPTION_ROW_W 444
 #define SELECT_VISIBLE 5
 #define BRIEF_LINES 5	/* body lines per page, under the fixed location line */
 #define OBJ_BRIEF_LINES 6
@@ -53,7 +64,7 @@ static u8 abortChoice = 1;	/* 0 Abort, 1 Cancel */
 
 static const char *mainItems[MAIN_ITEMS] =
 {
-	"Select Mission", "Exit"
+	"Select Mission", "Options", "Exit"
 };
 
 static const char *pauseItems[PAUSE_ITEMS] =
@@ -416,6 +427,7 @@ void menuOpen(const u8 s)
 		break;
 
 	case MENU_PAUSE:
+	case MENU_OPTIONS:
 		cursor = 0;
 		break;
 
@@ -475,9 +487,15 @@ static u16 keyMain(const u16 key)
 
 	if(key == UI_KEY_ENTER)
 	{
-		if(cursor == 0)
+		if(cursor == MAIN_ITEM_SELECT)
 		{
 			menuOpen(MENU_SELECT);
+			return MENU_ACTION_REDRAW;
+		}
+
+		if(cursor == MAIN_ITEM_OPTIONS)
+		{
+			menuOpen(MENU_OPTIONS);
 			return MENU_ACTION_REDRAW;
 		}
 
@@ -685,6 +703,62 @@ static u16 keyMap(const u16 key)
 	return MENU_ACTION_NONE;
 }
 
+static u16 keyOutcome(const u16 key)
+{
+	if(key == UI_KEY_ESC)
+	{
+		menuOpen(MENU_SELECT);
+		return MENU_ACTION_REDRAW;
+	}
+
+	if(key == UI_KEY_ENTER)
+	{
+		/* Continue from a completed mission; retry a failed one. */
+		if(missionOutcome == OUTCOME_COMPLETE)
+		{
+			menuOpen(MENU_SELECT);
+			return MENU_ACTION_REDRAW;
+		}
+
+		return MENU_ACTION_RETRY;
+	}
+
+	return MENU_ACTION_NONE;
+}
+
+static u16 keyOptions(const u16 key)
+{
+	if(listMove(key, OPTION_ITEMS))
+		return MENU_ACTION_REDRAW;
+
+	if(key == UI_KEY_ESC)
+	{
+		menuOpen(MENU_MAIN);
+		cursor = MAIN_ITEM_OPTIONS;
+		return MENU_ACTION_REDRAW;
+	}
+
+	if(key != UI_KEY_LEFT && key != UI_KEY_RIGHT)
+		return MENU_ACTION_NONE;
+
+	if(cursor == OPTION_SOUND)
+	{
+		if(key == UI_KEY_LEFT && soundLevel > 0)
+			soundLevel--;
+		else if(key == UI_KEY_RIGHT && soundLevel < SOUND_LEVEL_MAX)
+			soundLevel++;
+		else
+			return MENU_ACTION_NONE;
+
+		return MENU_ACTION_REDRAW;
+	}
+
+	/* On to the left, Off to the right, as the buttons sit. */
+	showFps = (u8)(key == UI_KEY_LEFT);
+
+	return MENU_ACTION_REDRAW;
+}
+
 u16 menuKey(const u16 uiKey)
 {
 	switch(screen)
@@ -705,6 +779,10 @@ u16 menuKey(const u16 uiKey)
 		return keyPauseObjectives(uiKey);
 	case MENU_MAP:
 		return keyMap(uiKey);
+	case MENU_OUTCOME:
+		return keyOutcome(uiKey);
+	case MENU_OPTIONS:
+		return keyOptions(uiKey);
 	}
 
 	return MENU_ACTION_NONE;
@@ -945,20 +1023,48 @@ static void drawAbort(void)
 	footerItem(&x, 119, ARROWS_NONE, "Esc Back");
 }
 
-/*  The 9x9 objective mark: a box, filled when complete, crossed when failed. */
-static void objectiveMark(const s16 x, const s16 y, const u8 state)
+/*  The 9x9 objective mark: a box, filled when complete, crossed when
+    failed. Inverse draws it white, pixel by pixel where it must, for the
+    row an outcome screen picks out. */
+static void objectiveMark(const s16 x, const s16 y, const u8 state, const s16 inverse)
 {
+	s16 k;
+
 	if(state == OBJECTIVE_FAILED)
 	{
-		uiLine(x, y, (s16)(x + 8), (s16)(y + 8));
-		uiLine((s16)(x + 8), y, x, (s16)(y + 8));
+		if(!inverse)
+		{
+			uiLine(x, y, (s16)(x + 8), (s16)(y + 8));
+			uiLine((s16)(x + 8), y, x, (s16)(y + 8));
+			return;
+		}
+
+		for(k = 0; k < 9; k++)
+		{
+			uiClearRect((s16)(x + k), (s16)(y + k), 1, 1);
+			uiClearRect((s16)(x + 8 - k), (s16)(y + k), 1, 1);
+		}
+
 		return;
 	}
 
-	uiBox(x, y, 9, 9);
+	if(!inverse)
+	{
+		uiBox(x, y, 9, 9);
+
+		if(state == OBJECTIVE_COMPLETE)
+			uiFillRect((s16)(x + 2), (s16)(y + 2), 5, 5);
+
+		return;
+	}
+
+	uiClearRect(x, y, 9, 1);
+	uiClearRect(x, (s16)(y + 8), 9, 1);
+	uiClearRect(x, y, 1, 9);
+	uiClearRect((s16)(x + 8), y, 1, 9);
 
 	if(state == OBJECTIVE_COMPLETE)
-		uiFillRect((s16)(x + 2), (s16)(y + 2), 5, 5);
+		uiClearRect((s16)(x + 2), (s16)(y + 2), 5, 5);
 }
 
 static void drawPauseObjectives(void)
@@ -976,7 +1082,7 @@ static void drawPauseObjectives(void)
 
 		y = (s16)(28 + i * ROW_PITCH);
 
-		objectiveMark(18, (s16)(y + 5), state);
+		objectiveMark(18, (s16)(y + 5), state, FALSE);
 
 		mapTextCopy(mapInfo.objectiveOfs[i], menuStr, MENU_STR_MAX);
 		textFit(35, rowMid(y, ROW_H), UI_FONT_BODY, FALSE, menuStr, 340);
@@ -1044,6 +1150,177 @@ static void drawMap(void)
 	footerItem(&x, FOOTER_Y, ARROWS_NONE, "Esc Back");
 }
 
+/*  "m:ss" for a tick count, or "-" for no time. */
+static void formatTime(char *dst, const u16 ticks)
+{
+	u16 secs, n;
+
+	if(ticks == MISSION_TIME_NONE)
+	{
+		dst[0] = '-';
+		dst[1] = 0;
+		return;
+	}
+
+	secs = (u16)(ticks / TICKS_PER_SECOND);
+	p_atos(dst, "%d:", (u16)(secs / 60));
+	secs %= 60;
+	n = slen(dst);
+	dst[n] = (char)('0' + secs / 10);
+	dst[n + 1] = (char)('0' + secs % 10);
+	dst[n + 2] = 0;
+}
+
+/*  A run of the title bar's second line: label in the body face, value in
+    bold, x advancing past both. */
+static void timeItem(s16 *x, const s16 y, const char *label, const char *value)
+{
+	text(*x, y, UI_FONT_BODY, TRUE, label);
+	*x += textWidth(UI_FONT_BODY, label);
+	text(*x, y, UI_FONT_BODY_BOLD, TRUE, value);
+	*x += textWidth(UI_FONT_BODY_BOLD, value);
+}
+
+static void drawOutcome(void)
+{
+	const char *heading = (missionOutcome == OUTCOME_COMPLETE) ? "MISSION COMPLETE" :
+		(missionOutcome == OUTCOME_KIA) ? "KILLED IN ACTION" : "MISSION FAILED";
+	s16 x, i, y;
+
+	/* A 28 row title bar: the mission and its times on two lines at the
+	   left, the verdict in the heading face at the right. */
+	uiFillRect(0, 0, UI_W, 28);
+
+	missionQualifier(menuStr2, MENU_STR_MAX);
+	text(8, 8, UI_FONT_BODY, TRUE, menuStr2);
+
+	x = 8;
+	formatTime(menuStr, missionTicks);
+	timeItem(&x, 20, "Time ", menuStr);
+	formatTime(menuStr, (missionIndex == MISSION_NONE) ? MISSION_TIME_NONE : missionBest(missionIndex, difficulty));
+	timeItem(&x, 20, " " MIDDOT " Best ", menuStr);
+
+	if(missionNewBest)
+		text(x, 20, UI_FONT_BODY, TRUE, " new");
+
+	textRight((s16)(UI_W - 8), 14, UI_FONT_HEAD_BOLD, TRUE, heading);
+
+	for(i = 0; i < mapInfo.objectiveCount; i++)
+	{
+		const u8 state = objectiveState[i];
+		const char *label = (state == OBJECTIVE_COMPLETE) ? "Complete" :
+			(state == OBJECTIVE_FAILED) ? "Failed" : "Incomplete";
+
+		/* The objective that failed the mission is picked out. */
+		const u16 sel = (u16)(missionOutcome == OUTCOME_FAILED && state == OBJECTIVE_FAILED);
+
+		y = (s16)(34 + i * ROW_PITCH);
+
+		if(sel)
+			uiFillRect(12, y, 456, ROW_H);
+
+		objectiveMark(18, (s16)(y + 5), state, (s16)sel);
+
+		mapTextCopy(mapInfo.objectiveOfs[i], menuStr, MENU_STR_MAX);
+		textFit(35, rowMid(y, ROW_H), UI_FONT_BODY, (s16)sel, menuStr, 340);
+
+		textRight(462, rowMid(y, ROW_H),
+			(state == OBJECTIVE_INCOMPLETE) ? UI_FONT_BODY : UI_FONT_BODY_BOLD, (s16)sel, label);
+	}
+
+	footerRule();
+	x = 12;
+	footerItem(&x, FOOTER_Y, ARROWS_NONE, (missionOutcome == OUTCOME_COMPLETE) ? "Enter Continue" : "Enter Retry");
+	footerItem(&x, FOOTER_Y, ARROWS_NONE, "Esc Mission Select");
+}
+
+/*  A 44 wide, 18 tall button: filled when current, outlined otherwise. In an
+    inverse row the colours swap, so the current one is white on the bar. */
+static void optionButton(const s16 x, const s16 y, const u16 current, const u16 inverse, const char *label)
+{
+	if(current)
+	{
+		if(inverse)
+			uiClearRect(x, y, 44, 18);
+		else
+			uiFillRect(x, y, 44, 18);
+
+		textCentre((s16)(x + 22), rowMid(y, 18), UI_FONT_BODY_BOLD, (s16)!inverse, label);
+		return;
+	}
+
+	if(inverse)
+	{
+		uiClearRect(x, y, 44, 1);
+		uiClearRect(x, (s16)(y + 17), 44, 1);
+		uiClearRect(x, y, 1, 18);
+		uiClearRect((s16)(x + 43), y, 1, 18);
+	}
+	else
+	{
+		uiBox(x, y, 44, 18);
+	}
+
+	textCentre((s16)(x + 22), rowMid(y, 18), UI_FONT_BODY, (s16)inverse, label);
+}
+
+static void drawOptions(void)
+{
+	s16 x, i, y, k;
+
+	titleBar("OPTIONS", NULL);
+
+	/* Sound: the label, a bar of SOUND_LEVEL_MAX segments in a box, and the
+	   count. The design's row is 22 tall with the value column at 132. */
+	y = 28;
+	i = (s16)(cursor == OPTION_SOUND);
+
+	if(i)
+		uiFillRect(12, y, OPTION_ROW_W, 22);
+
+	text(18, rowMid(y, 22), UI_FONT_BODY_BOLD, i, "Sound");
+
+	if(i)
+	{
+		uiClearRect(132, (s16)(y + 5), 133, 1);
+		uiClearRect(132, (s16)(y + 16), 133, 1);
+		uiClearRect(132, (s16)(y + 5), 1, 12);
+		uiClearRect(264, (s16)(y + 5), 1, 12);
+	}
+	else
+	{
+		uiBox(132, (s16)(y + 5), 133, 12);
+	}
+
+	for(k = 0; k < soundLevel; k++)
+	{
+		if(i)
+			uiClearRect((s16)(134 + k * 13), (s16)(y + 7), 12, 8);
+		else
+			uiFillRect((s16)(134 + k * 13), (s16)(y + 7), 12, 8);
+	}
+
+	p_atos(menuStr, "%d / %d", (u16)soundLevel, (u16)SOUND_LEVEL_MAX);
+	text(275, rowMid(y, 22), UI_FONT_BODY, i, menuStr);
+
+	/* Show FPS: On / Off. */
+	y = 54;
+	i = (s16)(cursor == OPTION_FPS);
+
+	if(i)
+		uiFillRect(12, y, OPTION_ROW_W, 22);
+
+	text(18, rowMid(y, 22), UI_FONT_BODY_BOLD, i, "Show FPS");
+	optionButton(132, (s16)(y + 2), (u16)(showFps != 0), (u16)i, "On");
+	optionButton(186, (s16)(y + 2), (u16)(showFps == 0), (u16)i, "Off");
+
+	footerRule();
+	x = 12;
+	footerItem(&x, FOOTER_Y, ARROWS_UP_DOWN, "Move");
+	footerItem(&x, FOOTER_Y, ARROWS_LEFT_RIGHT, "Change");
+	footerItem(&x, FOOTER_Y, ARROWS_NONE, "Esc Back");
+}
+
 void menuDraw(void)
 {
 	uiClear();
@@ -1073,6 +1350,12 @@ void menuDraw(void)
 		break;
 	case MENU_MAP:
 		drawMap();
+		break;
+	case MENU_OUTCOME:
+		drawOutcome();
+		break;
+	case MENU_OPTIONS:
+		drawOptions();
 		break;
 	}
 }

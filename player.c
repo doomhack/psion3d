@@ -165,6 +165,23 @@ static void tryMove(const f16 dx, const f16 dy)
 
 static u8 useHeld = FALSE;
 
+/*  Whether the player was on the end cell last tick, so entering it is one
+    event and standing on it is none. Checked every tick rather than only on a
+    move: two byte compares, and it means a player placed on the cell - the
+    spawn, or the PC host's --pos - reports it too. */
+static u8 atExit = FALSE;
+
+static void checkExit(void)
+{
+	const u8 here = ((u8)fp2int(player.pos.x) == mapInfo.endX &&
+		(u8)fp2int(player.pos.y) == mapInfo.endY);
+
+	if(here && !atExit)
+		levelEvent(LEVEL_EVENT_EXIT, 0, mapInfo.endX, mapInfo.endY);
+
+	atExit = here;
+}
+
 static void tryUse(void)
 {
 	const f16 f_dx = fpcos(player.pos.angle);
@@ -403,6 +420,7 @@ void initPlayer()
 	f_strafeVel = 0;
 	f_turnVel = 0;
 	useHeld = FALSE;
+	atExit = FALSE;
 
 	player.weaponsOwned = 0; //Only the pistol is free; the rest are pickups.
 	player.items = 0;
@@ -525,6 +543,8 @@ void updatePlayer(u16 keys)
 		   same guard as tryMove rather than costing an idle tick. */
 		checkPickup();
 	}
+
+	checkExit();
 
 	/*  On the press, not the hold. updatePlayer runs once per catch-up tick
 	    and the key state is sampled once a frame, so a held key would

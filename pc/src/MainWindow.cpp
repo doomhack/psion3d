@@ -181,6 +181,7 @@ void MainWindow::onFrame()
 		m_fps = (int)(m_frames * 1000LL / m_fpsClock.elapsed());
 		m_frames = 0;
 		m_fpsClock.restart();
+		hostSetFps(m_fps);
 	}
 }
 
