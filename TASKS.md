@@ -583,8 +583,12 @@ come from are pinned. Fixing that made the headless `--frames` loop hold the
 clock while it runs: the wall clock used to creep into long runs, and
 `pcTickAdvance` counted double when paused.
 
-Still to do on hardware: the first run's numbers, as the baseline for the
-budget table in `CLAUDE.md`.
+First run on device, 2026-09-21, now the baseline table in `CLAUDE.md`:
+Corridor 22.2, Empty room 18.8, Detail walls 21.3, Openings 14.2, Enemies
+12.4, Decorations 10.9, Crowd 6.7, average 15.2. Sprite rows are the cost:
+one decoration at two cells is dearer than six enemies further away, and the
+crowd's heavy filling the screen is a 149 ms frame. A second run agreed to
+0.2 on one station and exactly elsewhere: under 0.3 is noise, 0.5 is real.
 
 ### 20. One-shot verify script
 - [x] A single command that builds, hashes, checks DGROUP, and builds the PC host.

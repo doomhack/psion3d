@@ -106,7 +106,7 @@ grep -aoi "N.\{0,1\}\(SgnMol\|SgnDiv\|LngShr\|LngShl\)" *.OBJ | sort | uniq -c
 
 The renderer has been through a measured optimisation pass (14 → 20fps). **Measure before optimising.** Five predictions during that pass were wrong, three of them "this is obviously faster" changes that regressed on the target.
 
-Measured budget, map 1, fixed corridor position, 20fps = 50ms/frame:
+Measured budget, the old map 1 corridor (a plain corridor, since replaced by benchmark station 1), 20fps = 50ms/frame:
 
 | Component | Cost |
 | --- | --- |
@@ -114,6 +114,21 @@ Measured budget, map 1, fixed corridor position, 20fps = 50ms/frame:
 | Ray cast (per-ray setup, DDA walk, per-hit maths) | ~11ms |
 | Weapon overlay sprite | ~4ms |
 | Screen clear, blit, enemy sprites, AI, `wFlush` combined | ~12ms |
+
+Benchmark baseline on device, 2026-09-21 (Options → Benchmark, `map97.map`; a change's numbers go next to these in its commit message). Two runs agreed to 0.2 fps on one station and exactly elsewhere, so treat a change under 0.3 fps as noise and 0.5 as real:
+
+| Station | fps | ms/frame |
+| --- | --- | --- |
+| Corridor | 22.2 | 45 |
+| Empty room | 18.8 | 53 |
+| Detail walls | 21.3 | 47 |
+| Openings | 14.2 | 70 |
+| Enemies | 12.4 | 81 |
+| Decorations | 10.9 | 92 |
+| Crowd | 6.7 | 149 |
+| **Average** | **15.2** | |
+
+Read it as: walls are cheaper than sprites, and sprite *rows* are what cost — one decoration at 2 cells (Decorations) is worse than six enemies further off, and the crowd's heavy filling the screen is a 149ms frame. Openings at 70ms is the arch reveals and the second face behind every see-through cell. The empty room is slower than the corridor with less on screen: that is the DDA walking 12–16 cells per ray.
 
 **Span call count dominates wall cost, not rows written.** Three dither bands covering 0.31× the column height measured 5.6ms — 2.6× the per-row cost of the full-height span they sit on. Fewer, larger span calls win; splitting a style into *more* calls to write *fewer* rows loses. `WALL_DETAIL_DEPTH` and the `LAB_PANEL_*` switches in `walls.h` are the tunables, with their measured costs documented there.
 
