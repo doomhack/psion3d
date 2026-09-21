@@ -20,6 +20,7 @@
 #compile settings
 #compile hud
 #compile automap
+#compile bench
 #compile ui_psion
 #compile videomem
 #compile fpasm

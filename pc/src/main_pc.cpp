@@ -61,6 +61,14 @@ int main(int argc, char **argv)
 	QCommandLineOption angleOpt("angle",
 		"Start facing this angle. Q8 radians, as shown on the HUD: 0 looks "
 		"along +X, 402 is a quarter turn, 1608 is a full circle.", "a");
+	QCommandLineOption stationOpt("station",
+		"Start at station N (1-based) of the --map, one of its [LEVEL] station "
+		"lines, as the benchmark would place the player. Overrides --pos and "
+		"--angle.", "n");
+	QCommandLineOption benchOpt("bench",
+		"Run the benchmark from the main menu, as Options > Benchmark does. With "
+		"--frames the virtual clock gives one frame per tick, so every station "
+		"reads 32.0 and 1400 frames lands on the results screen.");
 	QCommandLineOption verboseOpt({"v", "verbose-io"},
 		"Report every failed file open, including loadSprite's routine probe "
 		"past the last frame of each sprite.");
@@ -78,6 +86,8 @@ int main(int argc, char **argv)
 	parser.addOption(deadOpt);
 	parser.addOption(posOpt);
 	parser.addOption(angleOpt);
+	parser.addOption(stationOpt);
+	parser.addOption(benchOpt);
 	parser.addOption(verboseOpt);
 	parser.process(app);
 
@@ -144,6 +154,18 @@ int main(int argc, char **argv)
 
 	const int mapId = parser.value(mapOpt).toInt();
 
+	if(parser.isSet(benchOpt) && mapId != 0)
+	{
+		std::fprintf(stderr, "--bench does not take --map\n");
+		return 1;
+	}
+
+	if(parser.isSet(stationOpt) && mapId == 0)
+	{
+		std::fprintf(stderr, "--station needs --map\n");
+		return 1;
+	}
+
 	/*  --screen is a key sequence played into the menus from where hostInit
 	    leaves them: the main menu, or the game when --map is given. */
 	struct ScreenRoute { const char *name; bool inPlay; const char *keys; };
@@ -177,7 +199,9 @@ int main(int argc, char **argv)
 			return 1;
 		}
 
-		if(route->inPlay != (mapId != 0))
+		/* A benchmark run is play too: --bench --frames 300 --screen pause is
+		   Esc mid-run, the partial results screen. */
+		if(route->inPlay != (mapId != 0 || parser.isSet(benchOpt)))
 		{
 			std::fprintf(stderr, "--screen %s %s --map\n", route->name,
 			             route->inPlay ? "needs" : "does not take");
@@ -210,6 +234,12 @@ int main(int argc, char **argv)
 		hostSetPlayerPosition((short)posX, (short)posY, (short)angle);
 	}
 
+	if(parser.isSet(stationOpt) && !hostSetStation(parser.value(stationOpt).toInt()))
+		return 1;
+
+	if(parser.isSet(benchOpt) && !hostStartBench())
+		return 1;
+
 	if(parser.isSet(fireOpt))
 		hostSetKey(HOST_KEY_FIRE, 1);
 
@@ -220,11 +250,23 @@ int main(int argc, char **argv)
 		hostKillPlayer();
 
 	/*  Drive the virtual clock rather than waiting on the real one, so a given
-	    tick count always produces the same frame. */
+	    tick count always produces the same frame. The clock is held while the
+	    loop runs: the advance is the only movement, however long the frames
+	    take to render, which is what makes a 1400 frame --bench run read 32.0
+	    at every station. */
+	if(parser.isSet(framesOpt))
+		hostSetPaused(1);
+
 	for(int i = 0, n = parser.value(framesOpt).toInt(); i < n; ++i)
 	{
 		pcTickAdvance(1);
 		hostFrame();
+	}
+
+	if(parser.isSet(framesOpt))
+	{
+		hostSetPaused(0);
+		hostResyncClock();
 	}
 
 	/*  After the frames, so a pause screen can show what play changed: --use

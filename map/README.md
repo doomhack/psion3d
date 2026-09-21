@@ -59,6 +59,12 @@ Find the hidden lab in the basement below the cold store.   ; the rest is its br
   the grid; 90 in the file is engine angle 0, 180 is 402.
 - `mappos` is a pixel position for the world map screen; the units are that
   screen's and nothing else reads it.
+- `station = x, y, bearing, name` may repeat up to eight times
+  (`MAP_MAX_STATIONS`). Each is a place the benchmark stands - the cell, the
+  compass bearing as for `angle`, and the rest of the line as the name the
+  results screen shows. Only `map97.map` has them and only the benchmark
+  (`bench.c`, Options > Benchmark) reads them; the PC host's `--station N`
+  places the player at one.
 - Text lines may not begin with `[` (it would be read as a header). Indent
   with a space if you must.
 - The briefing and objective text are stored as strings with `'\n'` between

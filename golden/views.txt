@@ -76,3 +76,18 @@ map1_kia           --map 1 --frames 20 --dead
 menu_options       --screen options
 # the in-game HUD around the spawn view, the whole LCD (--hud)
 hud_spawn          --map 1 --hud
+# map 97 is the benchmark map (Options > Benchmark, bench.c): one room per
+# rendering aspect, each a [LEVEL] station line. --station N places the player
+# as the run does, so these pin every scene the numbers come from
+bench_corridor     --map 97 --station 1
+bench_empty_room   --map 97 --station 2
+bench_detail_walls --map 97 --station 3
+bench_openings     --map 97 --station 4
+bench_enemies      --map 97 --station 5
+bench_decorations  --map 97 --station 6
+bench_crowd        --map 97 --station 7
+# the run itself under the virtual clock: one frame per tick, so every station
+# reads 32.0 and 1400 frames is past the last one - the results screen
+bench_results      --bench --frames 1400
+# Esc during the second station: the partial results, the rest unmeasured
+bench_abort        --bench --frames 300 --screen pause

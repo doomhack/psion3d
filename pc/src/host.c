@@ -22,6 +22,7 @@
 #include "menu.h"
 #include "hud.h"
 #include "ui.h"
+#include "bench.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -91,6 +92,13 @@ static void printLevelInfo(void)
 		fprintf(stderr, "  objective %u\n", i + 1);
 		printText("  title", mapInfo.objectiveOfs[i]);
 		printText("  brief", mapInfo.objectiveBriefOfs[i]);
+	}
+
+	for(i = 0; i < mapInfo.stationCount; i++)
+	{
+		fprintf(stderr, "  station %u at %u,%u angle %d\n", i + 1,
+		        mapInfo.stations[i].x, mapInfo.stations[i].y, mapInfo.stations[i].f_angle);
+		printText("  name", mapInfo.stations[i].nameOfs);
 	}
 }
 
@@ -254,6 +262,46 @@ void hostSetPlayerPosition(short x, short y, short angle)
 
 	bmClearScreen();
 	draw();
+}
+
+int hostSetStation(int n)
+{
+	const station_t *st;
+
+	if(!g_started || n < 1 || n > mapInfo.stationCount)
+	{
+		fprintf(stderr, "--station %d: the level has %u stations\n", n, mapInfo.stationCount);
+		return 0;
+	}
+
+	st = &mapInfo.stations[n - 1];
+	hostSetPlayerPosition((short)(int2fp(st->x) + flt2fp(0.5f)),
+	                      (short)(int2fp(st->y) + flt2fp(0.5f)), st->f_angle);
+
+	return 1;
+}
+
+/* ---------------------------------------------------------------- bench */
+
+int hostStartBench(void)
+{
+	if(!g_started)
+		return 0;
+
+	if(!benchStart())
+	{
+		fprintf(stderr, "benchStart failed: map %d missing, or no station lines\n", BENCH_MAP_ID);
+		return 0;
+	}
+
+	/* Into play, as hostMenuKey does when a mission starts. */
+	pcTickResync();
+	g_gameTime = p_returntickcount();
+	bmClearScreen();
+	draw();
+	hudRefresh();
+
+	return 1;
 }
 
 /* ------------------------------------------------------------------ frame */

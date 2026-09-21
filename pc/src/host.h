@@ -78,6 +78,15 @@ void hostClearKeys(void);           /* on focus loss, so nothing sticks down */
     stderr if the cell is not walkable, but places the player anyway. */
 void hostSetPlayerPosition(short x, short y, short angle);
 
+/*  Place the player at station n (1-based) of the level in play, as the
+    benchmark would: --station n. Returns 0 if there is no such station. */
+int  hostSetStation(int n);
+
+/*  Start the benchmark from the main menu, as Options > Benchmark does:
+    --bench. Under --frames every station then measures one frame per tick.
+    Returns 0 if map97 failed to load. */
+int  hostStartBench(void);
+
 /*  Zero the player's health, so the death path (and the Killed in Action
     screen) can be reached headlessly: --dead with a few --frames. */
 void hostKillPlayer(void);

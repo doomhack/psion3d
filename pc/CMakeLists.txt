@@ -37,6 +37,7 @@ set(GAME_SOURCES
     ${GAME_ROOT}/settings.c
     ${GAME_ROOT}/hud.c
     ${GAME_ROOT}/automap.c
+    ${GAME_ROOT}/bench.c
 )
 
 set(PC_SOURCES

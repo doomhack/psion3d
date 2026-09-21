@@ -9,6 +9,7 @@
 #include "menu.h"
 #include "ui.h"
 #include "hud.h"
+#include "bench.h"
 
 u16 keys = 0;
 u8 gameMode = GAME_MODE_MENU;
@@ -59,7 +60,17 @@ u16 gameKey(const u16 uiKey)
 
 		keys = 0;
 		gameMode = GAME_MODE_MENU;
-		menuOpen(MENU_PAUSE);
+
+		/* Esc abandons a benchmark run and shows what it measured so far. */
+		if(benchActive)
+		{
+			benchStop();
+			menuOpen(MENU_BENCH);
+		}
+		else
+		{
+			menuOpen(MENU_PAUSE);
+		}
 
 		return GAME_KEY_REDRAW;
 	}
@@ -94,6 +105,13 @@ u16 gameKey(const u16 uiKey)
 
 	case MENU_ACTION_QUIT:
 		return GAME_KEY_QUIT;
+
+	case MENU_ACTION_BENCH:
+		/* Into play at the first station; a failed load stays on the menu. */
+		if(benchStart())
+			return GAME_KEY_IGNORED;
+
+		return GAME_KEY_REDRAW;
 	}
 
 	return GAME_KEY_REDRAW;
@@ -101,6 +119,18 @@ u16 gameKey(const u16 uiKey)
 
 u16 gameRunTicks(u16 gameTime, const u16 realTime)
 {
+	/* A benchmark frame renders a frozen world: no input, no AI and no
+	   mission clock, so the frame rate is the renderer's alone and the
+	   station looks the same in every frame. */
+	if(benchActive)
+	{
+		bmClearScreen();
+		draw();
+		benchFrame(realTime);
+
+		return realTime;
+	}
+
 	while(tickDelta(realTime, gameTime) > 0)
 	{
 		/* A dead player takes no input; the last hit plays out on its own. */

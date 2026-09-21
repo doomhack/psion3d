@@ -22,6 +22,7 @@ void loadMapData(const u8 mapId)
 	switch (mapId)
 	{
 	case 1:
+	case 97: /* the benchmark stations (bench.c), measured in the shipped style */
 	case 98: /* the showcase corridor in this style, see golden/views.txt */
 		drawWall = drawWallLab;
 		break;
@@ -219,6 +220,7 @@ static void resetMapInfo(void)
 	mapInfo.mapPosX = 0;
 	mapInfo.mapPosY = 0;
 	mapInfo.objectiveCount = 0;
+	mapInfo.stationCount = 0;
 	mapInfo.titleOfs = MAP_TEXT_NONE;
 	mapInfo.locationOfs = MAP_TEXT_NONE;
 	mapInfo.briefingOfs = MAP_TEXT_NONE;
@@ -314,11 +316,10 @@ static u16 parseNum(const char **p, u16 *out)
 	return TRUE;
 }
 
-/* "x, y" and nothing after it. */
-static u16 parsePair(const char *s, u16 *a, u16 *b)
+/* A comma at *p, spaces before it allowed, and step past it. */
+static u16 parseComma(const char **p)
 {
-	if (!parseNum(&s, a))
-		return FALSE;
+	const char *s = *p;
 
 	while (isSpace(*s))
 		s++;
@@ -326,15 +327,33 @@ static u16 parsePair(const char *s, u16 *a, u16 *b)
 	if (*s != ',')
 		return FALSE;
 
-	s++;
+	*p = s + 1;
 
-	if (!parseNum(&s, b))
+	return TRUE;
+}
+
+/* "x, y" and nothing after it. */
+static u16 parsePair(const char *s, u16 *a, u16 *b)
+{
+	if (!parseNum(&s, a) || !parseComma(&s) || !parseNum(&s, b))
 		return FALSE;
 
 	while (isSpace(*s))
 		s++;
 
 	return *s == 0;
+}
+
+/* A compass bearing in degrees to the engine's angle. The file holds 0 north
+   (up the grid) and 90 east. The engine's 0 is +x, east, and it turns towards
+   +y, south, so the bearing runs a quarter turn ahead of it. Then degrees to
+   Q8 radians: a full turn is 1608 (2 pi * 256), and 1608 / 360 is exactly
+   67 / 15. 359 * 67 fits a u16. */
+static f16 bearingToAngle(u16 bearing)
+{
+	bearing = (u16)((bearing + 270) % 360);
+
+	return (f16)(bearing * 67 / 15);
 }
 
 /* Flush what the stage buffer holds of the current text line. */
@@ -503,13 +522,38 @@ static u16 levelLine(parser_t *ps)
 		if (!parseNum(&p, &a))
 			return MAP_FAIL(ps, "angle wants a bearing in degrees");
 
-		/* The file holds a compass bearing, 0 north (up the grid) and 90
-		   east. The engine's 0 is +x, east, and it turns towards +y, south,
-		   so the bearing runs a quarter turn ahead of it. Then degrees to Q8
-		   radians: a full turn is 1608 (2 pi * 256), and 1608 / 360 is
-		   exactly 67 / 15. 359 * 67 fits a u16. */
-		a = (u16)((a + 270) % 360);
-		mapInfo.f_startAngle = (f16)(a * 67 / 15);
+		mapInfo.f_startAngle = bearingToAngle(a);
+	}
+	else if (keyIs(s, "station"))
+	{
+		/* x, y, bearing, then the rest of the line is the name. */
+		const char *p = eq;
+		station_t *st;
+		u16 bearing;
+
+		if (mapInfo.stationCount >= MAP_MAX_STATIONS)
+			return MAP_FAIL(ps, "more than MAP_MAX_STATIONS station lines");
+
+		if (!parseNum(&p, &a) || !parseComma(&p) || !parseNum(&p, &b) ||
+			!parseComma(&p) || !parseNum(&p, &bearing) || !parseComma(&p) ||
+			a >= MAP_X || b >= MAP_Y)
+			return MAP_FAIL(ps, "station wants x, y, bearing, name");
+
+		while (isSpace(*p))
+			p++;
+
+		if (*p == 0)
+			return MAP_FAIL(ps, "station has no name");
+
+		st = &mapInfo.stations[mapInfo.stationCount];
+		st->x = (u8)a;
+		st->y = (u8)b;
+		st->f_angle = bearingToAngle(bearing);
+
+		if (!textAppendString(p, &st->nameOfs))
+			return MAP_FAIL(ps, "level text exceeds MAP_TEXT_BYTES");
+
+		mapInfo.stationCount++;
 	}
 	else if (keyIs(s, "title"))
 	{

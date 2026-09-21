@@ -137,6 +137,7 @@ The OS, window server and file system take their own share on top.
 | 2026-09-20 | 40,627 | 45,376 | 50,176 | options screen: settings.c |
 | 2026-09-20 | 41,756 | 45,392 | 50,176 | HUD: hud.c, HUD window replaces the debug window |
 | 2026-09-21 | 42,430 | 45,392 | 50,176 | HUD cells: per-value updates through gPrintBoxText |
+| 2026-09-21 | 43,636 | 45,568 | 51,200 | task 19: benchmark (bench.c, stations in mapInfo, results screen) |
 
 Code has grown ~9 KB in a week; data has barely moved. That is the intended
 shape — features should land as code and far data, not as near arrays.

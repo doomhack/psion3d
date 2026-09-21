@@ -553,16 +553,38 @@ Checked by adding a referenced 1,000-byte global: `_BSS` +1,000, DGROUP
 linker's smart linking, not a script bug.
 
 ### 19. Benchmark mode
-- [ ] Build-time `#define` that spawns at the fixed measurement position and reports average fps.
+- [x] A benchmark map of stations, run from Options, with a frame rate per room.
 
-Performance is measured on hardware only, and today that means standing in the
-map 1 corridor and watching the once-a-second counter in
-[psion3d.c](psion3d.c:157) for ten seconds. A `BENCH` define that forces the
-spawn position and angle to the documented corridor spot, ignores input, and
-prints the average over 10 seconds (or 200 frames) to a debug slot makes the
-reading repeatable and the device step a number to copy into a commit
-message. The position and angle should be written down once here so the
-numbers in `CLAUDE.md` stay comparable across sessions.
+Done, as a dedicated map rather than the build-time define first proposed:
+the "map 1 corridor" the old numbers were taken in no longer exists (the
+spawn moved to (27,3) facing south in the rework), and real levels will keep
+changing. [map/map97.map](map/map97.map) is the benchmark, past the mission
+scan like the 98/99 showcases and in the lab style: seven rooms joined by
+doors, one per rendering aspect - a corridor, a 12x12 empty room seen across
+its diagonal (the DDA-heavy case), a corridor lined with the detail wall
+types, a wall of doors, windows, bars, an arch and pillars, six idle enemies,
+decorations and pickups, and a crowd with a heavy filling the screen. Each is
+a `station = x, y, bearing, name` line in `[LEVEL]` (`MAP_MAX_STATIONS`
+8, parsed into `mapInfo.stations`), so a new aspect is a room and a line.
+
+Options > Benchmark ([bench.c](bench.c)) loads the map and stands at each
+station for `BENCH_STATION_TICKS` (5 s): the tick loop is bypassed, so no
+input, AI or mission clock, and the frame after each teleport is a warm-up
+that starts the clock without being counted. The result is frames over ticks
+in tenths, and the run ends on `MENU_BENCH` the way a mission ends on its
+outcome - a results screen of `Corridor 19.7` rows with the run's average in
+the title bar. Esc mid-run shows what was measured, Enter runs it again. The
+whole thing costs 176 bytes of DGROUP.
+
+On the PC host `--map 97 --station N` places the player as the run does and
+`--bench --frames 1400` runs it under the virtual clock, where every station
+reads 32.0; both are golden views (`bench_*`), so the scenes the numbers
+come from are pinned. Fixing that made the headless `--frames` loop hold the
+clock while it runs: the wall clock used to creep into long runs, and
+`pcTickAdvance` counted double when paused.
+
+Still to do on hardware: the first run's numbers, as the baseline for the
+budget table in `CLAUDE.md`.
 
 ### 20. One-shot verify script
 - [x] A single command that builds, hashes, checks DGROUP, and builds the PC host.

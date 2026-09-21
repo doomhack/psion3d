@@ -19,6 +19,7 @@
 #define MENU_MAP 7
 #define MENU_OUTCOME 8	/* how the mission ended, from missionOutcome */
 #define MENU_OPTIONS 9
+#define MENU_BENCH 10	/* the benchmark results, from bench.c */
 
 /*  What a key did. REDRAW covers every change that stays inside the menus;
     the others are for gameloop.c to act on. */
@@ -29,6 +30,7 @@
 #define MENU_ACTION_ABORT 4
 #define MENU_ACTION_QUIT 5
 #define MENU_ACTION_RETRY 6	/* the same mission again, from the outcome screen */
+#define MENU_ACTION_BENCH 7	/* run the benchmark, from Options or the results screen */
 
 /*  The mission highlighted in the list, and so the one a START_MISSION
     action means. Index into the mission index, not a map id. */

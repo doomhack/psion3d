@@ -64,6 +64,18 @@ extern u16 map[MAP_Y][MAP_X];
 #define MAP_MAX_OBJECTIVES 5
 #define MAP_TEXT_NONE 0xFFFF
 
+/* A benchmark station: where the run stands, which way it faces, and the name
+   the results screen lists it under. [LEVEL] station = x, y, bearing, name.
+   Only bench.c reads them; every other level has none. */
+#define MAP_MAX_STATIONS 8
+
+typedef struct station_t
+{
+	u8 x, y;	/* the cell; the run stands in its middle */
+	f16 f_angle;	/* Q8 radians, engine convention, converted from the bearing */
+	u16 nameOfs;	/* the name string in the text segment */
+} station_t;
+
 typedef struct mapinfo_t
 {
 	u8 startX, startY;	/* cell the player spawns in */
@@ -75,6 +87,8 @@ typedef struct mapinfo_t
 	u16 objectiveOfs[MAP_MAX_OBJECTIVES];	/* one title string each */
 	u16 objectiveBriefOfs[MAP_MAX_OBJECTIVES];	/* and one briefing */
 	u16 textLen;	/* bytes used in the text segment */
+	u8 stationCount;
+	station_t stations[MAP_MAX_STATIONS];
 } mapinfo_t;
 
 extern mapinfo_t mapInfo;

@@ -8,6 +8,7 @@
 #include "automap.h"
 #include "units.h"
 #include "settings.h"
+#include "bench.h"
 
 /*  Geometry shared by every screen, from the design artboards: a 20 row
     title bar, an 18 row footer under a rule at 142, 13px body text on a
@@ -47,9 +48,10 @@ static u8 abortChoice = 1;	/* 0 Abort, 1 Cancel */
 #define MAIN_ITEM_EXIT 2
 /*  The Options rows, 22 tall on a 26 pitch, and their width: the design's
     content column less its 6px right spacer. */
-#define OPTION_ITEMS 2
+#define OPTION_ITEMS 3
 #define OPTION_SOUND 0
 #define OPTION_FPS 1
+#define OPTION_BENCH 2
 #define OPTION_ROW_W 444
 #define SELECT_VISIBLE 5
 #define BRIEF_LINES 5	/* body lines per page, under the fixed location line */
@@ -738,6 +740,9 @@ static u16 keyOptions(const u16 key)
 		return MENU_ACTION_REDRAW;
 	}
 
+	if(cursor == OPTION_BENCH)
+		return (key == UI_KEY_ENTER) ? MENU_ACTION_BENCH : MENU_ACTION_NONE;
+
 	if(key != UI_KEY_LEFT && key != UI_KEY_RIGHT)
 		return MENU_ACTION_NONE;
 
@@ -757,6 +762,21 @@ static u16 keyOptions(const u16 key)
 	showFps = (u8)(key == UI_KEY_LEFT);
 
 	return MENU_ACTION_REDRAW;
+}
+
+static u16 keyBench(const u16 key)
+{
+	if(key == UI_KEY_ENTER)
+		return MENU_ACTION_BENCH;
+
+	if(key == UI_KEY_ESC)
+	{
+		menuOpen(MENU_OPTIONS);
+		cursor = OPTION_BENCH;
+		return MENU_ACTION_REDRAW;
+	}
+
+	return MENU_ACTION_NONE;
 }
 
 u16 menuKey(const u16 uiKey)
@@ -783,6 +803,8 @@ u16 menuKey(const u16 uiKey)
 		return keyOutcome(uiKey);
 	case MENU_OPTIONS:
 		return keyOptions(uiKey);
+	case MENU_BENCH:
+		return keyBench(uiKey);
 	}
 
 	return MENU_ACTION_NONE;
@@ -1314,10 +1336,70 @@ static void drawOptions(void)
 	optionButton(132, (s16)(y + 2), (u16)(showFps != 0), (u16)i, "On");
 	optionButton(186, (s16)(y + 2), (u16)(showFps == 0), (u16)i, "Off");
 
+	/* Benchmark: one button, Enter runs it. */
+	y = 80;
+	i = (s16)(cursor == OPTION_BENCH);
+
+	if(i)
+		uiFillRect(12, y, OPTION_ROW_W, 22);
+
+	text(18, rowMid(y, 22), UI_FONT_BODY_BOLD, i, "Benchmark");
+	optionButton(132, (s16)(y + 2), TRUE, (u16)i, "Run");
+
 	footerRule();
 	x = 12;
 	footerItem(&x, FOOTER_Y, ARROWS_UP_DOWN, "Move");
 	footerItem(&x, FOOTER_Y, ARROWS_LEFT_RIGHT, "Change");
+	footerItem(&x, FOOTER_Y, ARROWS_NONE, "Enter Run");
+	footerItem(&x, FOOTER_Y, ARROWS_NONE, "Esc Back");
+}
+
+/*  "19.7" from tenths. */
+static void formatFps10(char *dst, const u16 fps10)
+{
+	p_atos(dst, "%d.%d", (u16)(fps10 / 10), (u16)(fps10 % 10));
+}
+
+/*  The benchmark results: one row per station of the map in play, in two
+    columns of four, with the run's average in the title bar once it has
+    completed. A station the run never reached (Esc) shows a dash. */
+#define BENCH_COL_ROWS 4
+#define BENCH_COL_W 222
+
+static void drawBench(void)
+{
+	s16 x, i, y, cx;
+
+	if(benchAvg10)
+	{
+		p_atos(menuStr2, "Avg %d.%d fps", (u16)(benchAvg10 / 10), (u16)(benchAvg10 % 10));
+		titleBar("BENCHMARK", menuStr2);
+	}
+	else
+	{
+		titleBar("BENCHMARK", NULL);
+	}
+
+	for(i = 0; i < mapInfo.stationCount; i++)
+	{
+		cx = (s16)((i < BENCH_COL_ROWS) ? 12 : 12 + BENCH_COL_W + 12);
+		y = (s16)(28 + (i % BENCH_COL_ROWS) * ROW_PITCH);
+
+		if(i < benchDone)
+			formatFps10(menuStr, benchFps10[i]);
+		else
+			copyTo(menuStr, "-", MENU_STR_MAX);
+
+		textRight((s16)(cx + BENCH_COL_W - 6), rowMid(y, ROW_H), UI_FONT_BODY_BOLD, FALSE, menuStr);
+		x = (s16)(BENCH_COL_W - 12 - textWidth(UI_FONT_BODY_BOLD, menuStr) - 8);
+
+		mapTextCopy(mapInfo.stations[i].nameOfs, menuStr, MENU_STR_MAX);
+		textFit((s16)(cx + 6), rowMid(y, ROW_H), UI_FONT_BODY, FALSE, menuStr, x);
+	}
+
+	footerRule();
+	x = 12;
+	footerItem(&x, FOOTER_Y, ARROWS_NONE, "Enter Again");
 	footerItem(&x, FOOTER_Y, ARROWS_NONE, "Esc Back");
 }
 
@@ -1356,6 +1438,9 @@ void menuDraw(void)
 		break;
 	case MENU_OPTIONS:
 		drawOptions();
+		break;
+	case MENU_BENCH:
+		drawBench();
 		break;
 	}
 }

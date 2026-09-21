@@ -55,6 +55,7 @@ Working-tree line endings are mixed (git stores LF, some files are CRLF on disk)
 | `mission.c` | Mission index (titles/locations parsed from `map1..map20.map` at startup into a far segment), `difficulty`, `objectiveState[]` |
 | `automap.c` | The pause menu's level plan, rendered into `screenBm` with `bitmap.c` and copied out with `uiBlitMap` |
 | `settings.c` | The Options screen's values (`soundLevel`, `showFps`); process lifetime, no save file yet |
+| `bench.c` | The benchmark: the stations of `map97.map` in turn, world frozen, fps per station for the `MENU_BENCH` results screen |
 | `hud.c` | The in-game HUD panels (health, objectives, weapons/ammo, fps) drawn through `ui.h` into the HUD target: static parts on a redraw event, values as single-call cells replaced only when they change (never invalidate the HUD window for a value; see task 8) |
 | `draw.c` | DDA ray cast, per-span wall depth buffer, sprite collection/sorting, player shot resolution |
 | `walls.c` | Default wall style + `drawWall` function-pointer global |
@@ -116,7 +117,7 @@ Measured budget, map 1, fixed corridor position, 20fps = 50ms/frame:
 
 **Span call count dominates wall cost, not rows written.** Three dither bands covering 0.31× the column height measured 5.6ms — 2.6× the per-row cost of the full-height span they sit on. Fewer, larger span calls win; splitting a style into *more* calls to write *fewer* rows loses. `WALL_DETAIL_DEPTH` and the `LAB_PANEL_*` switches in `walls.h` are the tunables, with their measured costs documented there.
 
-**How to measure.** Add a `#define` that *removes* work, rebuild, read the fps counter (`psion3d.c` prints it once a second). Watch it ~10 seconds; one fps step is ~2.5ms at 20fps. Measure from a fixed position — active enemies move and make readings unstable.
+**How to measure.** Add a `#define` that *removes* work, rebuild, and run **Options → Benchmark** on the device: it steps through the seven stations of `map/map97.map` (corridor, empty room, detail walls, openings, enemies, decorations, crowd), five seconds each with input ignored and AI frozen, and ends on a results screen with a frame rate per station in tenths and the run's average (`bench.c`, task 19). Copy that line into the commit message. One fps step is ~2.5ms at 20fps. A station is a `station = x, y, bearing, name` line in the map file, so a new aspect is a new room and a line, not a code change; `psion3d_pc --map 97 --station N` shows what a station sees, and the `bench_*` golden frames pin every scene. The HUD's FPS row (Options) is still there for an ad-hoc reading, but measure from a fixed position — active enemies move and make readings unstable.
 
 Never isolate ray-loop internals by *substituting* values: everything downstream depends on the ray's result, and three such attempts came back contaminated, two reading **slower** than baseline. For work that cannot simply be removed, do it **twice** and discard the copy — the delta is one pass.
 

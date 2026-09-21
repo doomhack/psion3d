@@ -247,12 +247,12 @@ void pcTickResync(void)
 	g_pausedAt = g_tickOrigin;
 }
 
+/*  Moving the origin back is one tick in either state: paused reads
+    g_pausedAt - g_tickOrigin, running reads now - g_tickOrigin. Touching
+    g_pausedAt as well made a paused advance count double. */
 void pcTickAdvance(unsigned short ticks)
 {
-	double ms = (double)ticks * 1000.0 / 32.0;
-
-	g_tickOrigin -= ms;
-	g_pausedAt += ms;
+	g_tickOrigin -= (double)ticks * 1000.0 / 32.0;
 }
 
 void pcTickSetStart(unsigned short start)
