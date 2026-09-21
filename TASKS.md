@@ -19,7 +19,7 @@ prediction.
       row (the design's new HUD artboard) when there is a HUD. Not saved -
       every launch is 7 / Off - until there is a save file. Cheats stays off
       the main menu.
-- [ ] Cheats screen, unlocks and the Cheat Unlocked dialog.
+- [ ] Cheats screen, unlocks and the Cheat Unlocked dialog - task 24.
 - [x] Mission outcome screens (complete / failed / killed in action), mission
       timer, best times - see tasks 9 and 10. Best times still want a save file.
 
@@ -269,10 +269,10 @@ objectives as they stood, Enter to retry the level, Esc to Mission Select.
 No fade; the menu window comes up over the last frame.
 
 ### 10. Level exit and completion
-- [ ] A way to finish a level.
+- [x] A way to finish a level.
 - [x] Judge the mission on the end cell and show the outcome.
 - [ ] Persist best times (they live in the far mission index and go with the
-      process).
+      process) - task 23.
 
 Done 2026-09-20. `missionTick()` tests the player's cell against
 `mapInfo.endX` / `endY` every tick, after `updatePlayer` has raised the level
@@ -426,6 +426,77 @@ None of the per-frame additions were measured by ablation on hardware. The
 candidates, if the counter ever moves: the DDA sprite gate changed from
 `!isWall` to `!isSolid` (one mask for another), `doorEnemyNear` per door
 column, the tracer XOR lines, and the impact marker's three-frame life.
+
+### 23. Save game
+- [ ] Save to file: missions completed, cheats unlocked, best times, options.
+- [ ] Reset Game item on the Options screen - wipes the save (with a
+      confirm, like Abort) and returns everything to first-launch state.
+
+Everything the game remembers today goes with the process: `soundLevel` /
+`showFps` in [settings.c](settings.c) (task 1), `difficulty` in
+[mission.c](mission.c) (task 15), and best times per mission and difficulty
+in the `MISIDX` far segment record, set by `missionTick` (task 10). Mission
+completion is not recorded anywhere yet, and cheats (task 24) have no state
+to save until their screen exists - reserve the bits. Options should load
+before the main menu draws, so `gameInit()` is the read and the Options
+screen and the outcome screen are the writes; the file is small enough to
+rewrite whole each time rather than patch. Keep the record out of DGROUP
+(read straight into the mission index segment / the settings globals) and
+version it with a magic + version header so a missing or malformed file is
+a clean first launch, never a crash. Path goes beside the assets, e.g.
+`LOC::M:\IMG\SAVE.DAT`; check `p_open` write modes and the `E_FILE_EOF`
+convention from CLAUDE.md. Once it lands, tick the "persist" items in tasks
+1, 10 and 15.
+
+### 24. Cheats
+- [ ] `u16 cheatFlags` (one bit per cheat), the hooks below, and a Cheats
+      screen on the main menu that toggles the unlocked ones.
+- [ ] Unlocks: each cheat is earned by completing a given mission at a given
+      difficulty inside a time limit, GoldenEye style. Needs task 23 - an
+      unlock that goes with the process is not worth showing.
+- [ ] A cheated run records no best time and earns no unlock (`setBest` in
+      [mission.c](mission.c) and the unlock check both test `cheatFlags`).
+- [ ] Cheat Unlocked dialog on the mission outcome screen.
+
+Sixteen cheats, chosen 2026-09-21 so that every one is a value change at
+spawn time or a branch in per-tick code - nothing touches the per-ray or
+per-column paths, so the frame budget is untouched and the near-data cost is
+the one flag word. Where a cheat does touch the renderer it is noted, and it
+still wants measuring on the device like anything else.
+
+| Cheat | Hook |
+| --- | --- |
+| Invincibility | `hurtPlayer()` in [player.c](player.c) keeps the shove and the hurt flash, skips the health subtraction. |
+| All weapons | `playerInit` gives every weapon, as picking up all four would. |
+| Infinite ammo | `updatePlayer` skips the `ammo[ammoType]--` at the shot; the empty-pool check is then never true. |
+| Turbo mode | `PLAYER_MOVE_TICK` / `PLAYER_TURN_TICK` scaled x1.5 or x2 where `updatePlayer` applies them. Knockback and impulse derive from the same constants - decide whether they scale too. |
+| One-shot kills | Spawn-time: `enemyList[id].health = 1` in `getEnemyCell()` ([enemy.c](enemy.c)) instead of the archetype's value, so the stagger threshold falls out automatically. |
+| Perfect aim | `getShotSpan()` returns 0 - no bullet spread for the player. |
+| Rapid fire | `shootCooldown` set to 1 at the shot instead of `fireDelay`. More shot resolutions per second, but that is per-frame span work, not per-ray. |
+| Invisibility | `enemyCanSeePlayer()` returns FALSE. Enemies still hear gunfire through `alertEnemies()` and search, they just never acquire. |
+| Pacifist | Enemies never enter AIMING / ATTACKING; the chase-or-wander decision at the end of `runAI` treats every type as CIV. Distinct from Invisibility in the menu text: "enemies can't see you" versus "enemies never attack". |
+| Slow enemies | `runAI()` on even ticks only from the catch-up loop in [gameloop.c](gameloop.c). Halves the AI cost as a side effect. Exclusive with Fast. |
+| Fast enemies | `runAI()` twice per tick. Doubles AI cost, which measured as near-free; `enemyMoveTickTable` is consumed twice, which is the intent. Exclusive with Slow. |
+| Mirror mode | Renderer, but not per-pixel: negate `rayIdxOffset[]` per column in [draw.c](draw.c) and the sprite screen-x projection in [sprite.c](sprite.c) (`spriteMirrored` already exists for the frames). The weapon impact span is symmetric about the centre so it needs nothing. Mirror the automap too or the pause map lies. |
+| Tiny enemies | Halve `spriteHeight` in the projection (`SPRITE_HEIGHT_NUM / f_depth`). Fewer pixels filled, so cheaper than normal; hit resolution follows the projected span so shots still land. |
+| Mercs | Spawn-time: the `switch(cell)` in `getEnemyCell()` maps E/F/G all to `ENEMY_TYPE_MER`. All four sprite sets load on every level ([game_map.c](game_map.c)) so there is no extra segment. Civilians stay civilians so Pacifist keeps meaning. Exclusive with Soldiers / Heavies. |
+| Soldiers | As Mercs, to `ENEMY_TYPE_SGR`. |
+| Heavies | As Mercs, to `ENEMY_TYPE_HVY`. |
+
+Menu rules: Slow / Fast are one radio group and Mercs / Soldiers / Heavies
+another - the last one toggled wins and clears the others. Rapid fire +
+Infinite ammo is the combination that sells the feature; Rapid fire alone
+empties the pistol pool in about two seconds, which is the point.
+
+Considered and dropped for cost: X-ray (skipping the depth test draws every
+collected sprite, ~4ms each), big heads (more fill per sprite), dual-wield (a
+second ~4ms overlay), extra enemies, any full-screen effect (the blit is bare
+`rep movsw`; anything per-word on top is the +28ms interleaving lesson), and
+noclip (the DDA from inside a solid cell hits at distance 0 and
+`30720 / distance` divides by zero). Free ones held back for a later batch:
+full automap reveal, enemy positions on the automap, wide-angle lens, low
+camera, instant weapon switch, one-hit `damageEnemy` as the alternative
+one-shot.
 
 ## Development infrastructure
 
