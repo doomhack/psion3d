@@ -15,11 +15,17 @@ u16 levelEventNone(const u8 event, const u8 item, const u8 x, const u8 y)
 	return FALSE;
 }
 
-/* Map 1: the front company's laboratory. Objective 2 is the rootkit on the
-   research director's computer and objective 3 is not harming the staff.
-   Any computer completes the rootkit objective until the map settles on
-   which desk is the director's - narrow it to that cell then. The keycard
-   and the switch take the default and open every locked door. */
+/* Map 1: the front company's laboratory. There are two ways into the lab:
+   the expected route is the keycard in the office block, which opens the
+   locked door off the inner lobby; the bypass is the vent shaft in the
+   locker room, which skips the offices and the keycard. Both come in
+   through the lab door at (20,26), so the second keycard at (19,26) is on
+   the one cell every player crosses - picking it up completes objective 1
+   and opens the locked doors, which gives the vent route a short walk back
+   to the exit. Objective 2 is the rootkit on the research director's
+   computer at (7,32); other computers do nothing. Objective 3 is not
+   harming the staff. The office keycard takes the default and opens every
+   locked door. */
 #define MAP1_OBJECTIVE_LAB_ACCESS 0
 #define MAP1_OBJECTIVE_ROOTKIT 1
 #define MAP1_OBJECTIVE_STAFF 2
