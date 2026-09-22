@@ -421,13 +421,26 @@ u16 projectSprite(const f16 x, const f16 y, spritehit_t* hit, const f16 f_viewCo
 	return TRUE;
 }
 
+/* The grey plane follows the black one in screenBm (bitmap.c), so one pointer
+   reaches both and the blit loops need not reload blackBm and greyBm - which
+   TopSpeed does on every byte, since a store through either might move them. */
+#define SPRITE_GREY_PLANE BM_BYTES
+
 /* Scratch for drawProjectedSprite. The source column a destination column maps
    to is the same on every row of a sprite, so the mapping is built once. Rows
    are decoded into mask bytes once per distinct source row - when a sprite is
    drawn taller than SPRITE_SIZE most destination rows repeat the previous
-   source row, which is exactly the close-up case that costs the most. */
-static u8 spriteColByte[SCREEN_WIDTH];
+   source row, which is exactly the close-up case that costs the most.
+
+   There are two decoders, split on size (TASKS.md task 22 has the figures).
+   Below SPRITE_SIZE, buildSpriteRowMasks decodes pixel by pixel and spriteCol
+   holds the source byte and spriteColShift the bit shift. From SPRITE_SIZE up,
+   buildMagnifiedRowMasks gathers whole bytes, spriteCol holds the source
+   column, and columns outside the sprite hold SPRITE_SIZE, whose spriteRowPix
+   entry is never written and stays transparent. */
+static u8 spriteCol[SCREEN_WIDTH];
 static u8 spriteColShift[SCREEN_WIDTH];
+static u8 spriteRowPix[SPRITE_SIZE + 1];
 static u8 spriteRowOpaque[SCREEN_WIDTH / 8];
 static u8 spriteRowBlack[SCREEN_WIDTH / 8];
 static u8 spriteRowGrey[SCREEN_WIDTH / 8];
@@ -440,6 +453,8 @@ static s16 scaleBound(const u16 value, const u16 step)
 	return (s16)((u16)((value << SPRITE_SCALE_BITS) + step - 1) / step);
 }
 
+/* Decodes the destination row span [rowXStart, rowXEnd) into mask bytes, a
+   pixel at a time, for a sprite drawn smaller than SPRITE_SIZE. */
 static void buildSpriteRowMasks(const u8* sourceRow, const s16 rowXStart, const s16 rowXEnd)
 {
 	s16 x = rowXStart;
@@ -451,7 +466,7 @@ static void buildSpriteRowMasks(const u8* sourceRow, const s16 rowXStart, const 
 
 	while(x < rowXEnd)
 	{
-		u8 pix = (sourceRow[spriteColByte[x]] >> spriteColShift[x]) & 3;
+		u8 pix = (sourceRow[spriteCol[x]] >> spriteColShift[x]) & 3;
 
 		if(pix != SPR_TRANSPARENT)
 		{
@@ -489,6 +504,90 @@ static void buildSpriteRowMasks(const u8* sourceRow, const s16 rowXStart, const 
 	}
 }
 
+/* The same, for a sprite drawn SPRITE_SIZE or larger.
+
+   The source pixels the span samples are unpacked to one byte each first, so
+   the per pixel work is a table read and a shift with no branches: eight
+   pixels are gathered into a word in the packed 2bpp layout a source byte
+   pair has, and the three 4 pixel mask tables turn that into mask bytes, as
+   drawSprite's 1:1 path does. Measured, a gathered pixel costs about 4.4 us
+   against 11 for buildSpriteRowMasks, but the unpack and the whole byte
+   gather add about 37 us a row plus 10 per source byte unpacked, which only
+   a magnified sprite's rows are wide enough to pay back.
+
+   Whole bytes are gathered, so the pixels either side of the span in its end
+   bytes are sampled too - from SPRITE_SIZE outside the sprite, and inside it
+   from columns this row may not have unpacked - and are masked off after. */
+static void buildMagnifiedRowMasks(const u8* sourceRow, const s16 rowXStart, const s16 rowXEnd)
+{
+	u16 b = (u16)(rowXStart >> 3);
+	u16 lastByte = (u16)((rowXEnd - 1) >> 3);
+	u16 firstCol = spriteCol[rowXStart];
+	u16 lastCol = spriteCol[rowXEnd - 1];
+	const u8* col;
+	const u8* source;
+	u8* pix;
+	u8 edge;
+
+	/* The mapping is monotonic, so the span's end columns bound every column
+	   it samples. Mirrored, it runs backwards. */
+	if(firstCol > lastCol)
+	{
+		u16 swap = firstCol;
+
+		firstCol = lastCol;
+		lastCol = swap;
+	}
+
+	source = sourceRow + (firstCol >> 2);
+	pix = &spriteRowPix[firstCol & ~3];
+
+	for(firstCol >>= 2, lastCol >>= 2; firstCol <= lastCol; firstCol++, pix += 4)
+	{
+		u8 packed = *source++;
+
+		pix[0] = packed & 3;
+		pix[1] = (packed >> 2) & 3;
+		pix[2] = (packed >> 4) & 3;
+		pix[3] = packed >> 6;
+	}
+
+	/* Rightmost pixel first, so the leftmost lands in the low bits as in a
+	   source byte: pixels 0-3 in the low byte, 4-7 in the high. */
+	for(col = &spriteCol[b << 3]; b <= lastByte; b++, col += 8)
+	{
+		u16 acc = spriteRowPix[col[7]];
+		u8 lo;
+		u8 hi;
+
+		acc = (acc << 2) | spriteRowPix[col[6]];
+		acc = (acc << 2) | spriteRowPix[col[5]];
+		acc = (acc << 2) | spriteRowPix[col[4]];
+		acc = (acc << 2) | spriteRowPix[col[3]];
+		acc = (acc << 2) | spriteRowPix[col[2]];
+		acc = (acc << 2) | spriteRowPix[col[1]];
+		acc = (acc << 2) | spriteRowPix[col[0]];
+
+		lo = (u8)acc;
+		hi = (u8)(acc >> 8);
+
+		spriteRowOpaque[b] = (u8)(spriteOpaqueMask[lo] | (spriteOpaqueMask[hi] << 4));
+		spriteRowBlack[b] = (u8)(spriteBlackMask[lo] | (spriteBlackMask[hi] << 4));
+		spriteRowGrey[b] = (u8)(spriteGreyMask[lo] | (spriteGreyMask[hi] << 4));
+	}
+
+	b = (u16)(rowXStart >> 3);
+	edge = (u8)(0xff << (rowXStart & 7));
+	spriteRowOpaque[b] &= edge;
+	spriteRowBlack[b] &= edge;
+	spriteRowGrey[b] &= edge;
+
+	edge = (u8)(0xff >> (7 - ((rowXEnd - 1) & 7)));
+	spriteRowOpaque[lastByte] &= edge;
+	spriteRowBlack[lastByte] &= edge;
+	spriteRowGrey[lastByte] &= edge;
+}
+
 void drawProjectedSprite(const spritehit_t* spriteHit)
 {
 	s16 height = spriteHit->spriteHeight;
@@ -517,6 +616,7 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 	u8 firstBand;
 	u8 lastBand;
 	u8 band;
+	u8 magnified;
 
 	if(height <= 0)
 		return;
@@ -630,14 +730,33 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 	if(spriteHit->mirrored)
 		sourceXAcc = ((SPRITE_SIZE << SPRITE_SCALE_BITS) - 1) - sourceXAcc;
 
-	for(x = xStart; x < xEnd; x++)
+	magnified = height >= SPRITE_SIZE;
+
+	if(magnified)
 	{
-		u16 sourceX = (u16)(sourceXAcc >> SPRITE_SCALE_BITS);
+		for(x = xStart & ~7; x < xStart; x++)
+			spriteCol[x] = SPRITE_SIZE;
 
-		spriteColByte[x] = (u8)(sourceX >> 2);
-		spriteColShift[x] = (u8)((sourceX & 3) << 1);
+		for(; x < xEnd; x++)
+		{
+			spriteCol[x] = (u8)(sourceXAcc >> SPRITE_SCALE_BITS);
+			sourceXAcc += sourceXAdvance;
+		}
 
-		sourceXAcc += sourceXAdvance;
+		for(; x & 7; x++)
+			spriteCol[x] = SPRITE_SIZE;
+	}
+	else
+	{
+		for(x = xStart; x < xEnd; x++)
+		{
+			u16 sourceX = (u16)(sourceXAcc >> SPRITE_SCALE_BITS);
+
+			spriteCol[x] = (u8)(sourceX >> 2);
+			spriteColShift[x] = (u8)((sourceX & 3) << 1);
+
+			sourceXAcc += sourceXAdvance;
+		}
 	}
 
 	prevSourceY = 0xffff;
@@ -652,22 +771,32 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 		{
 			u16 b = (u16)(rowXStart >> 3);
 			u16 lastByte = (u16)((rowXEnd - 1) >> 3);
-			u16 offset = (u16)((y << 5) + b);
+			u8* dst = blackBm + (y << 5) + b;
 
 			if(sourceY != prevSourceY)
 			{
-				buildSpriteRowMasks(spriteData + (sourceY << 4), rowXStart, rowXEnd);
+				if(magnified)
+					buildMagnifiedRowMasks(spriteData + (sourceY << 4), rowXStart, rowXEnd);
+				else
+					buildSpriteRowMasks(spriteData + (sourceY << 4), rowXStart, rowXEnd);
+
 				prevSourceY = sourceY;
 			}
 
-			for(; b <= lastByte; b++, offset++)
+			/* A close sprite is mostly whole opaque bytes, which need no read. */
+			for(; b <= lastByte; b++, dst++)
 			{
 				u8 opaqueMask = spriteRowOpaque[b];
 
-				if(opaqueMask)
+				if(opaqueMask == 0xff)
 				{
-					blackBm[offset] = (blackBm[offset] & ~opaqueMask) | spriteRowBlack[b];
-					greyBm[offset] = (greyBm[offset] & ~opaqueMask) | spriteRowGrey[b];
+					dst[0] = spriteRowBlack[b];
+					dst[SPRITE_GREY_PLANE] = spriteRowGrey[b];
+				}
+				else if(opaqueMask)
+				{
+					dst[0] = (dst[0] & ~opaqueMask) | spriteRowBlack[b];
+					dst[SPRITE_GREY_PLANE] = (dst[SPRITE_GREY_PLANE] & ~opaqueMask) | spriteRowGrey[b];
 				}
 			}
 		}
@@ -734,12 +863,12 @@ void drawSprite(u8 spanX, u8 y, u8 spriteId)
 		u8 bandBounds = bounds.bands[sourceY >> 3];
 		u8 bandLeft = bandBounds >> 4;
 		u8 bandRight = bandBounds & 0x0f;
-		const u8* sourceRow;
-		u16 offset;
+		const u8* source;
+		u8* dst;
 		s16 rowXStart;
 		s16 rowXEnd;
 		s16 x;
-		s16 srcIdx;
+		s16 pairs;
 
 		if(bandLeft > bandRight)
 			continue;
@@ -752,10 +881,9 @@ void drawSprite(u8 spanX, u8 y, u8 spriteId)
 		if(rowXEnd > xEnd)
 			rowXEnd = xEnd;
 
-		sourceRow = spriteData + (sourceY << 4);
-		offset = (yPos << 5) + (rowXStart >> 3);
+		source = spriteData + (sourceY << 4) + ((rowXStart - left) >> 2);
+		dst = blackBm + (yPos << 5) + (rowXStart >> 3);
 		x = rowXStart;
-		srcIdx = (rowXStart - left) >> 2;
 
 		/* A destination byte holds eight pixels but a source group covers four,
 		   so stepping four at a time read-modify-writes the same byte twice.
@@ -763,44 +891,53 @@ void drawSprite(u8 spanX, u8 y, u8 spriteId)
 		   aligned but not always eight, hence the half byte cases either side. */
 		if((x & 4) && x < rowXEnd)
 		{
-			u8 packed = sourceRow[srcIdx];
+			u8 packed = *source++;
 			u8 opaqueMask = (u8)(spriteOpaqueMask[packed] << 4);
 			u8 blackMask = (u8)(spriteBlackMask[packed] << 4);
 			u8 greyMask = (u8)(spriteGreyMask[packed] << 4);
 
-			blackBm[offset] = (blackBm[offset] & ~opaqueMask) | blackMask;
-			greyBm[offset] = (greyBm[offset] & ~opaqueMask) | greyMask;
+			dst[0] = (dst[0] & ~opaqueMask) | blackMask;
+			dst[SPRITE_GREY_PLANE] = (dst[SPRITE_GREY_PLANE] & ~opaqueMask) | greyMask;
 
-			offset++;
-			srcIdx++;
+			dst++;
 			x += 4;
 		}
 
-		while(x + 8 <= rowXEnd)
+		/* Signed: a band clipped away at the screen's right edge leaves
+		   rowXEnd short of x, and nothing is drawn. */
+		for(pairs = (rowXEnd - x) >> 3; pairs > 0; pairs--)
 		{
-			u8 p0 = sourceRow[srcIdx];
-			u8 p1 = sourceRow[srcIdx + 1];
+			u8 p0 = source[0];
+			u8 p1 = source[1];
 			u8 opaqueMask = (u8)(spriteOpaqueMask[p0] | (spriteOpaqueMask[p1] << 4));
 			u8 blackMask = (u8)(spriteBlackMask[p0] | (spriteBlackMask[p1] << 4));
 			u8 greyMask = (u8)(spriteGreyMask[p0] | (spriteGreyMask[p1] << 4));
 
-			blackBm[offset] = (blackBm[offset] & ~opaqueMask) | blackMask;
-			greyBm[offset] = (greyBm[offset] & ~opaqueMask) | greyMask;
+			if(opaqueMask == 0xff)
+			{
+				dst[0] = blackMask;
+				dst[SPRITE_GREY_PLANE] = greyMask;
+			}
+			else
+			{
+				dst[0] = (dst[0] & ~opaqueMask) | blackMask;
+				dst[SPRITE_GREY_PLANE] = (dst[SPRITE_GREY_PLANE] & ~opaqueMask) | greyMask;
+			}
 
-			offset++;
-			srcIdx += 2;
+			dst++;
+			source += 2;
 			x += 8;
 		}
 
 		if(x < rowXEnd)
 		{
-			u8 packed = sourceRow[srcIdx];
+			u8 packed = *source;
 			u8 opaqueMask = spriteOpaqueMask[packed];
 			u8 blackMask = spriteBlackMask[packed];
 			u8 greyMask = spriteGreyMask[packed];
 
-			blackBm[offset] = (blackBm[offset] & ~opaqueMask) | blackMask;
-			greyBm[offset] = (greyBm[offset] & ~opaqueMask) | greyMask;
+			dst[0] = (dst[0] & ~opaqueMask) | blackMask;
+			dst[SPRITE_GREY_PLANE] = (dst[SPRITE_GREY_PLANE] & ~opaqueMask) | greyMask;
 		}
 	}
 }

@@ -703,7 +703,47 @@ keep a second table.
 - [x] Partition the cost on the benchmark (2026-09-21).
 - [x] Colour-run sprite format with a per-run decoder - built, measured, **rejected** (2026-09-21).
 - [x] Frame cache 8 -> 9 slots (2026-09-21): the Decorations working set fits; +1 KB DGROUP, 2.5 KB to the limit. Measured: Decorations 10.9 -> 11.3, every other station on the baseline (22.3 / 18.8 / 21.3 / 14.2 / 12.4 / 6.7, average 15.2 -> 15.3).
-- [ ] Decide whether a decoded-row cache per (frame, size bucket) is worth its memory.
+- [x] Branch-free row decode and tighter blits (2026-09-22) - built, pixel-identical, measured: a win on large sprites only, loss below 64 px.
+- [x] Use the new decoder for magnified sprites only (height >= 64), the old one below (2026-09-22). The small-sprite decoder disassembles to the same instructions as the original; +240 B DGROUP for `spriteColShift`. The fit projected Enemies / Decorations back to 12.4 / 11.3 and Crowd ~7.3-7.5; measured on device: Corridor 22.3, Empty room 18.7, Detail walls 21.2, Openings 14.2, Enemies 12.5, Decorations 11.5, Crowd 7.4 (was 6.7, 149 -> 135 ms), average 15.3 -> 15.4. Everything but Crowd is within noise of the nine-slot build.
+- [ ] Add a benchmark station with an enemy about one cell away (height ~120-160): the case this was for, which only Crowd's single heavy covers now.
+- [ ] Decide whether a decoded-row cache per (frame, size bucket) is worth its memory - after the row decode above is measured.
+
+The row decode (2026-09-22). The TopSpeed disassembler (`tsda SPRITE out.txt`
+in DOSBox) showed the per-pixel loop in `buildSpriteRowMasks` was ~22
+instructions with 7 memory reads and 4 branches: its three mask
+accumulators, loop limit and row pointer lived on the stack, and each pixel
+took a variable `shr ax,cl` and a branch per colour. The rewrite unpacks the
+source columns a row samples to a byte each (`spriteRowPix`, once per
+distinct source row), gathers eight destination pixels into a word in packed
+2bpp order, and converts them with the three 4-pixel mask tables as the 1:1
+weapon path does: 8 instructions a pixel, 2 memory reads, no branches, plus
+~20 a destination byte. The unpack is extra work per source row, so the gain
+grows with sprite width and is estimated about even at 20-25 px - the
+benchmark's 11-30 px sprites sit near that, and a station with a close
+sprite would show the case this is for. Both blit loops now keep one plane
+pointer (the grey plane is `BM_BYTES` after the black) instead of reloading
+`blackBm` and `greyBm` from memory every byte, and store fully opaque bytes
+without reading them. Checked against the previous code by a PC harness
+drawing both over random backgrounds - every `spr/` frame and 12 random
+ones, heights 1-960, every span, three offsets, plain and mirrored, and the
+weapon at every x and every third row: 6.28 million draws, no difference.
+DGROUP -176 bytes.
+
+Measured on device against the nine-slot cache build: Corridor 22.3 -> 22.3,
+Empty room 18.8 -> 18.6, Detail walls 21.3 -> 21.1, Openings 14.2 -> 14.2,
+Enemies 12.4 -> 11.7, Decorations 11.3 -> 11.1, Crowd 6.7 -> 7.1, average
+15.3 -> 15.1. The blit changes bought nothing measurable (Corridor draws
+only the weapon). The PC host counted, per station frame (Enemies /
+Decorations / Crowd): 142 / 117 / 246 decoded rows, 406 / 443 / 1103
+gathered bytes, 921 / 1290 / 1856 unpacked source bytes. Fitting the new
+decode time (task 22's ablation plus the measured delta) to those gives
+about **35 us per gathered byte (4.4 us a pixel against the old 11), 10 us
+per unpacked source byte, and 37 us per row** of fixed overhead - three
+stations, three unknowns, so a rough fit with no check on it. Per sprite
+that puts break-even near height 64: the 60 px sprites come out about even,
+the smaller ones lose (a 15 px row unpacks and gathers two to three times
+the pixels it draws, and pays the 37 us), and Crowd's one h=120 heavy
+gains about 13 ms, which is all of that station's improvement.
 
 The benchmark said sprite rows were the cost; temporary ablation switches
 in [sprite.c](sprite.c) (`SPRITE_ABL_NO_DECODE`, `_NO_BLIT`, `_NO_WEAPON`,

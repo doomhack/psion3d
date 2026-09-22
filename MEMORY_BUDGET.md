@@ -88,7 +88,7 @@ the declarations.
 | `menuText` and line table | 1,504 | `menu.c` | 1,280 byte copy of the briefing or objective text being shown, 48 line starts/lengths, two 40 byte strings |
 | `spriteLoadBuffer` | 1,024 | `sprite.c` | file staging, used only during `loadSprite` |
 | sprite masks | 768 | `sprite.c` | three 256-entry LUTs |
-| `spriteColByte` / `ColShift` | 480 | `sprite.c` | per-column blit LUTs |
+| `spriteCol` / `ColShift` / `RowPix` | 545 | `sprite.c` | per-column source byte or column, bit shift (small sprites), and the current source row unpacked a pixel per byte (magnified sprites) |
 | `mapInfo` | ~88 | `game_map.c` | level numbers and text offsets, 8 benchmark stations |
 | `benchFps10` | 16 | `bench.c` | per-station result |
 | everything else | ~340 | | sprite row masks, segment handles and frame counts, cache entries, `objectiveState`, window and font statics, runtime |
