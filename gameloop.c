@@ -10,6 +10,7 @@
 #include "ui.h"
 #include "hud.h"
 #include "bench.h"
+#include "cheat.h"
 
 u16 keys = 0;
 u8 gameMode = GAME_MODE_MENU;
@@ -36,6 +37,9 @@ void gameInit(void)
 
 u16 gameStartMission(const u8 mapId)
 {
+	/* Before the load: enemies take the spawn-time cheats as they are placed. */
+	cheatBegin(mapId);
+
 	if(!loadMap(mapId))
 		return FALSE;
 
@@ -134,8 +138,16 @@ u16 gameRunTicks(u16 gameTime, const u16 realTime)
 	while(tickDelta(realTime, gameTime) > 0)
 	{
 		/* A dead player takes no input; the last hit plays out on its own. */
-		updatePlayer(player.health ? keys : 0);
-		runAI();
+		updatePlayer(player.health ? cheatKeys(keys) : 0);
+
+		/* The enemy speed cheats run the AI tick on even ticks only, or
+		   twice: every counter in it, moves, aims and bursts, goes at half
+		   or double the rate. */
+		if(!(cheatActive & CHEAT_SLOW_ENEMIES) || !(gameTime & 1))
+			runAI();
+
+		if(cheatActive & CHEAT_FAST_ENEMIES)
+			runAI();
 
 		gameTime++;
 

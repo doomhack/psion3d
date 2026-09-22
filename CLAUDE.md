@@ -55,6 +55,7 @@ Working-tree line endings are mixed (git stores LF, some files are CRLF on disk)
 | `mission.c` | Mission index (titles/locations parsed from `map1..map20.map` at startup into a far segment), `difficulty`, `objectiveState[]` |
 | `automap.c` | The pause menu's level plan, rendered into `screenBm` with `bitmap.c` and copied out with `uiBlitMap` |
 | `settings.c` | The Options screen's values (`soundLevel`, `showFps`); process lifetime, no save file yet |
+| `cheat.c` | Cheats (task 24): `cheatFlags` from the Cheats screen, `cheatActive` for the mission in play (none on the benchmark map), names, texts, radio groups; the hooks themselves sit in player, enemy, draw, sprite, automap and gameloop, all testing `cheatActive` |
 | `bench.c` | The benchmark: the stations of `map97.map` in turn, world frozen, fps per station for the `MENU_BENCH` results screen |
 | `hud.c` | The in-game HUD panels (health, objectives, weapons/ammo, fps) drawn through `ui.h` into the HUD target: static parts on a redraw event, values as single-call cells replaced only when they change (never invalidate the HUD window for a value; see task 8) |
 | `draw.c` | DDA ray cast, per-span wall depth buffer, sprite collection/sorting, player shot resolution |
@@ -82,7 +83,7 @@ To find remaining 32-bit arithmetic, ask the object files rather than reading co
 grep -aoi "N.\{0,1\}\(SgnMol\|SgnDiv\|LngShr\|LngShl\)" *.OBJ | sort | uniq -c
 ```
 
-**Assembler modules.** `.a` files are JPI/TopSpeed assembler, listed in `unnamed.pr` alongside the C modules. The syntax has traps: `;` comments are a **syntax error**, and displacements concatenate brackets — `mov es:[di][9600],al`, not `[di+9600]`. Arguments arrive in `AX`, `BX`; declare the convention explicitly with `#pragma call(reg_param=>(...), reg_saved=>(...))` on the C prototype rather than relying on the default.
+**Assembler modules.** `.a` files are JPI/TopSpeed assembler, listed in `unnamed.pr` alongside the C modules. The syntax has traps: `;` comments are a **syntax error**, and displacements concatenate brackets — `mov es:[di][9600],al`, not `[di+9600]`. Arguments arrive in `AX`, `BX`; declare the convention explicitly with `#pragma call(reg_param=>(...), reg_saved=>(...))` on the C prototype rather than relying on the default. Two more traps, met writing a third module: the file must have **CRLF line endings** or every line is a syntax error reported on line 1, and `jmp` and `call` are short unless written `jmp near` / `call near`, so a jump over more than 127 bytes needs `near` (a conditional jump cannot be near - invert it and `jmp near` past). `[bp][n]` addresses the stack (SS), so keep locals there and data behind `[si]`, `[di]`, `[bx][si]`, `[bx][di]`; more than two arguments go in a block of two-byte members whose address arrives in `AX`.
 
 **Two bitplanes in one buffer.** `screenBm` is a single 256x320 1bpp buffer: the top 256x160 half is the black plane, the bottom half is grey. `blackBm` and `greyBm` are pointers *into* `screenBm`, not separate allocations. Rows are 32 bytes wide, so byte addressing is `y << 5` and word addressing `y << 4`. Pixels are **low-bit-first**: pixel `x` uses `1 << (x & 7)`. Reversing that bit order swaps column pairs and produces jagged wall edges.
 
@@ -145,6 +146,7 @@ Never isolate ray-loop internals by *substituting* values: everything downstream
 | Coarse block skip in the DDA | map1 is 98% solid wall with ~75 walkable cells and **zero** empty 8×8 blocks. Check the map before any spatial optimisation. |
 | 32×32 textured walls | 16fps against 20 at best, after three implementations. Code removed. |
 | Run-length texture rendering | Fixed 32 texel iterations per column, but `wallHeight` is `30720 / distance` so a wall 4 cells away is only 30 rows tall — fewer rows than iterations. |
+| Colour-run (RLE / transposed Doom post) sprite format | Measured 2026-09-21 with the decoder in C and then in assembler, identical numbers: Corridor 22.2 → 17.7, Enemies 12.4 → 9.6, Crowd 6.7 → 6.3. At on-screen sizes (11–30 px) a run is 1–4 destination pixels, so 1.6–2.8× fewer units at 2–3.5× the cost each; and the weapon lost its 4-pixels-per-lookup 1:1 path. TopSpeed's code for these loops is as tight as hand assembler, so "rewrite in asm" is not a lever either. Task 22 has the figures. |
 
 ## Assets
 

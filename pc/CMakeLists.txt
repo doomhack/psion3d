@@ -38,6 +38,7 @@ set(GAME_SOURCES
     ${GAME_ROOT}/hud.c
     ${GAME_ROOT}/automap.c
     ${GAME_ROOT}/bench.c
+    ${GAME_ROOT}/cheat.c
 )
 
 set(PC_SOURCES

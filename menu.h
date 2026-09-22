@@ -20,6 +20,7 @@
 #define MENU_OUTCOME 8	/* how the mission ended, from missionOutcome */
 #define MENU_OPTIONS 9
 #define MENU_BENCH 10	/* the benchmark results, from bench.c */
+#define MENU_CHEATS 11
 
 /*  What a key did. REDRAW covers every change that stays inside the menus;
     the others are for gameloop.c to act on. */

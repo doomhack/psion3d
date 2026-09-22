@@ -91,3 +91,10 @@ bench_crowd        --map 97 --station 7
 bench_results      --bench --frames 1400
 # Esc during the second station: the partial results, the rest unmeasured
 bench_abort        --bench --frames 300 --screen pause
+# the cheats screen, from the main menu (task 24)
+menu_cheats        --screen cheats
+# the civilian view of map1_kill_civ under the mirror cheat: walls, sprites and
+# their frames all flipped left to right (the weapon is not)
+map1_mirror        --map 1 --pos 2944,6272 --angle 402 --cheats 0x0800
+# the same view with tiny enemies: the civilian at half size on the floor line
+map1_tiny          --map 1 --pos 2944,6272 --angle 402 --cheats 0x1000

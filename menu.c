@@ -9,6 +9,7 @@
 #include "units.h"
 #include "settings.h"
 #include "bench.h"
+#include "cheat.h"
 
 /*  Geometry shared by every screen, from the design artboards: a 20 row
     title bar, an 18 row footer under a rule at 142, 13px body text on a
@@ -42,10 +43,11 @@ static u8 first = 0;	/* the first visible row of a scrolling list */
 static u8 mapTop = 0;	/* the first map row the automap shows */
 static u8 abortChoice = 1;	/* 0 Abort, 1 Cancel */
 
-#define MAIN_ITEMS 3
+#define MAIN_ITEMS 4
 #define MAIN_ITEM_SELECT 0
 #define MAIN_ITEM_OPTIONS 1
-#define MAIN_ITEM_EXIT 2
+#define MAIN_ITEM_CHEATS 2
+#define MAIN_ITEM_EXIT 3
 /*  The Options rows, 22 tall on a 26 pitch, and their width: the design's
     content column less its 6px right spacer. */
 #define OPTION_ITEMS 3
@@ -54,6 +56,10 @@ static u8 abortChoice = 1;	/* 0 Abort, 1 Cancel */
 #define OPTION_BENCH 2
 #define OPTION_ROW_W 444
 #define SELECT_VISIBLE 5
+#define CHEAT_VISIBLE 5
+#define CHEAT_LIST_W 220
+#define CHEAT_INFO_X 264
+#define CHEAT_INFO_W 204
 #define BRIEF_LINES 5	/* body lines per page, under the fixed location line */
 #define OBJ_BRIEF_LINES 6
 /*  The objectives list column. The design has 186 and a rule at 204; the
@@ -66,7 +72,7 @@ static u8 abortChoice = 1;	/* 0 Abort, 1 Cancel */
 
 static const char *mainItems[MAIN_ITEMS] =
 {
-	"Select Mission", "Options", "Exit"
+	"Select Mission", "Options", "Cheats", "Exit"
 };
 
 static const char *pauseItems[PAUSE_ITEMS] =
@@ -399,6 +405,12 @@ static void loadObjectiveBrief(void)
 	layoutText(UI_FONT_BODY, (s16)(468 - (OBJ_RULE_X + 12)));
 }
 
+static void loadCheatInfo(void)
+{
+	copyTo(menuText, cheatInfo(cursor), MENU_TEXT_MAX);
+	layoutText(UI_FONT_BODY, CHEAT_INFO_W);
+}
+
 void menuOpen(const u8 s)
 {
 	screen = s;
@@ -440,6 +452,12 @@ void menuOpen(const u8 s)
 		break;
 
 	case MENU_PAUSE_OBJECTIVES:
+		break;
+
+	case MENU_CHEATS:
+		cursor = 0;
+		first = 0;
+		loadCheatInfo();
 		break;
 
 	case MENU_MAP:
@@ -498,6 +516,12 @@ static u16 keyMain(const u16 key)
 		if(cursor == MAIN_ITEM_OPTIONS)
 		{
 			menuOpen(MENU_OPTIONS);
+			return MENU_ACTION_REDRAW;
+		}
+
+		if(cursor == MAIN_ITEM_CHEATS)
+		{
+			menuOpen(MENU_CHEATS);
 			return MENU_ACTION_REDRAW;
 		}
 
@@ -764,6 +788,34 @@ static u16 keyOptions(const u16 key)
 	return MENU_ACTION_REDRAW;
 }
 
+static u16 keyCheats(const u16 key)
+{
+	if(listMove(key, CHEAT_COUNT))
+	{
+		if(cursor < first)
+			first = cursor;
+
+		if(cursor >= first + CHEAT_VISIBLE)
+			first = (u8)(cursor - CHEAT_VISIBLE + 1);
+
+		loadCheatInfo();
+		return MENU_ACTION_REDRAW;
+	}
+
+	if(key == UI_KEY_ESC)
+	{
+		menuOpen(MENU_MAIN);
+		cursor = MAIN_ITEM_CHEATS;
+		return MENU_ACTION_REDRAW;
+	}
+
+	/* A locked cheat does not toggle, and nothing changes on screen. */
+	if((key == UI_KEY_ENTER || key == UI_KEY_SPACE) && cheatToggle(cursor))
+		return MENU_ACTION_REDRAW;
+
+	return MENU_ACTION_NONE;
+}
+
 static u16 keyBench(const u16 key)
 {
 	if(key == UI_KEY_ENTER)
@@ -805,6 +857,8 @@ u16 menuKey(const u16 uiKey)
 		return keyOptions(uiKey);
 	case MENU_BENCH:
 		return keyBench(uiKey);
+	case MENU_CHEATS:
+		return keyCheats(uiKey);
 	}
 
 	return MENU_ACTION_NONE;
@@ -1224,6 +1278,8 @@ static void drawOutcome(void)
 
 	if(missionNewBest)
 		text(x, 20, UI_FONT_BODY, TRUE, " new");
+	else if(cheatActive)
+		text(x, 20, UI_FONT_BODY, TRUE, " " MIDDOT " cheats on");
 
 	textRight((s16)(UI_W - 8), 14, UI_FONT_HEAD_BOLD, TRUE, heading);
 
@@ -1403,6 +1459,56 @@ static void drawBench(void)
 	footerItem(&x, FOOTER_Y, ARROWS_NONE, "Esc Back");
 }
 
+/*  The cheats: a scrolling list, each row the name and a box filled when the
+    cheat is on (the objective mark), and the highlighted cheat's text in the
+    column at the right. Locked rows say so in place of the box. */
+static void drawCheats(void)
+{
+	s16 x, i, y;
+	u16 on = 0;
+
+	for(i = 0; i < CHEAT_COUNT; i++)
+		if(cheatFlags & (1u << i))
+			on++;
+
+	p_atos(menuStr2, "%d on", on);
+	titleBar("CHEATS", menuStr2);
+
+	for(i = 0; i < CHEAT_VISIBLE && first + i < CHEAT_COUNT; i++)
+	{
+		const u8 c = (u8)(first + i);
+		const u16 sel = (u16)(c == cursor);
+
+		y = (s16)(28 + i * ROW_PITCH);
+
+		if(sel)
+			uiFillRect(12, y, CHEAT_LIST_W, ROW_H);
+
+		textFit(18, rowMid(y, ROW_H), UI_FONT_BODY_BOLD, (s16)sel, cheatName(c), (s16)(CHEAT_LIST_W - 6 - 60));
+
+		if(cheatUnlocked & (1u << c))
+			objectiveMark((s16)(12 + CHEAT_LIST_W - 6 - 9), (s16)(y + 5),
+				(u8)((cheatFlags & (1u << c)) ? OBJECTIVE_COMPLETE : OBJECTIVE_INCOMPLETE), (s16)sel);
+		else
+			textRight((s16)(12 + CHEAT_LIST_W - 6), rowMid(y, ROW_H), UI_FONT_BODY, (s16)sel, "Locked");
+	}
+
+	scrollbar(238, 28, 106, CHEAT_COUNT, first, CHEAT_VISIBLE);
+	uiLine(252, TITLE_H, 252, FOOTER_Y - 1);
+
+	/* Three lines for the cheat's text, the longest of which wraps to three
+	   on the device's wider font, and the rule for all of them under it. */
+	drawLines(CHEAT_INFO_X, rowMid(28, ROW_H), UI_FONT_BODY, 0, 3);
+	text(CHEAT_INFO_X, rowMid(98, ROW_H), UI_FONT_BODY_BOLD, FALSE, "A run with cheats on");
+	text(CHEAT_INFO_X, rowMid(117, ROW_H), UI_FONT_BODY_BOLD, FALSE, "sets no best time.");
+
+	footerRule();
+	x = 12;
+	footerItem(&x, FOOTER_Y, ARROWS_UP_DOWN, "Move");
+	footerItem(&x, FOOTER_Y, ARROWS_NONE, "Enter Toggle");
+	footerItem(&x, FOOTER_Y, ARROWS_NONE, "Esc Back");
+}
+
 void menuDraw(void)
 {
 	uiClear();
@@ -1441,6 +1547,9 @@ void menuDraw(void)
 		break;
 	case MENU_BENCH:
 		drawBench();
+		break;
+	case MENU_CHEATS:
+		drawCheats();
 		break;
 	}
 }

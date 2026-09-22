@@ -5,9 +5,21 @@
 #include "bitmap.h"
 #include "sprite.h"
 #include "sprslot.h"
+#include "cheat.h"
 
 #include "debug.h"
 
+
+/* Frames held in near RAM. Nine because the Decorations benchmark station
+   shows nine distinct frames at once - four decorations, four pickups and
+   the weapon - and an LRU cache one short of a cyclic working set misses on
+   every access: it was eight, and the nine 1 KB segment copies a frame that
+   cost measured 3.2 ms there. A slot is 1 KB of DGROUP.
+
+   Sprite cost was partitioned on the benchmark in TASKS.md task 22, which
+   has the figures: the per pixel decode dominates, the blit is a fifth of
+   it, and the weapon overlay is a flat 5.2 ms a frame. */
+#define SPRITE_CACHE_FRAMES 9
 
 #define SPRITE_SIZE 64
 #define SPRITE_ROW_BYTES 16
@@ -18,7 +30,6 @@
 #define SPRITE_SCALE_BITS 8
 #define SPRITE_NUM_MASK 0x1f
 #define SPRITE_FRAME_MASK 0x07
-#define SPRITE_CACHE_FRAMES 8
 #define SPRITE_HEIGHT_NUM ((s16)30720)
 
 #define SPR_TRANSPARENT 0
@@ -382,6 +393,11 @@ u16 projectSprite(const f16 x, const f16 y, spritehit_t* hit, const f16 f_viewCo
 	   as the sprite warping across the screen as you close on it. */
 	if(f_side >= f_depth || f_side <= -f_depth)
 		return FALSE;
+
+	/* The mirror cheat has turned the rays (drawSetMirror): what is to the
+	   right is drawn on the left. */
+	if(cheatActive & CHEAT_MIRROR)
+		f_side = -f_side;
 
 	spanx = 30 + fp2int(
 		fpmul(

@@ -91,6 +91,11 @@ int  hostStartBench(void);
     screen) can be reached headlessly: --dead with a few --frames. */
 void hostKillPlayer(void);
 
+/*  Turn on the cheats in mask (CHEAT_* bits, cheat.h), as the Cheats screen
+    would: --cheats. Call before hostInit, since a mission takes them as it
+    starts; the benchmark map ignores them. */
+void hostSetCheats(unsigned mask);
+
 /*  One frame: catch up whole ticks against the tick counter, then clear,
     draw and unpack. */
 void hostFrame(void);

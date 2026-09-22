@@ -8,6 +8,7 @@
 #include "level.h"
 #include "walls.h"
 #include "draw.h"
+#include "cheat.h"
 
 typedef struct markedsprite_t
 {
@@ -208,8 +209,10 @@ static void drawEnemyTracers(const spritehit_t* spriteHits, const u16 spritesHit
 /* 60 degree FOV, 60 rays, 4 pixels each. Held as sincos_tab index offsets
    rather than as angles, so a ray direction is one add onto the player's table
    index instead of a trigidx() conversion per ray. Spans 171 of the 1024
-   entries, which is the same 60.1 degrees as the angle table it replaces. */
-static const s16 rayIdxOffset[60] =
+   entries, which is the same 60.1 degrees as the angle table it replaces.
+   Not const: the mirror cheat negates it in place (drawSetMirror), so the ray
+   loop reads the same table the same way whether the view is flipped or not. */
+static s16 rayIdxOffset[60] =
 {
 	-86, -83, -80, -78, -74, -72, -69, -66, -63, -60,
 	-57, -55, -51, -48, -46, -43, -40, -37, -34, -31,
@@ -442,6 +445,51 @@ static void drawImpact(const f16* f_wallDepth, const f16 f_viewCos, const f16 f_
 	hit.enemyId = SPRITE_NO_ENEMY;
 
 	drawProjectedSprite(&hit);
+}
+
+static u8 viewMirrored = FALSE;
+
+void drawSetMirror(const u16 mirror)
+{
+	u16 i;
+
+	if((u8)(mirror != 0) == viewMirrored)
+		return;
+
+	/* Column i now looks as far to one side as it looked to the other. The
+	   gaps between neighbouring rays keep their sizes, so rayHalfWidth still
+	   holds column for column. */
+	for(i = 0; i < 60; i++)
+		rayIdxOffset[i] = (s16)-rayIdxOffset[i];
+
+	viewMirrored = (u8)(mirror != 0);
+}
+
+/* The sprite cheats, on the frame's collected sprites before the shot is
+   resolved against them: once per sprite, outside the ray loop. Under the
+   mirror every sprite is drawn flipped (projectSprite has already moved it
+   to the other side). A tiny enemy is half the height and width, standing
+   on the same floor line, so a shot follows its narrower silhouette. */
+static void cheatSprites(spritehit_t* spriteHits, const u16 spritesHit)
+{
+	u16 i;
+
+	if(!(cheatActive & (CHEAT_MIRROR | CHEAT_TINY_ENEMIES)))
+		return;
+
+	for(i = 0; i < spritesHit; i++)
+	{
+		spritehit_t* hit = &spriteHits[i];
+
+		if(cheatActive & CHEAT_MIRROR)
+			hit->mirrored = (u8)!hit->mirrored;
+
+		if((cheatActive & CHEAT_TINY_ENEMIES) && hit->enemyId != SPRITE_NO_ENEMY)
+		{
+			hit->spriteHeight >>= 1;
+			hit->offsetY = (s16)(hit->spriteHeight >> 1);
+		}
+	}
 }
 
 /* rayDelta() of every sincos_tab entry. Ray directions are always table
@@ -890,6 +938,7 @@ void draw()
 		}
 	}
 	
+	cheatSprites(spriteHits, spritesHit);
 	resolvePlayerShot(spriteHits, spritesHit, f_wallDepth, baseIdx);
 
 	visibleSprites = spritesHit;

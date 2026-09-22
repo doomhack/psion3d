@@ -28,7 +28,7 @@ int main(int argc, char **argv)
 		"the program opens at the main menu, as the device does.", "n", "0");
 	QCommandLineOption screenOpt("screen",
 		"Open at a menu screen, for screenshots: main, select, briefing or "
-		"objectives (the front end, from the first mission), options, or pause, "
+		"objectives (the front end, from the first mission), options, cheats, or pause, "
 		"abort, pobjectives or map (the pause set, which need --map).", "name");
 	QCommandLineOption tickOpt("tick-start",
 		"Seed the 16-bit tick counter, e.g. 65520, to exercise its wraparound "
@@ -69,6 +69,11 @@ int main(int argc, char **argv)
 		"Run the benchmark from the main menu, as Options > Benchmark does. With "
 		"--frames the virtual clock gives one frame per tick, so every station "
 		"reads 32.0 and 1400 frames lands on the results screen.");
+	QCommandLineOption cheatsOpt("cheats",
+		"Turn on these cheats before the mission starts, as the Cheats screen "
+		"would: a mask of CHEAT_* bits from cheat.h, decimal or 0x hex, so "
+		"0x0800 is Mirror Mode. The radio groups are not enforced here. The "
+		"benchmark map ignores cheats.", "mask");
 	QCommandLineOption verboseOpt({"v", "verbose-io"},
 		"Report every failed file open, including loadSprite's routine probe "
 		"past the last frame of each sprite.");
@@ -88,6 +93,7 @@ int main(int argc, char **argv)
 	parser.addOption(angleOpt);
 	parser.addOption(stationOpt);
 	parser.addOption(benchOpt);
+	parser.addOption(cheatsOpt);
 	parser.addOption(verboseOpt);
 	parser.process(app);
 
@@ -177,6 +183,7 @@ int main(int argc, char **argv)
 		{ "briefing",    false, "ee"   },
 		{ "objectives",  false, "eee"  },
 		{ "options",     false, "de"   },
+		{ "cheats",      false, "dde"  },
 		{ "pause",       true,  "x"    },
 		{ "abort",       true,  "xddde" },
 		{ "pobjectives", true,  "xde"  },
@@ -207,6 +214,20 @@ int main(int argc, char **argv)
 			             route->inPlay ? "needs" : "does not take");
 			return 1;
 		}
+	}
+
+	if(parser.isSet(cheatsOpt))
+	{
+		bool ok = false;
+		const unsigned mask = parser.value(cheatsOpt).toUInt(&ok, 0);
+
+		if(!ok || mask > 0xffff)
+		{
+			std::fprintf(stderr, "--cheats wants a 16 bit mask, e.g. 0x0800\n");
+			return 1;
+		}
+
+		hostSetCheats(mask);
 	}
 
 	if(!hostInit(assetRoot, mapId))

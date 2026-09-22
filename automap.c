@@ -3,6 +3,7 @@
 #include "game_map.h"
 #include "player.h"
 #include "fp_math.h"
+#include "cheat.h"
 
 /*  What each cell draws, from its flags rather than its type, so a wall
     style's meaning carries over: solid is black, a wall the ray sees through
@@ -39,7 +40,8 @@ static void drawCell(const s16 x, const s16 y, const u16 cell)
     the tip five pixels ahead of the cell centre and the base three behind. */
 static void drawPlayer(const u8 topRow)
 {
-	const f16 f_cos = fpcos(player.pos.angle);
+	const u16 mirror = (u16)(cheatActive & CHEAT_MIRROR);
+	const f16 f_cos = mirror ? -fpcos(player.pos.angle) : fpcos(player.pos.angle);
 	const f16 f_sin = fpsin(player.pos.angle);
 	s16 cx, cy;
 	s16 tipX, tipY, baseX, baseY, leftX, leftY, rightX, rightY;
@@ -48,6 +50,9 @@ static void drawPlayer(const u8 topRow)
 	   In two steps because a Q8 position times four overflows 16 bits. */
 	cx = (s16)((fp2int(player.pos.x) << 2) + ((player.pos.x & 0xff) >> 6));
 	cy = (s16)(((fp2int(player.pos.y) - (s16)topRow) << 2) + ((player.pos.y & 0xff) >> 6));
+
+	if(mirror)
+		cx = (s16)((MAP_X << 2) - cx);
 
 	if(cy < -8 || cy > AUTOMAP_H + 8)
 		return;
@@ -70,6 +75,9 @@ static void drawPlayer(const u8 topRow)
 
 void automapDraw(const u8 topRow)
 {
+	/* Under the mirror cheat the plan is flipped as the view is, or the map
+	   would put on the right what the player sees on the left. */
+	const u16 mirror = (u16)(cheatActive & CHEAT_MIRROR);
 	s16 x, y;
 	u16 row;
 
@@ -83,7 +91,7 @@ void automapDraw(const u8 topRow)
 			break;
 
 		for(x = 0; x < MAP_X; x++)
-			drawCell((s16)(x << 2), (s16)(y << 2), map[row][x]);
+			drawCell((s16)((mirror ? (MAP_X - 1 - x) : x) << 2), (s16)(y << 2), map[row][x]);
 	}
 
 	drawPlayer(topRow);

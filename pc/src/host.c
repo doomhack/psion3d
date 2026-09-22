@@ -23,6 +23,7 @@
 #include "hud.h"
 #include "ui.h"
 #include "bench.h"
+#include "cheat.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -333,6 +334,11 @@ void hostKillPlayer(void)
 {
 	if(g_started)
 		player.health = 0;
+}
+
+void hostSetCheats(unsigned mask)
+{
+	cheatFlags = (u16)(mask & cheatUnlocked);
 }
 
 void hostSetPaused(int paused)

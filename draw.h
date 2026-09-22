@@ -12,4 +12,8 @@
 void draw(void);
 void addEnemyTracer(u8 enemyId, u8 aim);
 
+/*  Flip the view left to right, or back: the mirror cheat, set as a mission
+    starts. projectSprite follows by itself; this turns the rays. */
+void drawSetMirror(const u16 mirror);
+
 #endif

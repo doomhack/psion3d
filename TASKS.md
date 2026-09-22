@@ -19,7 +19,9 @@ prediction.
       row (the design's new HUD artboard) when there is a HUD. Not saved -
       every launch is 7 / Off - until there is a save file. Cheats stays off
       the main menu.
-- [ ] Cheats screen, unlocks and the Cheat Unlocked dialog - task 24.
+- [ ] Cheats screen, unlocks and the Cheat Unlocked dialog - task 24. The
+      screen and all sixteen cheats are in; unlocks and the dialog wait on
+      the save file.
 - [x] Mission outcome screens (complete / failed / killed in action), mission
       timer, best times - see tasks 9 and 10. Best times still want a save file.
 
@@ -449,14 +451,66 @@ convention from CLAUDE.md. Once it lands, tick the "persist" items in tasks
 1, 10 and 15.
 
 ### 24. Cheats
-- [ ] `u16 cheatFlags` (one bit per cheat), the hooks below, and a Cheats
+- [x] `u16 cheatFlags` (one bit per cheat), the hooks below, and a Cheats
       screen on the main menu that toggles the unlocked ones.
 - [ ] Unlocks: each cheat is earned by completing a given mission at a given
       difficulty inside a time limit, GoldenEye style. Needs task 23 - an
       unlock that goes with the process is not worth showing.
 - [ ] A cheated run records no best time and earns no unlock (`setBest` in
       [mission.c](mission.c) and the unlock check both test `cheatFlags`).
+      The best time half is done; the unlock check waits on unlocks.
 - [ ] Cheat Unlocked dialog on the mission outcome screen.
+
+The cheats themselves done 2026-09-22, all unlocked. How it is put together:
+
+- **Module.** [cheat.c](cheat.c) owns `cheatFlags` (what the screen has
+  on), `cheatActive` (what the mission in play runs with) and
+  `cheatUnlocked` (`CHEAT_ALL` until unlocks exist; a locked row shows
+  "Locked" and does not toggle). `gameStartMission` calls `cheatBegin`
+  *before* `loadMap`, because the spawn-time cheats act as `getEnemyCell`
+  places enemies. Every hook tests `cheatActive`, so nothing changes under
+  a mission in progress, and it is zero on the benchmark map whatever is
+  set - the benchmark measures the renderer as it ships, and the `bench_*`
+  goldens stay put. The radio groups are `cheatToggle`'s job.
+- **Screen.** Main menu -> Cheats (between Options and Exit): a five row
+  scrolling list with the objective mark as the on box, the highlighted
+  cheat's text on the right, Enter or Space toggles. A cheated mission's
+  outcome screen says "cheats on" where a new best would say "new".
+- **Hooks as built**, where they differ from the table: *All weapons* also
+  gives one pickup of each ammo type, or the three guns start dry and fall
+  back to the pistol at the first shot. *Turbo* scales the displacement and
+  turn `updatePlayer` applies, not the constants, so the caps, impulses and
+  damping keep their feel and a shove scales with the rest (x1.5, the
+  largest step is then 96 Q8 plus the 38 radius, well inside a cell).
+  *Pacifist* is `enemyActsCivilian()` in the four places the AI tested
+  `ENEMY_TYPE_CIV`; the type itself is untouched, so a kill still reports
+  the real type to the level script. *Slow* runs the AI on even `gameTime`.
+  *Mirror* negates `rayIdxOffset` in place once per mission
+  (`drawSetMirror`), so the ray loop is the same code reading the same
+  table; `projectSprite` negates the side offset, a per-frame pass after
+  the ray loop flips every sprite's frame, `cheatKeys` swaps left/right
+  and strafe, the hurt flash swaps edge, and the automap flips. The weapon
+  overlay is not flipped. *Tiny enemies* is the same post-loop pass:
+  half height and width, `offsetY` keeping the feet on the floor line, and
+  the shot test follows the narrower span. An impact marker on a tiny enemy
+  is still placed at full-size scale, so it can land beside the body.
+- **Checked** on the PC host with `--cheats <mask>` (new): 320 ticks among
+  map 1's four mercs gave 90 health with nothing on, 100 under
+  Invincibility, Invisibility, Pacifist and Slow, 40 under Fast, and two
+  heavies on screen under All Heavies; one pistol round kills the civilian
+  under One-shot. New goldens `menu_cheats`, `map1_mirror`, `map1_tiny`.
+  Benchmark on the device 2026-09-22, cheats off (the benchmark map
+  ignores them): Corridor 22.2, Empty room 18.6, Detail walls 21.1,
+  Openings 14.2, Enemies 12.4, Decorations 11.4, Crowd 6.7, average 15.2 -
+  against the task 22 build's 22.3 / 18.8 / 21.3 / 14.2 / 12.4 / 11.3 /
+  6.7 (15.3), every station within the 0.3 noise band. The two wall-only
+  stations both reading 0.2 down is worth a second run if it recurs
+  (`draw()` gained a call after the ray loop and `rayIdxOffset` moved from
+  `_CONST` to `_DATA`). The mirror and tiny passes *switched on* are
+  unmeasured: that wants a fixed view on a mission map with the HUD fps.
+- **Memory.** 912 bytes of DGROUP, almost all of it the names and texts in
+  `_CONST`; they were cut to one short line each for that reason. DGROUP is
+  47,504, 1,648 under the 48 KB gate.
 
 Sixteen cheats, chosen 2026-09-21 so that every one is a value change at
 spawn time or a branch in per-tick code - nothing touches the per-ray or
@@ -639,6 +693,73 @@ rooms and enemies placed inside walls, which otherwise only show up on device.
 valid characters; the validator should reuse it via the PC build rather than
 keep a second table.
 
+### 22. Sprite drawing cost
+- [x] Partition the cost on the benchmark (2026-09-21).
+- [x] Colour-run sprite format with a per-run decoder - built, measured, **rejected** (2026-09-21).
+- [x] Frame cache 8 -> 9 slots (2026-09-21): the Decorations working set fits; +1 KB DGROUP, 2.5 KB to the limit. Measured: Decorations 10.9 -> 11.3, every other station on the baseline (22.3 / 18.8 / 21.3 / 14.2 / 12.4 / 6.7, average 15.2 -> 15.3).
+- [ ] Decide whether a decoded-row cache per (frame, size bucket) is worth its memory.
+
+The benchmark said sprite rows were the cost; temporary ablation switches
+in [sprite.c](sprite.c) (`SPRITE_ABL_NO_DECODE`, `_NO_BLIT`, `_NO_WEAPON`,
+each removing work rather than substituting a value) said which part. They
+were taken out once the figures below were measured; to partition it again,
+put them back for the run - the decode one holds the first row's masks for
+the whole sprite, the blit one decodes and writes nothing, the weapon one
+returns from `drawSprite` at once. Per frame removed on Enemies /
+Decorations / Crowd: the per-pixel row decode 24.4 / 31.8 / 75.8 ms, the
+per-byte blit 4.3 / 4.7 / 14.2, the weapon overlay 5.2 flat on every
+station, and on Decorations a further 3.2 from nine distinct frames (four
+decorations, four pickups, the weapon) cycling through the eight-slot LRU
+cache, which misses on every access when the working set is one larger - a
+ten-slot build confirmed it alone. The PC host counted 2115 / 2946 / 6982
+pixel decodes and 406 / 443 / 1535 blitted bytes for those frames, so the
+decode costs about 11 us - 300 clocks - per destination pixel and the blit
+9 us per byte, both linear. Half the Crowd frame was the decode.
+
+The experiment: a format 2 storing each frame as colour runs per row (2-bit
+colour, 6-bit length, a 64-entry row offset table, 274-847 bytes a frame
+against 1024) and a decoder that maps a run to a screen span through a
+per-sprite source-column-to-screen-column table and ORs it into the row
+masks - Doom's column-and-post idea turned through ninety degrees for a
+row-major screen, with the post being a colour rather than pixels. It was
+pixel-identical (a simulation over every width 1..640 matched the old
+sampling for all 205,120 columns, plain and mirrored; every golden frame
+matched) and saved 2.6 KB of DGROUP, and the weapon went through it too.
+
+Measured, it lost, and equally with the decoder in C and in assembler
+(`sprasm.a`, ~70 instructions a run including the span routine, the same
+numbers to 0.1 fps): Corridor 22.2 -> 17.7, Empty room 18.8 -> 15.4,
+Detail walls 21.3 -> 17.1, Openings 14.2 -> 12.2, Enemies 12.4 -> 9.6,
+Decorations 10.9 -> 9.4, Crowd 6.7 -> 6.3. Corridor has no sprite but the
+weapon, so its +11.5 ms is the weapon alone: the old 1:1 path decodes four
+pixels per table lookup (~135 instructions a row) and the run path walks
+~7 runs a row (~490). Taking that off the rest leaves the run decoder at
++13.5 / +4.5 / +0.5 ms on Enemies / Decorations / Crowd. The unit count did
+fall - runs on exactly what the stations draw were 1328 / 1304 / 2496
+against those pixel counts, 1.6x / 2.3x / 2.8x fewer - but at on-screen
+sizes (11-30 px) a run covers 1-4 destination pixels and costs 2-3.5 of
+them, so it is a wash at best and a loss with the weapon. Only the h=120
+heavy gained (5x fewer units), and one sprite is not a frame.
+
+Two lessons for the next attempt, both now in `CLAUDE.md`. Fewer units is
+not the lever at these sizes; the per-unit cost is, and it is set by the
+instruction count of the loop, not by who writes it: TopSpeed's code for
+these loops is as tight as hand assembler (the C and assembler decoders
+measured identically), so "rewrite in assembler" is only a lever where C
+cannot reach an instruction, as with `fpmul` and `IMUL`. And a 1:1 special
+case is worth keeping: the weapon's four-pixels-per-lookup path is a third
+of the cost of the general one.
+
+Reverted the same day: format 1 files, the pixel decoder and `drawSprite`
+are back, `sprasm.a` / `sprasm.h` / `pc/src/sprasm_pc.c` / `spr/README.md`
+are gone, and the ablation switches came out with them. The row in `CLAUDE.md`'s rejected table points
+here. What is left on the table: the cache slots (a define, measured), and
+the only remaining large lever - not decoding at all on most frames, by
+caching decoded mask rows per (frame, size bucket, bit phase) so a standing
+or slowly approaching enemy costs only its blit. That is a redesign with a
+memory problem (a decoded 60 px frame is ~1.8 KB, DGROUP has ~3.5 KB free,
+far memory has 400 KB but costs 0.35 ms per KB to bring near) and wants
+its own costing before anything is built.
 ## Housekeeping
 
 - [ ] `TEXWALL.OBJ` is left over from the removed textured-wall experiment;

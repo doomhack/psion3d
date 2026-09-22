@@ -53,7 +53,7 @@ the declarations.
 | --- | ---: | --- | --- |
 | `screenBm` | 10,240 | `bitmap.c` | both bitplanes, 320 rows x 32 B. Load-bearing, see CLAUDE.md |
 | `map[64][64]` | 8,192 | `game_map.c` | packed `u16` cells |
-| `spriteCache` | 8,192 | `sprite.c` | 8-frame near-RAM LRU; keeps far sprite count decoupled from DGROUP |
+| `spriteCache` | 9,216 | `sprite.c` | 9-frame near-RAM LRU; keeps far sprite count decoupled from DGROUP. Nine because the Decorations benchmark station cycles nine frames, and LRU one short of the working set misses every access (3.2 ms) |
 | `spriteFrameBounds` | 3,072 | `sprite.c` | 32 slots x 8 frames x 12 B — **11 slots used, ~2 KB reclaimable** |
 | `recipTab` | 2,048 | `draw.c` | `rayDelta()` per trig entry, hoists a divide out of the ray loop |
 | `enemyList` | 1,792 | `enemy.c` | 64 x 28 B `enemy_t`. Grew 20 → 28 B with AI memory fields |
@@ -138,6 +138,8 @@ The OS, window server and file system take their own share on top.
 | 2026-09-20 | 41,756 | 45,392 | 50,176 | HUD: hud.c, HUD window replaces the debug window |
 | 2026-09-21 | 42,430 | 45,392 | 50,176 | HUD cells: per-value updates through gPrintBoxText |
 | 2026-09-21 | 43,636 | 45,568 | 51,200 | task 19: benchmark (bench.c, stations in mapInfo, results screen) |
+| 2026-09-21 | 43,636 | 46,592 | 51,200 | task 22: sprite frame cache 8 -> 9 slots (Decorations thrash, 3.2 ms) |
+| 2026-09-22 | 44,972 | 47,504 | 51,200 | task 24: cheats (cheat.c, Cheats screen, 16 hooks) |
 
 Code has grown ~9 KB in a week; data has barely moved. That is the intended
 shape — features should land as code and far data, not as near arrays.

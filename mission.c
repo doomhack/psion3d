@@ -3,6 +3,7 @@
 #include "mission.h"
 #include "player.h"
 #include "ui.h"	/* uiInfoMsg, for the objective notices */
+#include "cheat.h"
 
 u8 missionCount = 0;
 u8 difficulty = DIFFICULTY_SENIOR;
@@ -153,12 +154,12 @@ static void setBest(const u8 mission, const u8 d, u16 ticks)
 }
 
 /*  The mission is over: record how, and a completion's time if it beats
-    the best so far. */
+    the best so far. A run with any cheat on records nothing. */
 static u8 endMission(const u8 outcome)
 {
 	missionOutcome = outcome;
 
-	if (outcome == OUTCOME_COMPLETE && missionIndex != MISSION_NONE)
+	if (outcome == OUTCOME_COMPLETE && missionIndex != MISSION_NONE && !cheatActive)
 	{
 		const u16 best = missionBest(missionIndex, difficulty);
 

@@ -21,6 +21,7 @@
 #compile hud
 #compile automap
 #compile bench
+#compile cheat
 #compile ui_psion
 #compile videomem
 #compile fpasm

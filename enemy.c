@@ -7,6 +7,7 @@
 #include "pickup.h"
 #include "mission.h"
 #include "level.h"
+#include "cheat.h"
 
 #define ENEMY_LEASH_DIST_METERS 28
 #define ENEMY_ATTACK_DIST_MER_METERS 4
@@ -427,6 +428,15 @@ static void enemyLoseAim(enemy_t* enemy, const u8 remaining)
     enemyStartSearch(enemy, enemyMoveTicks(enemy));
 }
 
+/* Whether the AI decides for this enemy as for a civilian: never chasing or
+   attacking, wandering, and running from gunfire. The Pacifist cheat makes
+   that every enemy. The type itself is untouched, so the sprites, the stats
+   and what the level script is told about a kill are still the real ones. */
+static u16 enemyActsCivilian(const enemy_t* enemy)
+{
+    return enemy->type == ENEMY_TYPE_CIV || (cheatActive & CHEAT_PACIFIST);
+}
+
 /* Something loud happened at x, y. Only enemies that are not already dealing
    with the player care: idle ones go and look, wandering civilians run, and one
    already searching redirects to the newer noise.
@@ -456,7 +466,7 @@ void alertEnemies(const u8 x, const u8 y)
            next step interpolates from wherever the enemy stopped, so this reads
            as a reaction rather than a jump. Civilians run from trouble;
            everyone else goes to find it. */
-        if(enemy->type == ENEMY_TYPE_CIV)
+        if(enemyActsCivilian(enemy))
             enemyStartFlee(enemy);
         else
             enemyStartSearch(enemy, 0);
@@ -708,7 +718,7 @@ static void enemyStepSideways(const u16 id, enemy_t* enemy, const u8 targetX, co
    chase loop - every path back to "normal" goes through here. */
 static u8 enemyAlertState(const enemy_t* enemy)
 {
-    return (enemy->type == ENEMY_TYPE_CIV) ? ENEMY_STATE_WANDER : ENEMY_STATE_CHASING;
+    return enemyActsCivilian(enemy) ? ENEMY_STATE_WANDER : ENEMY_STATE_CHASING;
 }
 
 /* Cardinal steps indexed by enemy->wanderDir. Turning is +/-1 modulo 4, so the
@@ -810,7 +820,9 @@ u16 getEnemyCell(u16 x, u16 y, s8 cell)
             break;
     }
 
-    
+    //All four sprite sets load on every level, so any type can stand anywhere.
+    enemyType = cheatEnemyType((u8)enemyType);
+
     enemyList[enemyId].type = enemyType;
 
     //Start in idle state.
@@ -834,7 +846,8 @@ u16 getEnemyCell(u16 x, u16 y, s8 cell)
 
 
     enemyList[enemyId].enemyStats = &enemyStats[enemyType];
-    enemyList[enemyId].health = enemyStats[enemyType].health;
+    //One-shot kills: any round is at least 1, so it kills and never merely staggers.
+    enemyList[enemyId].health = (cheatActive & CHEAT_ONE_SHOT) ? 1 : enemyStats[enemyType].health;
 
     //An enemy map character stands on bare floor.
     enemyList[enemyId].underCell = MAP_MASK_WALK;
@@ -1014,7 +1027,9 @@ void runAI()
             continue;
         }
 
-        canSee = enemyCanSeePlayer(enemy);
+        /* Invisible: nobody acquires the player, and the sight line is not
+           even walked. Gunfire still carries through alertEnemies. */
+        canSee = !(cheatActive & CHEAT_INVISIBLE) && enemyCanSeePlayer(enemy);
 
         if(canSee)
             enemySetTargetToPlayer(enemy);
@@ -1034,7 +1049,7 @@ void runAI()
                     break;
 
                 //Civilians have no interest in the player, they just move on.
-                if(enemy->type == ENEMY_TYPE_CIV)
+                if(enemyActsCivilian(enemy))
                 {
                     enemy->state = ENEMY_STATE_WANDER;
                     enemy->stateCounter = 0;
@@ -1128,7 +1143,7 @@ void runAI()
                    onto the player and pin them there. Every route into this
                    case goes through enemyAlertState, so this only catches a
                    future one that does not. */
-                if(enemy->type == ENEMY_TYPE_CIV)
+                if(enemyActsCivilian(enemy))
                 {
                     enemy->state = ENEMY_STATE_WANDER;
                     enemy->stateCounter = 0;

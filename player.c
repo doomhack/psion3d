@@ -8,6 +8,7 @@
 #include "pickup.h"
 #include "decor.h"
 #include "level.h"
+#include "cheat.h"
 
 player_t player = {0};
 
@@ -380,13 +381,17 @@ static void updatePlayerWeapon(u16 keys)
 			}
 			else
 			{
-				if(ammoType != AMMO_TYPE_NONE)
+				if(ammoType != AMMO_TYPE_NONE && !(cheatActive & CHEAT_INFINITE_AMMO))
 					player.ammo[ammoType]--;
 
-				player.weaponState.shootCooldown = player.currentWeapon->fireDelay;
+				/* Rapid fire: one tick of cooldown, so a round every other
+				   tick, sixteen a second, whatever the weapon. */
+				player.weaponState.shootCooldown = (cheatActive & CHEAT_RAPID_FIRE) ?
+					1 : player.currentWeapon->fireDelay;
 				player.weaponState.weaponSpriteId = (player.currentWeapon->weaponSprite << 3) | 1;
 				player.weaponState.shootFrames = WEAPON_FLASH_TICKS;
-				player.weaponState.shotSpan = getShotSpan(player.currentWeapon->accuracy);
+				player.weaponState.shotSpan = (cheatActive & CHEAT_PERFECT_AIM) ?
+					PLAYER_AIM_SPAN : getShotSpan(player.currentWeapon->accuracy);
 				player.weaponState.shotPending = TRUE;
 				player.weaponState.recoilOffset = WEAPON_RECOIL_KICK;
 
@@ -427,6 +432,17 @@ void initPlayer()
 	player.ammo[AMMO_TYPE_SMG] = 0;
 	player.ammo[AMMO_TYPE_AR] = 0;
 	player.ammo[AMMO_TYPE_LMG] = 0;
+
+	/* As if all three had been picked up, less the raise: the pistol is
+	   still the one in hand. */
+	if(cheatActive & CHEAT_ALL_WEAPONS)
+	{
+		player.weaponsOwned = (1 << WEAPON_SMG) | (1 << WEAPON_AR) | (1 << WEAPON_LMG);
+		giveAmmo(AMMO_TYPE_SMG);
+		giveAmmo(AMMO_TYPE_AR);
+		giveAmmo(AMMO_TYPE_LMG);
+	}
+
 	player.currentWeapon = &weapons[WEAPON_PISTOL];
 	player.weaponState.shootCooldown = 0;
 	player.weaponState.shootFrames = 0;
@@ -457,10 +473,15 @@ void hurtPlayer(const u8 damage, const f16 fromX, const f16 fromY)
 	const f16 f_shove = (f16)((PLAYER_MOVE_TICK * damage) >> 2);
 	const f16 f_kick = (f16)((PLAYER_TURN_TICK * damage) >> 4);
 
-	if(damage >= player.health)
-		player.health = 0;
-	else
-		player.health -= damage;
+	/* Invincible: the shove, the kick and the flash, so a hit still reads
+	   as one, but no health. */
+	if(!(cheatActive & CHEAT_INVINCIBLE))
+	{
+		if(damage >= player.health)
+			player.health = 0;
+		else
+			player.health -= damage;
+	}
 
 	//Shoved away from the shooter, along the facing axis.
 	f_moveVel = clampFp(f_moveVel + ((f_along >= 0) ? -f_shove : f_shove),
@@ -471,11 +492,12 @@ void hurtPlayer(const u8 damage, const f16 fromX, const f16 fromY)
 	addTurnImpulse((shotRand & 0x8000) ? f_kick : -f_kick);
 
 	//Flash the screen edge the shooter is on, so a hit from out of view says
-	//which way to turn.
+	//which way to turn. Under the mirror cheat that side is on the other edge.
 	if(f_absAlong >= f_absSide)
 		player.hitDir = (f_along >= 0) ? PLAYER_HIT_FRONT : PLAYER_HIT_BACK;
 	else
-		player.hitDir = (f_side >= 0) ? PLAYER_HIT_RIGHT : PLAYER_HIT_LEFT;
+		player.hitDir = ((f_side >= 0) != ((cheatActive & CHEAT_MIRROR) != 0)) ?
+			PLAYER_HIT_RIGHT : PLAYER_HIT_LEFT;
 
 	player.hitFlash = PLAYER_HIT_FLASH_FRAMES;
 }
@@ -525,6 +547,12 @@ void updatePlayer(u16 keys)
 
 	player.pos.angle += f_turnVel;
 
+	/* Turbo scales what the velocities do, not the velocities, so the caps,
+	   impulses and damping keep their feel at one and a half times the
+	   speed. A shove moves the player through the same path and scales too. */
+	if(cheatActive & CHEAT_TURBO)
+		player.pos.angle += f_turnVel >> 1;
+
 	/* With no velocity dx and dy are both zero and tryMove cannot change the
 	   position, so skip it along with its two enemy list scans. */
 	if(f_moveVel != 0 || f_strafeVel != 0)
@@ -536,6 +564,12 @@ void updatePlayer(u16 keys)
 		   projectSprite use, so a positive strafe velocity moves right. */
 		dx = fpmul(f_cos, f_moveVel) - fpmul(f_sin, f_strafeVel);
 		dy = fpmul(f_sin, f_moveVel) + fpmul(f_cos, f_strafeVel);
+
+		if(cheatActive & CHEAT_TURBO)
+		{
+			dx += dx >> 1;
+			dy += dy >> 1;
+		}
 
 		tryMove(dx, dy);
 
