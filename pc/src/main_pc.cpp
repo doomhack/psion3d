@@ -274,9 +274,16 @@ int main(int argc, char **argv)
 	    tick count always produces the same frame. The clock is held while the
 	    loop runs: the advance is the only movement, however long the frames
 	    take to render, which is what makes a 1400 frame --bench run read 32.0
-	    at every station. */
+	    at every station.
+	    hostInit, and hostStartBench, set the game clock and then draw a frame,
+	    and the options above take their time too; resync once the clock is
+	    held, or that real time is caught up as ticks on the first frame and
+	    whether it crosses a tick boundary decides what --fire shows. */
 	if(parser.isSet(framesOpt))
+	{
 		hostSetPaused(1);
+		hostResyncClock();
+	}
 
 	for(int i = 0, n = parser.value(framesOpt).toInt(); i < n; ++i)
 	{
