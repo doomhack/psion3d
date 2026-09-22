@@ -319,6 +319,12 @@ no levels yet (task 16), so expect them to move.
 
 ### 12. Sound
 - [ ] Weapon, hit and alert sounds.
+- [ ] Pitch enemy sounds up under the Tiny Enemies cheat (`cheatActive &
+      CHEAT_TINY_ENEMIES`, task 24). How depends on what the spike finds the
+      SIBO sound API can do: a playback rate or pitch parameter if there is
+      one, otherwise resampled copies of the enemy sounds made at load time
+      (a far segment, not DGROUP) or a second set of assets. Only enemy
+      sounds; the player's weapons stay as they are.
 
 There is no audio anywhere in the codebase. The SIBO sound API and the frame
 budget are both unknowns here, so this wants a spike first: make one sound play
