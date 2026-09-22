@@ -445,6 +445,11 @@ static u8 spriteRowOpaque[SCREEN_WIDTH / 8];
 static u8 spriteRowBlack[SCREEN_WIDTH / 8];
 static u8 spriteRowGrey[SCREEN_WIDTH / 8];
 
+/* Per destination byte, the pixels whose wall column the sprite is in front
+   of: a nibble per four pixel column. Built only for a sprite with a nearer
+   wall inside its span, not just at its edges. */
+static u8 spriteColVisible[SCREEN_WIDTH / 8];
+
 /* Ceiling of (value << SPRITE_SCALE_BITS) / step. Both operands fit in 16 bits:
    value is at most SPRITE_SIZE and step at most SPRITE_SIZE << SPRITE_SCALE_BITS,
    so this stays a native 16 bit divide instead of a called 32 bit one. */
@@ -588,7 +593,7 @@ static void buildMagnifiedRowMasks(const u8* sourceRow, const s16 rowXStart, con
 	spriteRowGrey[lastByte] &= edge;
 }
 
-void drawProjectedSprite(const spritehit_t* spriteHit)
+void drawProjectedSprite(const spritehit_t* spriteHit, const f16* f_wallDepth)
 {
 	s16 height = spriteHit->spriteHeight;
 	s16 width;
@@ -617,6 +622,10 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 	u8 lastBand;
 	u8 band;
 	u8 magnified;
+	u16 firstCol;
+	u16 lastCol;
+	u16 col;
+	u8 occluded;
 
 	if(height <= 0)
 		return;
@@ -689,6 +698,56 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 
 	if(xStart >= xEnd || yStart >= yEnd)
 		return;
+
+	/* Clip against the walls a column at a time. The caller has already tested
+	   the centre column - a sprite whose centre is behind a wall is not drawn,
+	   and cannot be shot either - so this only hides the parts a nearer wall
+	   covers, which were painted over that wall's edge. Hidden columns at the
+	   ends just narrow the span; any inside it are masked off each decoded
+	   row. f_wallDepth is distance along each ray and f_spriteDist is
+	   perpendicular, the same comparison the centre test makes. */
+	firstCol = (u16)(xStart >> 2);
+	lastCol = (u16)((xEnd - 1) >> 2);
+
+	while(firstCol <= lastCol && spriteHit->f_spriteDist >= f_wallDepth[firstCol])
+		firstCol++;
+
+	while(lastCol > firstCol && spriteHit->f_spriteDist >= f_wallDepth[lastCol])
+		lastCol--;
+
+	if(firstCol > lastCol)
+		return;
+
+	if(xStart < (s16)(firstCol << 2))
+		xStart = (s16)(firstCol << 2);
+
+	if(xEnd > (s16)((lastCol + 1) << 2))
+		xEnd = (s16)((lastCol + 1) << 2);
+
+	occluded = FALSE;
+
+	for(col = firstCol + 1; col < lastCol; col++)
+	{
+		if(spriteHit->f_spriteDist >= f_wallDepth[col])
+		{
+			occluded = TRUE;
+			break;
+		}
+	}
+
+	if(occluded)
+	{
+		for(col = firstCol; col <= lastCol; col++)
+		{
+			u8 nibble = (u8)((col & 1) ? 0xf0 : 0x0f);
+
+			if(col == firstCol || !(col & 1))
+				spriteColVisible[col >> 1] = 0;
+
+			if(spriteHit->f_spriteDist < f_wallDepth[col])
+				spriteColVisible[col >> 1] |= nibble;
+		}
+	}
 
 	/* (yStart - top) is less than height and sourceYStep is
 	   (SPRITE_SIZE << SPRITE_SCALE_BITS) / height, so the product always fits in
@@ -779,6 +838,20 @@ void drawProjectedSprite(const spritehit_t* spriteHit)
 					buildMagnifiedRowMasks(spriteData + (sourceY << 4), rowXStart, rowXEnd);
 				else
 					buildSpriteRowMasks(spriteData + (sourceY << 4), rowXStart, rowXEnd);
+
+				if(occluded)
+				{
+					for(; b <= lastByte; b++)
+					{
+						u8 visible = spriteColVisible[b];
+
+						spriteRowOpaque[b] &= visible;
+						spriteRowBlack[b] &= visible;
+						spriteRowGrey[b] &= visible;
+					}
+
+					b = (u16)(rowXStart >> 3);
+				}
 
 				prevSourceY = sourceY;
 			}

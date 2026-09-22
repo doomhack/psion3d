@@ -98,3 +98,8 @@ menu_cheats        --screen cheats
 map1_mirror        --map 1 --pos 2944,6272 --angle 402 --cheats 0x0800
 # the same view with tiny enemies: the civilian at half size on the floor line
 map1_tiny          --map 1 --pos 2944,6272 --angle 402 --cheats 0x1000
+# sprites clipped per wall column: the benches and flasks behind the lab window
+# stop at its side reveal instead of being drawn over it
+map1_clip_window   --map 1 --pos 3456,6528 --angle 0
+# the same beside a pillar: the part of the figure behind its edge is hidden
+map1_clip_pillar   --map 1 --pos 4992,6272 --angle 603

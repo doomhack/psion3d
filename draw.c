@@ -444,7 +444,7 @@ static void drawImpact(const f16* f_wallDepth, const f16 f_viewCos, const f16 f_
 	hit.mirrored = FALSE;
 	hit.enemyId = SPRITE_NO_ENEMY;
 
-	drawProjectedSprite(&hit);
+	drawProjectedSprite(&hit, f_wallDepth);
 }
 
 static u8 viewMirrored = FALSE;
@@ -948,7 +948,7 @@ void draw()
 		spritesHit--;
 
 		if(spriteHits[spritesHit].f_spriteDist < f_wallDepth[spriteHits[spritesHit].spanX])
-			drawProjectedSprite(&spriteHits[spritesHit]);
+			drawProjectedSprite(&spriteHits[spritesHit], f_wallDepth);
 	}
 
 	drawImpact(f_wallDepth, f_viewCos, f_viewSin);
