@@ -576,6 +576,8 @@ static u16 levelLine(parser_t *ps)
 /* The section in progress has ended: a new header, or the end of the file. */
 static u16 closeSection(parser_t *ps)
 {
+	u16 i;	/* along an edge; the grid is square */
+
 	switch (ps->section)
 	{
 	case SECTION_MAP:
@@ -584,6 +586,17 @@ static u16 closeSection(parser_t *ps)
 
 		if (ps->y != MAP_Y || ps->x != 0)
 			return MAP_FAIL(ps, "map grid is not 64 x 64");
+
+		/* The ray caster walks a pointer through map[][] with no bounds
+		   check (draw.c), which is safe only because no ray can leave the
+		   grid: every cell on its edge must stop one. Nothing at run time
+		   opens a solid cell, so checking here is enough. */
+		for (i = 0; i < MAP_X; i++)
+		{
+			if (!isSolid(map[0][i]) || !isSolid(map[MAP_Y - 1][i]) ||
+				!isSolid(map[i][0]) || !isSolid(map[i][MAP_X - 1]))
+				return MAP_FAIL(ps, "map border cell is not a solid wall");
+		}
 
 		ps->mapDone = TRUE;
 		return TRUE;

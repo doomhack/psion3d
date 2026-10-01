@@ -128,8 +128,12 @@ u16 gameRunTicks(u16 gameTime, const u16 realTime)
 	   station looks the same in every frame. */
 	if(benchActive)
 	{
+#ifdef BENCH_PROFILE
+		benchDraw();
+#else
 		bmClearScreen();
 		draw();
+#endif
 		benchFrame(realTime);
 
 		return realTime;

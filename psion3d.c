@@ -13,6 +13,7 @@
 #include "ui.h"
 #include "ui_psion.h"
 #include "hud.h"
+#include "bench.h"
 
 /*  Were in psion3d.h until it was made SDK-free; only this file reads them. */
 static const P_RECT gameWinRect = {{0,0}, {240,160}};
@@ -116,7 +117,7 @@ static u16 runTicks(u16 gameTime)
 	   menu window comes up over the game instead of the frame going out. */
 	if(gameMode != GAME_MODE_PLAYING)
 		menuWindowShow(TRUE);
-	else
+	else if(!BENCH_SKIP(BENCH_NO_BLIT))
 		updateScreen();
 
 	return gameTime;

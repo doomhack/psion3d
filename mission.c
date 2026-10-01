@@ -6,7 +6,7 @@
 #include "cheat.h"
 
 u8 missionCount = 0;
-u8 difficulty = DIFFICULTY_SENIOR;
+u8 difficulty = DIFFICULTY_RECRUIT;
 u8 objectiveState[MAP_MAX_OBJECTIVES];
 u8 missionIndex = MISSION_NONE;
 u16 missionTicks = 0;
@@ -33,7 +33,7 @@ static HANDLE missionSeg = 0;
 
 static const char *difficultyNames[DIFFICULTY_COUNT] =
 {
-	"Agent", "Senior", "Elite"
+	"Recruit", "Agent", "Elite"
 };
 
 static long recOfs(const u8 mission, const u16 field)
@@ -258,37 +258,33 @@ void missionMapPos(const u8 mission, u16 *x, u16 *y)
 
 const char *difficultyName(const u8 d)
 {
-	return difficultyNames[d < DIFFICULTY_COUNT ? d : DIFFICULTY_SENIOR];
+	return difficultyNames[d < DIFFICULTY_COUNT ? d : DIFFICULTY_RECRUIT];
 }
 
-/*  Agent takes a quarter off both, Elite adds a quarter. First guesses:
-    BALANCE.md tunes Senior, and these are ratios to it. */
-u8 difficultyDamage(const u8 damage)
+/*  Thirds of the enemyStats[] value, per difficulty. Recruit plays the table
+    as written - BALANCE.md tunes Recruit - and the other two are ratios to
+    it. Agent and Elite are first guesses that keep the old 3 : 4 : 5 spacing. */
+static const u8 difficultyScale[DIFFICULTY_COUNT] =
 {
-	u16 v = damage;
+	3, 4, 5
+};
 
-	if (difficulty == DIFFICULTY_AGENT)
-		v = (u16)(v * 3 / 4);
-	else if (difficulty == DIFFICULTY_ELITE)
-		v = (u16)(v * 5 / 4);
+static u8 difficultyScaled(const u8 value)
+{
+	u16 v = (u16)(value * difficultyScale[difficulty] / 3);
 
 	if (v > 255)
 		v = 255;
 
 	return (u8)v;
+}
+
+u8 difficultyDamage(const u8 damage)
+{
+	return difficultyScaled(damage);
 }
 
 u8 difficultyAccuracy(const u8 accuracy)
 {
-	u16 v = accuracy;
-
-	if (difficulty == DIFFICULTY_AGENT)
-		v = (u16)(v * 3 / 4);
-	else if (difficulty == DIFFICULTY_ELITE)
-		v = (u16)(v * 5 / 4);
-
-	if (v > 255)
-		v = 255;
-
-	return (u8)v;
+	return difficultyScaled(accuracy);
 }

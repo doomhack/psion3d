@@ -54,6 +54,7 @@ typedef struct wallhit_t
 	u8 mapX; //Cell coordinates, for wall types whose look depends on their neighbours.
 	u8 mapY;
 	u8 side;
+	u8 pad;	/* to 14 bytes: at 13, every other hit's words sat on odd addresses, a bus cycle more each on the V30 */
 } wallhit_t;
 
 /* True when the column's footprint on the face overlaps the wallX range

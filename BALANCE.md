@@ -182,8 +182,10 @@ how hard a hit lands — not by whether rounds land.
 - Enemies give up the chase beyond 14 cells (28 m). Now that doors and arches no longer stop a
   pursuit, this leash is the only thing that ends one.
 - **Difficulty** scales Dmg and Hit chance at the shot (`difficultyDamage` / `difficultyAccuracy`
-  in `mission.c`) and nothing else: Agent x3/4, Senior x1, Elite x5/4. The table above is Senior.
-  The other two multipliers are first guesses and have not been played.
+  in `mission.c`) and nothing else: Recruit x1, Agent x4/3, Elite x5/3 (`difficultyScale[]`, in
+  thirds). The table above, and every danger figure below, is Recruit - the Goldeneye Agent
+  anchor, which is that game's easiest setting too. The Agent and Elite multipliers are first
+  guesses and have not been played.
 
 ### Movement and sight
 
@@ -238,7 +240,9 @@ a long stream from where it stands.
 
 ### Danger
 
-Player at 100 HP, standing still, one enemy in its band with line of sight. "Hit every" is the
+Player at 100 HP, standing still, one enemy in its band with line of sight, on Recruit. Agent
+scales damage and hit chance by 4/3 each, so expected DPS by ~1.8x and time to kill to ~0.56x;
+Elite by 5/3 each, ~2.8x DPS and ~0.36x time to kill. "Hit every" is the
 figure that governs how dangerous an enemy *feels*; time to kill is what governs whether you live.
 
 | Type | expected DPS | hit every | **TTK, one** | two | vs Goldeneye Agent |

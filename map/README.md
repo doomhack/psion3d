@@ -45,6 +45,11 @@ Find the hidden lab in the basement below the cold store.   ; the rest is its br
 - `[MAP]` is exactly 64 rows of 64 cells, as before: every byte that is not a
   line ending is a cell, so no trailing spaces there. The cell characters are
   decoded by `getCellEncoding()` in [game_map.c](../game_map.c).
+- Every cell on the grid's edge - the first and last row, the first and last
+  column - must be a solid wall: `X P V ! * : # U`. Not a window, door, arch,
+  bars, shootable wall, low wall or pillar, which the ray sees past. The ray
+  caster walks `map[][]` without a bounds check (`ddaasm.a`), so the load
+  fails on an open edge rather than let a ray run off the grid.
 - A line starting with `;` is a comment anywhere, and blank lines are
   skipped. Outside `[MAP]`, leading and trailing whitespace is dropped too.
 - `[LEVEL]` lines are `key = value`. A `;` after the value starts a comment,

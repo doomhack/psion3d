@@ -1410,6 +1410,104 @@ static void drawOptions(void)
 	footerItem(&x, FOOTER_Y, ARROWS_NONE, "Esc Back");
 }
 
+#ifdef BENCH_PROFILE
+
+/*  The profiling build's benchmark results: a row per station and a column
+    per part of the frame (bench.h), in milliseconds, with the mean of the
+    stations measured on the last row. No footer, to make room for that
+    row; Enter and Esc still do what the footer says on the fps screen. */
+#define PROFILE_NAME_W 100
+#define PROFILE_COL_W 42
+#define PROFILE_ROW_PITCH 15
+
+static const char * const profileHead[BENCH_PARTS] =
+{
+	"Frame", "Rays", "Walls", "Sprite", "Gun", "Clear", "Blit", "Other", "Resid"
+};
+
+/*  "-0.4" from tenths. */
+static void formatMs10(char *dst, const s16 ms10)
+{
+	u16 m = (u16)ms10;
+
+	if(ms10 < 0)
+	{
+		*dst++ = '-';
+		m = (u16)-ms10;
+	}
+
+	p_atos(dst, "%d.%d", (u16)(m / 10), (u16)(m % 10));
+}
+
+static void profileRow(const s16 y, const char *name, const s16 *ms10)
+{
+	u8 part;
+
+	textFit(6, rowMid(y, PROFILE_ROW_PITCH), UI_FONT_BODY, FALSE, name, PROFILE_NAME_W - 6);
+
+	for(part = 0; part < BENCH_PARTS; part++)
+	{
+		formatMs10(menuStr, ms10[part]);
+		textRight((s16)(PROFILE_NAME_W + (part + 1) * PROFILE_COL_W), rowMid(y, PROFILE_ROW_PITCH),
+			part == BENCH_PART_FRAME ? UI_FONT_BODY_BOLD : UI_FONT_BODY, FALSE, menuStr);
+	}
+}
+
+static void drawBench(void)
+{
+	s16 ms10[BENCH_PARTS];
+	s16 sum[BENCH_PARTS];
+	s16 i, y;
+	u8 part;
+
+	titleBar("PROFILE", "ms per frame");
+
+	y = TITLE_H + 1;
+
+	for(part = 0; part < BENCH_PARTS; part++)
+	{
+		textRight((s16)(PROFILE_NAME_W + (part + 1) * PROFILE_COL_W), rowMid(y, PROFILE_ROW_PITCH),
+			UI_FONT_BODY, FALSE, profileHead[part]);
+		sum[part] = 0;
+	}
+
+	uiLine(0, (s16)(y + PROFILE_ROW_PITCH), UI_W - 1, (s16)(y + PROFILE_ROW_PITCH));
+
+	for(i = 0; i < mapInfo.stationCount; i++)
+	{
+		y = (s16)(TITLE_H + 2 + (i + 1) * PROFILE_ROW_PITCH);
+		mapTextCopy(mapInfo.stations[i].nameOfs, menuStr2, MENU_STR_MAX);
+
+		if(i >= benchDone)
+		{
+			textFit(6, rowMid(y, PROFILE_ROW_PITCH), UI_FONT_BODY, FALSE, menuStr2, PROFILE_NAME_W - 6);
+			textRight((s16)(PROFILE_NAME_W + PROFILE_COL_W), rowMid(y, PROFILE_ROW_PITCH), UI_FONT_BODY_BOLD, FALSE, "-");
+			continue;
+		}
+
+		for(part = 0; part < BENCH_PARTS; part++)
+		{
+			ms10[part] = benchPartMs10((u8)i, part);
+			sum[part] += ms10[part];
+		}
+
+		profileRow(y, menuStr2, ms10);
+	}
+
+	if(benchDone == 0)
+		return;
+
+	y = (s16)(TITLE_H + 2 + (mapInfo.stationCount + 1) * PROFILE_ROW_PITCH);
+	uiLine(0, (s16)(y - 1), UI_W - 1, (s16)(y - 1));
+
+	for(part = 0; part < BENCH_PARTS; part++)
+		ms10[part] = (s16)(sum[part] / (s16)benchDone);
+
+	profileRow(y, "Mean", ms10);
+}
+
+#else
+
 /*  "19.7" from tenths. */
 static void formatFps10(char *dst, const u16 fps10)
 {
@@ -1458,6 +1556,8 @@ static void drawBench(void)
 	footerItem(&x, FOOTER_Y, ARROWS_NONE, "Enter Again");
 	footerItem(&x, FOOTER_Y, ARROWS_NONE, "Esc Back");
 }
+
+#endif
 
 /*  The cheats: a scrolling list, each row the name and a box filled when the
     cheat is on (the objective mark), and the highlighted cheat's text in the

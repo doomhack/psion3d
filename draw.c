@@ -9,6 +9,8 @@
 #include "walls.h"
 #include "draw.h"
 #include "cheat.h"
+#include "bench.h"
+#include "ddaasm.h"
 
 typedef struct markedsprite_t
 {
@@ -645,6 +647,10 @@ static u16 boxHit(const u16 sidedx, const u16 sidedy, const u16 deltax, const u1
 	return TRUE;
 }
 
+/* The walker for a ray's direction, picked once per ray: bit 0 of the index
+   is stepping -x, bit 1 stepping -y. */
+static const ddawalk_fn ddaWalkers[4] = { ddaWalk0, ddaWalk1, ddaWalk2, ddaWalk3 };
+
 void draw()
 {
 	u16 i;
@@ -657,6 +663,8 @@ void draw()
 	const f16 f_viewCos = fpcos(player.pos.angle);
 	const f16 f_viewSin = fpsin(player.pos.angle);
 	const s16 baseIdx = trigidx(player.pos.angle);
+	const u16* startCell;
+	f16 f_toLowX, f_toHighX, f_toLowY, f_toHighY;
 
 	if(!recipReady)
 	{
@@ -668,28 +676,43 @@ void draw()
 		recipReady = TRUE;
 	}
 
+	/* The same for every ray of the frame, so worked out once rather than
+	   sixty times: the player's cell, where every ray's walk starts, and the
+	   distance from the player to each of its four edges, which the side
+	   distances below are scaled from. */
+	{
+		const s16 cellX = fp2int(player.pos.x);
+		const s16 cellY = fp2int(player.pos.y);
+
+		startCell = &map[cellY][cellX];
+		f_toLowX = player.pos.x - int2fp(cellX);
+		f_toHighX = int2fp(cellX + 1) - player.pos.x;
+		f_toLowY = player.pos.y - int2fp(cellY);
+		f_toHighY = int2fp(cellY + 1) - player.pos.y;
+	}
+
 	for(i = 0; i < 60; i++)
 	{
 		wallhit_t wallhits[3];
-	
-		s16 mapx = fp2int(player.pos.x);
-		s16 mapy = fp2int(player.pos.y);
+
+		/* The cell at each stop, rebuilt from the walk's pointer there. */
+		s16 mapx, mapy;
 
 		s16 stepx, stepy;
+		u16 quadrant;
 
-		/* Unsigned so the accumulators cannot wrap. A near axis-parallel ray
-		   has a delta of up to FP_MAX, which overflows s16 the first time it
-		   is added to a side distance the ray has already carried across the
-		   map; the wrapped value then stays below the other axis for the rest
-		   of the cast and the ray runs off sideways. */
-		u16 sidedx, sidedy;
-		
 		u16 side;
 		
-		u16 solid, hits;
+		u16 solid;
+
+		/* The hit being filled in: a pointer walked along wallhits rather than
+		   an index, which cost a multiply by the element size at every use. */
+		wallhit_t* wh;
 
 		boxhit_t box;
-	
+		ddaray_t ray;
+		ddawalk_fn walk;	/* this ray's quadrant, chosen once */
+
 		const s16 rayIdx = baseIdx + rayIdxOffset[i];
 		const u16 cosIdx = (u16)((rayIdx + TRIG_COS_OFFSET) & TRIG_TABLE_MASK);
 		const u16 sinIdx = (u16)(rayIdx & TRIG_TABLE_MASK);
@@ -703,26 +726,36 @@ void draw()
 		f_wallDepth[i] = FP_MAX;
 
 
+		/* The side distances go straight into the ray. They are unsigned so
+		   the accumulators cannot wrap: a near axis-parallel ray has a delta
+		   of up to FP_MAX, which overflows s16 the first time it is added to a
+		   side distance the ray has already carried across the map, and the
+		   wrapped value then stays below the other axis for the rest of the
+		   cast and the ray runs off sideways. The quadrant is the ddaWalkers index,
+		   set in the branches that already know the signs. */
 		if(f_dx < 0)
 		{
 			stepx = -1;
-			sidedx = fpmul(player.pos.x - int2fp(mapx), (f16)deltax);
+			ray.sidedx = (u16)fpmul(f_toLowX, (f16)deltax);
+			quadrant = 1;
 		}
 		else
 		{
 			stepx = 1;
-			sidedx = fpmul(int2fp(mapx + 1) - player.pos.x, (f16)deltax);
+			ray.sidedx = (u16)fpmul(f_toHighX, (f16)deltax);
+			quadrant = 0;
 		}
 
 		if(f_dy < 0)
 		{
 			stepy = -1;
-			sidedy = fpmul(player.pos.y - int2fp(mapy), (f16)deltay);
+			ray.sidedy = (u16)fpmul(f_toLowY, (f16)deltay);
+			quadrant |= 2;
 		}
 		else
 		{
 			stepy = 1;
-			sidedy = fpmul(int2fp(mapy + 1) - player.pos.y, (f16)deltay);
+			ray.sidedy = (u16)fpmul(f_toHighY, (f16)deltay);
 		}
 
 		/* A ray straight down an axis never crosses a boundary on the other one,
@@ -733,13 +766,18 @@ void draw()
 		   Say never directly. Kept out of the branches above so their code
 		   generation, and the register pressure around fpmul, is untouched. */
 		if(f_dx == 0)
-			sidedx = DDA_NEVER;
+			ray.sidedx = DDA_NEVER;
 
 		if(f_dy == 0)
-			sidedy = DDA_NEVER;
-		
+			ray.sidedy = DDA_NEVER;
+
+		ray.cell = startCell;
+		ray.deltax = deltax;
+		ray.deltay = deltay;
+		walk = ddaWalkers[quadrant];
+
 		solid = 0;
-		hits = 0;
+		wh = wallhits;
 		
 		do
 		{
@@ -754,29 +792,27 @@ void draw()
 			{
 				do
 				{
-					if(sidedx < sidedy)
-					{
-						sidedx = sidedx + deltax;
-						mapx += stepx;
-						side = 0;
-					}
-					else
-					{
-						sidedy = sidedy + deltay;
-						mapy += stepy;
-						side = 1;
-					}
+					u16 ofs;
 
-					hitcell = mapCell(mapx, mapy);
-					hit = isWall(hitcell);
+					side = walk(&ray);
+					hitcell = *ray.cell;
+					hit = hitcell & MAP_MASK_WALL;
+
+					/* The stop's coordinates, from its place in map[][]: a byte
+					   offset, two bytes a cell and MAP_X (64) cells a row, which
+					   spares the pointer subtraction its two halving shifts. Only
+					   at stops, never per step. */
+					ofs = (u16)((const u8*)ray.cell - (const u8*)&map[0][0]);
+					mapx = (s16)((ofs >> 1) & (MAP_X - 1));
+					mapy = (s16)(ofs >> 7);
 
 					/* Sprites are gathered from every cell the ray can see into, which
 					   is every cell that is not solid - an enemy standing in an archway
 					   or doorway is in a wall cell and used to be skipped here, so it
 					   simply was not drawn. Same single mask test as the old hit == 0. */
-					if(!isSolid(hitcell))
+					if(!(hitcell & MAP_MASK_SOLID))
 					{
-						if(isSprite(hitcell) && !isMarked(hitcell) &&
+						if((hitcell & MAP_MASK_SPRITE) && !(hitcell & MAP_MASK_MARKED) &&
 							spritesMarked < MAX_VISIBLE_SPRITES)
 						{
 							markSprite(mapx, mapy);
@@ -825,10 +861,12 @@ void draw()
 				/* A pillar cell's wall is the post in its middle, not its faces:
 				   hit 2 is a hit on the post, a miss sends the ray on. Tested
 				   here, once per wall hit, and not in the step loop above: a
-				   compare per DDA step measured a frame a second. */
-				if(mapCellType(hitcell) == WALL_TYPE_PILLAR)
+				   compare per DDA step measured a frame a second. The type is
+				   compared in place, not through mapCellType(), which TopSpeed
+				   calls rather than inlining and which shifts the type down first. */
+				if((hitcell & MAP_BLOCK_TYPE_MASK) == SET_CELL_TYPE_ID(WALL_TYPE_PILLAR))
 				{
-					if(!boxHit(sidedx, sidedy, deltax, deltay, stepx, stepy, f_dx, f_dy,
+					if(!boxHit(ray.sidedx, ray.sidedy, deltax, deltay, stepx, stepy, f_dx, f_dy,
 						mapx, mapy, PILLAR_LO, PILLAR_HI, PILLAR_LO, PILLAR_HI, &box))
 						continue;
 
@@ -838,12 +876,12 @@ void draw()
 				break;
 			}
 			
-			solid = isSolid(hitcell) || hits >= 2 || hit == 2;
+			solid = (hitcell & MAP_MASK_SOLID) || wh >= &wallhits[2] || hit == 2;
 			
-			wallhits[hits].cell = hitcell;
-			wallhits[hits].mapX = (u8)mapx;
-			wallhits[hits].mapY = (u8)mapy;
-			wallhits[hits].side = side;
+			wh->cell = hitcell;
+			wh->mapX = (u8)mapx;
+			wh->mapY = (u8)mapy;
+			wh->side = side;
 
 			/* The side distance was advanced past the boundary just crossed, so
 			   subtracting one delta recovers the distance to it, without the
@@ -858,7 +896,7 @@ void draw()
 				   is scaled with it. */
 				f_dist = box.f_dist;
 				side = box.side;
-				wallhits[hits].side = (u8)side;
+				wh->side = (u8)side;
 
 				if(side == 0)
 				{
@@ -875,14 +913,14 @@ void draw()
 			}
 			else if(side == 0)
 			{
-				f_dist = (f16)(sidedx - deltax);
+				f_dist = (f16)(ray.sidedx - deltax);
 
 				f_wallx = player.pos.y + fpmul(f_dist, f_dy);
 				delta = deltax;
 			}
 			else
 			{
-				f_dist = (f16)(sidedy - deltay);
+				f_dist = (f16)(ray.sidedy - deltay);
 
 				f_wallx = player.pos.x + fpmul(f_dist, f_dx);
 				delta = deltay;
@@ -919,22 +957,32 @@ void draw()
 			if((u16)f_step >= 16384)
 				f_step = 16384;
 
-			wallhits[hits].wallHeight = WALL_HEIGHT_NUM / f_dist;
-			wallhits[hits].f_wallDist = f_dist;
-			wallhits[hits].f_wallX = f_wallx - int2fp(fp2int(f_wallx));
-			wallhits[hits].f_wallXHalf = (s16)((((u16)f_step >> 4) * rayHalfWidth[i]) >> 8) + (f_step >> 7) + 1;
+			wh->wallHeight = WALL_HEIGHT_NUM / f_dist;
+			wh->f_wallDist = f_dist;
+			wh->f_wallX = f_wallx & 0xff;	/* f_wallx - int2fp(fp2int(f_wallx)), which is its low byte */
+			wh->f_wallXHalf = (s16)((((u16)f_step >> 4) * rayHalfWidth[i]) >> 8) + (f_step >> 7) + 1;
 			
-			hits++;
+			wh++;
 			
 		} while(solid == 0);
 		
 		
-		while(hits > 0)
+		while(wh > wallhits)
 		{
-			hits--;
+			wh--;
 
-			if(drawWall(i << 2, &wallhits[hits]))
-				f_wallDepth[i] = wallhits[hits].f_wallDist;
+#ifdef BENCH_PROFILE
+			/* The profiling build's switches, bench.h. In #ifdef rather than
+			   behind a constant: TopSpeed does not emit `if(0)` away cleanly. */
+			if(BENCH_SKIP(BENCH_NO_WALLS))
+				continue;
+
+			if(BENCH_SKIP(BENCH_WALLS_TWICE))
+				drawWall(i << 2, wh);
+#endif
+
+			if(drawWall(i << 2, wh))
+				f_wallDepth[i] = wh->f_wallDist;
 		}
 	}
 	
@@ -942,6 +990,11 @@ void draw()
 	resolvePlayerShot(spriteHits, spritesHit, f_wallDepth, baseIdx);
 
 	visibleSprites = spritesHit;
+
+#ifdef BENCH_PROFILE
+	if(BENCH_SKIP(BENCH_NO_SPRITES))
+		spritesHit = 0;
+#endif
 
 	while(spritesHit > 0)
 	{
@@ -962,6 +1015,9 @@ void draw()
 	}
 
 	//Draw player weapon, lowered by the switch animation and the firing recoil.
+#ifdef BENCH_PROFILE
+	if(!BENCH_SKIP(BENCH_NO_WEAPON))
+#endif
 	drawSprite(player.currentWeapon->spanX,
 		(u8)(player.currentWeapon->y + player.weaponState.switchOffset
 			+ player.weaponState.recoilOffset),

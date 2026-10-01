@@ -7,3 +7,5 @@ pc/build/
 *.user
 .verify/
 pc/.qtcreator/CMakeLists.txt.user
+profbld/
+pc/build-profile/

@@ -54,9 +54,9 @@ together:
   title, location and `mappos` per mission in a far segment. So adding a
   level to the list is adding the file (task 16). `loadMapFile` reads the
   file in 64 byte chunks now; it was a `p_read` per byte.
-- **Difficulty** (task 15): Agent / Senior / Elite on the select screen,
-  applied in `enemyShootPlayer` to damage and accuracy (x3/4, x1, x5/4;
-  first guesses, see BALANCE.md). Not saved anywhere yet.
+- **Difficulty** (task 15): Recruit / Agent / Elite on the select screen,
+  applied in `enemyShootPlayer` to damage and accuracy (x1, x4/3, x5/3;
+  Recruit is the tuned table, the other two first guesses, see BALANCE.md). Not saved anywhere yet.
 - **Pause Map** (task 7): [automap.c](automap.c) renders 26 rows of the
   level at 4x4 pixels a cell into `screenBm` with the `bitmap.c` primitives
   and `uiBlitMap` copies it into the menu window (on the device through the
@@ -371,13 +371,14 @@ asset lists driven off the same `mapId` switch that picks the wall style.
 - [x] Selectable difficulty.
 - [ ] Tune the multipliers by feel; persist the choice once there is a save file.
 
-Done with task 1: Agent / Senior / Elite, chosen with left/right on Mission
+Done with task 1: Recruit / Agent / Elite, chosen with left/right on Mission
 Select, held in `difficulty` ([mission.c](mission.c)) and applied at the
 shot in `enemyShootPlayer` through `difficultyDamage()` and
-`difficultyAccuracy()` - x3/4, x1 and x5/4 on the two numbers BALANCE.md
-names as the threat rather than the archetype. Senior is the tuned baseline
-and the default; the other two are untested first guesses. The setting
-resets to Senior every launch.
+`difficultyAccuracy()` - x1, x4/3 and x5/3 (`difficultyScale[]`, in thirds)
+on the two numbers BALANCE.md names as the threat rather than the archetype.
+Recruit plays the `enemyStats[]` table as written, so BALANCE.md tunes
+Recruit; Agent and Elite are untested first guesses scaled from it. Recruit
+is the default, and the setting resets to it every launch.
 
 ### 16. More levels
 - [ ] Levels beyond `map/map1.map`.
@@ -557,6 +558,120 @@ noclip (the DDA from inside a solid cell hits at distance 0 and
 full automap reveal, enemy positions on the automap, wide-angle lens, low
 camera, instant weapon switch, one-hit `damageEnemy` as the alternative
 one-shot.
+
+### 25. Security cameras
+- [ ] Cameras that watch for the player and raise an alarm after a grace time.
+- [ ] HUD cue while a camera has the player in view.
+- [ ] Shot cameras break and stop watching.
+- [ ] `LEVEL_EVENT_ALARM`, so each level scripts what an alarm does.
+- [ ] Camera objectives on a real level: "Destroy all cameras", "Do not trip
+      the alarm".
+
+Designed 2026-09-28. Cameras become gameplay rather than set dressing: being
+seen for too long trips an alarm, and the player answers the cue by getting
+out of view or shooting the camera before it fires.
+
+**Agreed with the user:**
+
+- **No facing.** Cameras go in room corners, so direction does not matter: a
+  camera sees the player whenever the line from the camera cell to the
+  player cell is open. Nothing to store in the cell, no cone maths.
+- **Detection is not instant.** Being in view for longer than X seconds is
+  the seen event. The player gets a cue on first sight and has that long to
+  break line of sight or shoot the camera. This is the camera version of the
+  enemy wind-up and keeps the *no forced damage* rule (task 22): careful play
+  must always be able to avoid an alarm.
+
+**Proposed, confirm by feel:**
+
+- **Per-camera meter, drained rather than reset.** Each camera fills a meter
+  one step per tick while it can see the player and drains while it cannot.
+  Draining (at the fill rate, or slower) means repeated short peeks add up
+  and a long enough hide clears it - the same shape as enemy aim memory. A
+  hard reset on losing sight would allow endless peeking.
+- **X by difficulty:** Recruit 3s (96 ticks), Agent 2s (64), Elite 1.25s
+  (40). The floor is the time to notice the cue, find a camera that may be
+  behind the player, turn, aim and fire one round - longer than the 0.5-1.0s
+  enemy wind-ups because of the finding. `difficultyScale[]` multiplies, so
+  this wants its own small table rather than the existing scaling.
+- **Once per camera.** A camera that has fired goes quiet. The level script
+  can count alarms if a second one should be worse.
+- **Shooting cancels.** A hit clears the camera's meter the same tick.
+- **Invisibility cheat blinds cameras** as it blinds enemies. The enemy
+  speed cheats do not touch them.
+
+**How it would be put together:**
+
+- **Sight.** `enemyCanSeePlayer()` in [enemy.c](enemy.c) is a Bresenham walk
+  from a cell to `playerCellX/Y` through `cellBlocksSight()`, and uses
+  nothing from the enemy but its cell. Pull the body out as
+  `canSeePlayerFrom(x, y)` and have the enemy version call it, so cameras see
+  through exactly what enemies and the renderer do: windows, bars, arches,
+  low walls, pillars and an open door. Expect the IMG to change on that
+  refactor alone - TopSpeed's output moves on small source changes - so
+  check the goldens hold instead.
+- **Cameras see out of their room** through those same openings - a corner
+  camera will catch the player in the corridor through a doorway. Either
+  place cameras with that in mind, or add a Manhattan range cap
+  (`CAMERA_RANGE`) that keeps them to their room and also skips the walk for
+  far cameras. Decide when the first level is authored.
+- **Cover.** Low walls and pillars do not block sight, so in a camera room
+  only solid walls and the room's shape hide the player. Level design, not
+  code.
+- **Table.** A camera is decoration 0 (`1` in the map, task 4). Scan the map
+  at load into a small table - x, y, meter, flags, four bytes each, capped at
+  eight - so the tick does not search the grid. About 32 bytes of DGROUP plus
+  the counter for the HUD; check against `MEMORY_BUDGET.md`.
+- **Tick.** `cameraTick()` in a new portable `camera.c` (add it to
+  `unnamed.pr` and `GAME_SOURCES`), called in `gameRunTicks()` after
+  `runAI()` so `playerCellX/Y` are fresh. The benchmark branch returns before
+  that loop, so cameras on `map97` stay frozen with no extra code. Cost is one
+  Bresenham walk per camera in range per tick; it could run on alternate
+  ticks, since the meter hides the delay.
+- **Alarm.** A new `LEVEL_EVENT_ALARM` (item = camera index, x, y = camera
+  cell) when a meter fills. The default, when the level's handler returns
+  FALSE, is `alertEnemies()` at the player's cell - the camera reports where
+  the player is, not where it is. Scripts can instead fail a stealth
+  objective, lock doors (the reverse of `unlockDoor`), start an escape timer,
+  or wake reinforcements. Reinforcements are cheapest as dormant enemies
+  placed in a closed room and woken, rather than spawned.
+- **Breaking.** Shooting a camera already raises `LEVEL_EVENT_SHOOT_DECOR`.
+  Before the level event, mark the table entry dead and `updateCell` the cell
+  to a broken-camera frame - reserve decoration 2 (`dec2`, map char `3`) for
+  it, which also lets a map place pre-broken cameras. "Destroy all cameras"
+  is then a script counting those hits against the camera count.
+- **Cues.** Cameras see all round, so the player is often spotted by one
+  behind them or off screen, and sound (task 12) does not exist yet - the
+  cue has to be on the HUD. Show the fullest meter as one HUD cell, redrawn
+  only when it crosses a step (eight steps, say), never by invalidating the
+  window: per-cell draws measured 17 -> 16fps while firing, invalidation
+  17 -> 9 (task 8). A second cue on the camera itself - swap its cell to a
+  "tracking" frame while its meter is filling - tells the player *which*
+  camera to shoot. That is an `updateCell` on a state change, not a per-frame
+  cost, and wants one more reserved decoration frame.
+- **Shooting it means being seen.** Sight is symmetric, so the player cannot
+  shoot a camera it cannot see them from. X must cover stepping into the
+  doorway and firing, or "destroy all cameras" and "never trip the alarm"
+  cannot both be met on one level.
+
+**Checking.** A PC host golden per state: camera in view with the HUD cue
+part-filled, the broken frame, and the frame after the alarm (enemies
+searching). The camera tick is per-tick game code, not renderer, but
+measure on the device with the HUD fps from a fixed view in a camera room -
+the benchmark cannot see it, since the world is frozen there.
+
+**Follow-ups this opens** (separate tasks when picked up):
+
+- **Guard view cones.** Enemies see in all directions today
+  (`enemyCanSeePlayer` has no facing). Until idle and wandering guards have a
+  forward cone, stealth works against cameras only.
+- **Security console:** use a computer desk (`LEVEL_EVENT_USE_DECOR`) to shut
+  the cameras down - the quiet alternative to shooting them.
+- **Per-weapon noise:** a silenced weapon with a smaller `alertEnemies`
+  radius, which is what makes shooting a camera quietly a real choice.
+- **Alarm panels:** a guard who spots the player runs for a panel instead of
+  fighting; kill them first or the alarm fires.
+- **Escape timer** after an alarm, judged through `LEVEL_EVENT_EXIT`.
 
 ## Development infrastructure
 
@@ -808,6 +923,113 @@ or slowly approaching enemy costs only its blit. That is a redesign with a
 memory problem (a decoded 60 px frame is ~1.8 KB, DGROUP has ~3.5 KB free,
 far memory has 400 KB but costs 0.35 ms per KB to bring near) and wants
 its own costing before anything is built.
+
+### 26. Subsystem profile
+- [x] A profiling build of the benchmark that splits each station's frame into its parts (2026-09-30).
+- [x] Run it on the device and replace the 2026-09-04 budget table in `CLAUDE.md` with its numbers (2026-09-30).
+- [x] Count units per station on the PC host and fit the profile to them (2026-09-30, temporary counters, not kept).
+- [x] Find out why Decorations is 80.2ms in the profiling build and 88.5ms in the normal one: it was not; the photo's 88.2 was misread as 80.2 (see below).
+- [x] Profile again after the DDA work (2026-09-30).
+- [x] `bmFillPattern4` in assembler (2026-10-01), the dither span (Openings 100 calls / 599 rows, Corridor 49 / 200, Detail walls 18 / 104). Its C row loop was twelve instructions with the row counter and the mask kept on the stack, three memory accesses a row besides the pixel byte. Now in [bmasm.a](bmasm.a) with the fill's shape: the C clipping in registers, then a jump into 160 unrolled rows of `mov al,[bx][d]` / `and al,ch` / `or al,dl` (or `dh`) / `mov [bx][d],al`, 12 bytes an entry, the keep mask in CH and the two alternating pattern bytes fixed to even rows (DL, the first row's) and odd rows (DH), so nothing toggles at run time. The table's fixup (`add si,B1F3H`) and its 12-byte entries (1,908 bytes first to last) checked in the linked image. The simulator now runs all three spans, 3.73M cases, 0 mismatches; four planted pattern bugs caught, one a single row given the wrong pattern register. (The simulator itself first reported 279k false mismatches: it modelled every table as 4 bytes an instruction, and now scales each table by its real entry size and fails on a jump into the middle of an entry.) Code +1,897 B (`_TEXT` 49,052 of 64K), DGROUP unchanged, frames unchanged. Estimate: a row ~5-6us in C to ~1.5-2us, but the entry is ~9 instructions longer than C's, so Openings about -2ms, Corridor about -0.5ms, the rest within noise. Measured on device: Corridor 31.0 -> 31.6, Empty room 38.8 -> 38.6, Detail walls 31.4 -> 31.8, Openings 17.9 -> 18.6 (2.1ms, estimate ~2), Enemies 17.0 -> 16.7, Decorations 15.1 -> 14.8, Crowd 8.8 -> 8.6, average 22.8 -> 22.9. The three sprite stations read 1.1-2.6ms slower, though they draw 0-3 dither rows and no sprite code changed. Not layout: everything after `bitmap.c` moved 140 bytes, even, so every loop keeps its word alignment. Read against the build before the span work, the two runs together put Enemies / Decorations / Crowd at 16.7 / 14.8 / 8.6 where the counted rows predict ~16.8 / 14.95 / 8.75: the span run read high on those stations (it gained twice what their rows explained), and this one is back on the line. So the 0.3 fps noise floor, set on the ~22 fps stations, is 1-1.3ms on a 15-17 fps one, and a lone sprite-station reading should be repeated before it is acted on.
+- [x] Wall span rows (2026-10-01). Counted on the PC host per station (calls / rows): `bmFillRect4` carries it - Openings 624 / 4158, Corridor 230 / 3977 - then `bmClearRect4` (Openings 127 / 2710), `bmFillPattern4` small (Openings 100 / 599), `bmFillCol1` unused on the benchmark. Of the 24us a span call, the C primitive's entry is ~28 instructions (~15us); the rest is the wall style deciding the span. Its row loop is five instructions (`or`, `add`, `dec`, a redundant `test`, `jne`), the measured 2us a row. `bmFillRect4` and `bmClearRect4` are now [bmasm.a](bmasm.a): the same clipping in registers, then a jump into a 160-entry unrolled run of `or [bx][disp],dl` (`and` for the clear), one instruction a row, entered so exactly `h` rows run. The row pointer is biased by 128 so every entry takes the 16-bit displacement form and is 4 bytes; the table offsets were checked in the linked image (`add ax,ACB5H` is where the fill table lands, 636 bytes first to last entry). Checked by interpreting `bmasm.a`'s text against the C (now [pc/src/bmasm_pc.c](pc/src/bmasm_pc.c)) over 2.49M x / y / h cases through every clipping edge, 1.42M of them drawing: 0 mismatches, nothing written outside the buffer, SI and DI kept; four planted bugs caught, one of them a single table entry's displacement. One difference by construction: C's `y + h > 160` overflows s16 for y above ~2000 with a huge h, where it would have written past the buffer; the assembler compares `h` with `160 - y` and draws nothing. Code +1,286 B (47,155 of 64K), DGROUP unchanged, frames unchanged. Estimate, rows 2us -> ~0.7-0.9us: Openings -7.5 to -9ms, Corridor -4.5 to -5ms, Detail walls ~-2.5ms, sprite stations under 1ms. Measured on device: Corridor 28.0 -> 31.0, Empty room 38.2 -> 38.8, Detail walls 29.8 -> 31.4, Openings 16.2 -> 17.9, Enemies 16.6 -> 17.0, Decorations 14.8 -> 15.1, Crowd 8.7 -> 8.8, average 21.7 -> 22.8. Over the counted fill and clear rows the three wall stations agree on 0.85-0.87us saved a row (11.0ms over 12,882 rows), so an unrolled row costs ~1.15us (~31 clocks for the read-modify-write), not the 0.7-0.9 estimated: the saving came in ~25% under. The sprite stations read more than their rows explain, inside their noise. Left in C: `bmFillPattern4`, and the wall styles' own per-span work.
+- [x] 186 instruction set (2026-10-01). `#pragma optimize(cpu=>186)` is refused ("Illegal pragma value for cpu"); TopSpeed's targets go 86 -> 286, so `unnamed.pr` now has `cpu=>286` after `#model`, overriding the SDK's EPOC `cpu=>86`. Safe on the V30 as TopSpeed uses it: every C module's `tsda` listing (all 23) has no `0F`-prefixed opcode, no `arpl` and no 286 system instruction, the only things in the 286 set the V30 lacks. But it emits just one new form: `push` of an immediate, 58 sites (48 short), `mov ax,n; push ax` becoming `push n`. No shift by an immediate (it still loads `cl`, 163 sites), no `enter`/`leave`, no `imul` by an immediate. Code -228 B, DGROUP unchanged, frames unchanged (the PC build does not see it). The pushes are in the menus (25) and HUD (11); the render has four on the pillar `boxHit` call in `draw()` and a handful in the wall styles and `bitmap.c`, so no measurable frame change was expected. Measured on device: Corridor 27.4 -> 28.0, Empty room 38.2 -> 38.2, Detail walls 29.6 -> 29.8, Openings 16.0 -> 16.2, Enemies 16.4 -> 16.6, Decorations 14.6 -> 14.8, Crowd 8.6 -> 8.7, average 21.5 -> 21.7: 0.2-1.3ms faster, six stations up and none down, only Corridor clearly past the noise on its own. More than the push-immediates in the render look worth; not isolated (every function after the first changed module also moved). Kept: no slower, and 228 B smaller.
+- [x] Per-ray set-up (2026-10-01). The fitted 4.9ms "fixed" part of Rays is ~1ms of once-a-frame drawing inside `draw()` (the `bmDrawRect` border's 158-row edge loop ~0.7ms, the crosshair's four `bmXorLine`s ~0.3ms, by instruction count) and ~65us a ray. Of the ~80 instructions a ray spent before its first walk, the loop-invariant ones are now worked out once a frame above the loop: the player's cell (two `cbw` pairs a ray), the start cell pointer (`&map[y][x]`, a shift by 7), and the four distances from the player to the cell's edges. Each sign branch now loads its distance, makes its one `fpmul`, stores the side distance straight into the ray block (no `sidedx`/`sidedy` locals copied across) and sets its quadrant bit, so the second compare chain `DDA_QUADRANT` compiled to is gone (the macro with it). ~50 instructions a ray plus the two `fpmul`s: ~30 fewer, ~16us at ~15 clocks each, ~1ms a frame on every station whatever it shows. Frames unchanged, code -6 B. Measured on device: Corridor 26.8 -> 27.4, Empty room 37.2 -> 38.2, Detail walls 29.0 -> 29.6, Openings 15.7 -> 16.0, Enemies, Decorations and Crowd unchanged at 16.4 / 14.6 / 8.6, average 21.2 -> 21.5. The three stations precise enough to show it saved 0.7-0.8ms, ~12.5us a ray against ~16 estimated; on the sprite stations 0.75ms is 0.1-0.2 fps, inside their noise. Left: the border (a pointer walk with a per-row `if(twoEdges)`) and the crosshair are the other ~1ms of the fixed part.
+- [x] Wall hit maths (2026-10-01), the 52us a hit left in the ray cast. `tsda DRAW` showed ~90 instructions a hit around four calls, three multiplies and a divide. Removed, results bit-identical: the `mapCellType` call for the pillar test (now a masked compare with the pre-shifted type) and the `isSolid` call (one `test ah,40H`); the multiply by 13 at every `wallhits[hits]` index, both when the hit is stored and in the draw loop (a `wallhit_t*` walked along the array, `add si,0EH` a hit); `f_wallx - int2fp(fp2int(f_wallx))` as `f_wallx & 0xff`, which it is exactly; and `wallhit_t` padded 13 -> 14 bytes so no hit's words sit on odd addresses. The two `fpmul`s, the height `idiv` and the footprint `mul` are the real work and stay. ~27 instructions a hit, so an estimated ~15us of the 52 at ~15 clocks each: ~1ms a frame, ~2ms on Openings (142 hits). Frames unchanged, code -24 B. The compiler hoisted the pillar mask to just after the walk, two instructions a stop. Measured on device: Corridor 26.2 -> 26.8, Empty room 36.0 -> 37.2, Detail walls 28.4 -> 29.0, Openings 15.5 -> 15.7, Enemies 16.1 -> 16.4, Decorations 14.4 -> 14.6, Crowd 8.5 -> 8.6, average 20.7 -> 21.2. Pooled, 6.8ms over 532 hits is 12.7us saved a hit (estimate ~15), so a hit's maths is now ~39us; Openings, the most hits, gained least (0.8ms against ~2 estimated), inside its 1.2ms noise floor.
+- [x] Screen clear in assembler (2026-09-30): `bmClearScreen` is [bmasm.a](bmasm.a), one `rep stosw` of 5120 words over both planes, the 16 hidden columns included (skipping them would need a loop per row for 1/16 of the words); the unrolled C loop it replaces measured 4.1ms. The C twin is [pc/src/bmasm_pc.c](pc/src/bmasm_pc.c) (`memset`). The buffer's address comes from `extrn _screenBm`: checked in the linked image, the routine's `mov di` loads 222EH, which is `_screenBm` in PSION3D.MAP. Frames unchanged, code -79 B. Profiled on device: Clear 4.1 -> 1.1ms (1.0-1.4 by station), 3.0ms off every frame, mean frame 61.9 -> 59.1ms; per station Frame 38.2 / 27.9 / 35.5 / 65.2 / 61.9 / 69.0 / 116.6ms, which the profile's Frame has matched in the normal build to 0.6ms, so about 26.2 / 35.8 / 28.2 / 15.3 / 16.2 / 14.5 / 8.6 fps. The normal benchmark then read Corridor 26.2, Empty room 36.0, Detail walls 28.4, Openings 15.5, Enemies 16.1, Decorations 14.4, Crowd 8.5, average 19.5 -> 20.7: within 0.2 of the prediction at every station. That is ~0.21us (~6 clocks) a word, above the 0.4-2.5ms estimate, which scaled from the blit: the blit's `rep movsw` costs 0.71us a word, so its 3.4ms is video RAM and not code. Walls read 0.3-0.5ms higher at every station, at the noise floor of a two-pass difference and not in proportion to rows drawn, so not taken as real.
+- [x] DDA step accessors written out by hand in `draw()` (2026-09-30): `mapCell`, `isWall`, `isSolid`, `isSprite`, `isMarked`, four near calls a step through open floor, now a bounds check, one `map` load and `test ah,imm` tests. Every golden frame unchanged, `_TEXT` and DGROUP the same size, and every function after `draw()` at the same address, so the sprite and wall code cannot have moved. Measured on device: Corridor 22.3 -> 23.6, Empty room 18.7 -> 23.0, Detail walls 21.2 -> 23.6, Openings 14.2 -> 14.8, Enemies 12.3 -> 13.5, Decorations 11.3 -> 12.2, Crowd 7.2 -> 7.6, average 15.3 -> 16.9. The saving per DDA step is 7.6-9.6us on every station (8.6 on average, a third of the 25.6), so the gain is the step loop alone and a step now costs ~17us. Still on the stack each step: `sidedx`, `sidedy`, `mapx`, `mapy`, `hitcell`, `hit`.
+- [x] DDA step in registers, indexed by pointer (2026-09-30): `ddaWalk` in [ddaasm.a](ddaasm.a), C twin [pc/src/ddaasm_pc.c](pc/src/ddaasm_pc.c). The ray keeps a pointer to its `map[][]` entry and steps it by +-1 / +-64 cells; `mapx`/`mapy` are rebuilt from the pointer only at stops. The walk stops where `draw()` has work - a wall, or a sprite not yet marked - and `draw()` applies the old tests there, so it passes nothing the old loop acted on. One copy of the loop per quadrant so both steps are immediates; all six values in registers (`si` cell, `ax`/`cx` side distances, `dx`/`di` deltas, `bx` the cell), one memory read a step. No bounds check: `loadMapFile` now fails a map whose edge is not all solid (every map passes; `map/README.md` has the rule), and nothing at run time opens a solid cell. Why assembler: the same loop as its own C function got four of the six into registers and never used `di`, and `register` changed nothing - register allocation is what C cannot reach. Checked: every golden frame unchanged (through the C twin); `ddaasm.a`'s own text interpreted against the C twin over 200,000 random walks on random solid-bordered maps, 0 mismatches, all quadrants and both faces exercised, and three planted bugs each caught; the assembled bytes hold every key instruction the expected number of times (`tsda` hangs on assembler objects). Code -60 B, DGROUP unchanged. Measured on device against the inlined C step: Corridor 23.6 -> 24.6, Empty room 23.0 -> 32.2, Detail walls 23.6 -> 26.2, Openings 14.8 -> 14.6, Enemies 13.5 -> 15.2, Decorations 12.2 -> 13.7, Crowd 7.6 -> 8.3, average 16.9 -> 19.2 (15.3 before task 26's two DDA changes). Fitted to counted steps and stops (a stop being a wall hit or collected sprite, where the walk returns to `draw()`), every station within 0.7 ms: **13.4us saved a step, so a step is now ~3.6us** (from 25.6 at the start), and **34us added a stop**. Openings has twice the stops of any other station (142) and few steps (299), so it lost 0.9 ms net. The stop cost is the call itself: ~32 instructions of `ddaWalk` entry and exit (six pushes, the ray loaded, the quadrant dispatch, three stores, six pops) and ~20 in `draw()` rebuilding `mapx`/`mapy` from the pointer.
+- [x] Trim the per-stop cost (~34us x 63-142 stops, 2.2-4.9 ms a frame), 2026-09-30. Done: the walker saves no general register (`reg_saved=>(es,ds,st1,st2)`; the compiler saves nothing around the call because `draw()` has nothing live across it); one entry point per quadrant, `ddaWalk0`..`ddaWalk3`, picked once per ray through `ddaWalkers[]` in `draw.c`, so there is no dispatch at a stop; `mapx`/`mapy` rebuilt from a byte offset, two instructions shorter. A stop is now 13 walker instructions against ~32. The function pointer type is declared under the same `#pragma call`, and TopSpeed checks it: giving the typedef alone a different `reg_param` fails the build ("'reg_param' attributes do not match"), so a call through the table cannot use the wrong convention. Checked: frames unchanged, 200,000 simulated walks of the new text against the C twin with 0 mismatches and planted bugs caught, encodings byte-scanned. Code +18 B, DGROUP +8 B (the table). Measured on device: Corridor 24.6 -> 24.8, Empty room 32.2 -> 33.0, Detail walls 26.2 -> 26.4, Openings 14.6 -> 15.0, Enemies 15.2 -> 15.5, Decorations 13.7 -> 13.9, Crowd 8.3 -> 8.3, average 19.2 -> 19.5. Each station alone is at the noise floor, but six of seven moved up and none down; pooled, 5.5 ms over 554 stops is **10us saved a stop**, against ~11 estimated from ~20 fewer instructions at the measured ~15 clocks each, so a stop is now ~24us. Not tried: handing `mapx`/`mapy` back from the walker (it has no register spare to keep them), The other fit for Openings' dip, wall code slowed by moving, is ruled out: the second profile's Walls did not move.
+
+First run, 2026-09-30 - the table is in `CLAUDE.md`. Mean frame 75.0ms:
+rays 26.6, sprites 23.1, walls 11.9, weapon 4.7, clear 4.1, blit 3.4, other
+0.3, residue 0.7 (at most 1.3 anywhere, so the switches do separate). The
+profiling build's Frame matched a normal run the same day to 0.6ms on six
+stations (Corridor 45.1 against 44.8, Crowd 139.5 against 138.9), so the
+switches themselves cost nothing measurable.
+
+Units counted per station on the PC host, one frame (steps, wall hits,
+sprites projected, span calls, rows): Corridor 296/65/0/286/4244, Empty
+room 1131/63/0/78/561, Detail walls 514/69/0/334/2074, Openings
+299/142/0/851/7467, Enemies 820/65/6/93/786, Decorations 818/63/8/75/725,
+Crowd 968/65/8/100/693. Least squares on those gives rays = 7.5ms +
+25.6us x steps + 56us x (hits - 60) + 0.18ms x sprites, and walls =
+14us x hits + 24us x spans + 2us x rows, each reproducing all seven
+stations within 0.5ms.
+
+What that points at, not yet tried:
+- **The DDA step, 25.6us (~690 clocks).** `tsda DRAW` shows three near calls
+  a step - `mapCell` (bounds check, push/pop, `mov cl,7; shl`), `isWall`,
+  `isSolid` - because TopSpeed emits the `static` accessors in
+  `game_map.h` as functions, and `sidedx`, `sidedy`, `mapx`, `mapy` all
+  live on the stack. It is 7.6ms of Corridor, 29ms of Empty room and
+  ~21ms of each sprite station. TopSpeed has an `inline` keyword and an
+  `inline_max` option (keyword table in `TS\SYS\TSC.TXT`); walking a cell
+  pointer by +-1 / +-64 instead of recomputing the index is the other half,
+  but drops the bounds check, so it needs every map to have a solid border
+  (task 21 could enforce it).
+- **The span call, 24us** against 2us a row - the existing rule, now with a
+  number. Openings pays 20ms of its 37ms walls in calls.
+- **`cpu=>86`.** The SDK's EPOC system block in `TS\SYS\TSPRJ.TXT` sets
+  `#pragma optimize(cpu=>86)`, and TopSpeed knows V30 / 80186 targets. The
+  V30 runs the 186 set (shift by immediate, `push imm`, `imul` by
+  immediate), and the listings are full of `mov cl,n; shl`. One line in
+  `unnamed.pr`; needs checking that the emulator and the OS are happy with
+  what it emits, then a benchmark.
+- **The clear, 4.1ms**, is an unrolled C loop over all 10,240 bytes, while
+  the blit moves the same amount with reads in 3.4ms. A `rep stosw` in
+  assembler, and skipping the 16 hidden columns, are the obvious tries.
+
+Decorations was first transcribed from the photo as 80.2ms, and chased for
+an afternoon as an 8ms difference from the normal build (88.5), with a
+code-alignment theory to explain it. It was a misread 8: Frame is the sum of
+the other columns by construction, and that row sums to 88.2, which the
+Mean row (75.0) also needs. There was no difference between the builds.
+Check a transcribed row adds up before reading anything into it.
+
+Second run, 2026-09-30, after the three DDA changes (table in `CLAUDE.md`):
+mean frame 61.9ms - sprites 23.0, rays 13.6 (was 26.6), walls 12.0, weapon
+4.8, clear 4.1, blit 3.5. Walls did not move (Openings 37.2 -> 37.7), so
+Openings' dip after the assembler walk was the stop cost, not wall code
+slowed by moving. Taking the benchmark-fitted step (3.6us) and stop (24us)
+costs out of Rays and fitting the rest to the same counts reproduces every
+station within 0.1ms: 4.9ms fixed (81us a ray), 52us of maths per wall hit,
+0.14ms per sprite projected. The profile's Frame matched the normal
+benchmark within 0.6ms on every station.
+
+`.\tools\profile.bat` builds `PROF3D.IMG`: the normal game with
+`BENCH_PROFILE` defined, from a copy of the sources in `profbld\` so its
+OBJs never mix with the normal build's (tsc /m rebuilds by timestamp, not by
+define). Options > Benchmark in that image measures every station in eight
+passes of `BENCH_PASS_TICKS` (6 s) - whole frame, no clear, no blit, no
+weapon, no world sprites, walls drawn twice, rays only (no walls, sprites or
+weapon), no draw at all - about 6 minutes for the seven stations, and ends
+on a PROFILE table in ms per frame: Frame, Rays, Walls, Sprite, Gun, Clear,
+Blit, Other and Resid, a row per station and their mean. Each part is the
+difference between two passes that differ in that part alone
+(`benchPartMs10` in [bench.c](bench.c) has the formulas). Walls are doubled
+rather than removed because a wall's return value decides which sprites it
+hides; the rays are measured with everything that reads that value off.
+Other is the loop around the render - `wFlush`, HUD, input, event poll -
+and Resid is the frame less the sum of the other parts, which should be
+noise: if it is not, two switches are not separable.
+
+Precision: a pass is ~192 ticks timed to a tick, so a pass reads to ~0.5%
+and a part, as the difference of two, to about 0.3 ms at 45 ms a frame and
+1 ms on Crowd's 135 ms. The Frame column is the profiling build's own frame
+time; compare it with a normal benchmark run to see what the switches
+themselves cost (one test per wall hit and a few per frame).
+
+None of it reaches `PSION3D.IMG`, which hashes as before. The hooks in
+`gameloop.c` and `draw.c` are `#ifdef BENCH_PROFILE`: written first as
+`if(!BENCH_SKIP(...))` over a constant 0, both files compiled to a
+different image, so TopSpeed does not drop a constant-false test without a
+trace. The one in `psion3d.c` did hash unchanged and keeps the macro.
+Profiling build DGROUP 47,936 (+320 over the normal build), 1,216 to the
+limit. On the PC, `-DPSION3D_BENCH_PROFILE=ON` in a build directory of its
+own (`pc/build-profile`) runs the same passes: `--bench --frames 11000
+--screenshot` reaches the table, where every part is 0 and Other is the
+whole 31.3 ms, because the virtual clock makes every frame exactly one tick.
+
 ## Housekeeping
 
 - [ ] `TEXWALL.OBJ` is left over from the removed textured-wall experiment;

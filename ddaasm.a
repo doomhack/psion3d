@@ -1,0 +1,156 @@
+module ddaasm
+
+segment _TEXT(CODE,48H)
+
+public _ddaWalk0:
+	push  ax
+	mov   di,ax
+	mov   si,[di]
+	mov   ax,[di][2]
+	mov   cx,[di][4]
+	mov   dx,[di][6]
+	mov   di,[di][8]
+ddaQ0:
+	cmp   ax,cx
+	jae   ddaQ0y
+	add   ax,dx
+	inc   si
+	inc   si
+	mov   bx,[si]
+	test  bh,20H
+	jne   ddaQ0sx
+	and   bx,9000H
+	cmp   bx,1000H
+	jne   ddaQ0
+ddaQ0sx:
+	xor   bx,bx
+	jmp   near ddaStop
+ddaQ0y:
+	add   cx,di
+	add   si,128
+	mov   bx,[si]
+	test  bh,20H
+	jne   ddaQ0sy
+	and   bx,9000H
+	cmp   bx,1000H
+	jne   ddaQ0
+ddaQ0sy:
+	mov   bx,1
+	jmp   near ddaStop
+
+public _ddaWalk1:
+	push  ax
+	mov   di,ax
+	mov   si,[di]
+	mov   ax,[di][2]
+	mov   cx,[di][4]
+	mov   dx,[di][6]
+	mov   di,[di][8]
+ddaQ1:
+	cmp   ax,cx
+	jae   ddaQ1y
+	add   ax,dx
+	dec   si
+	dec   si
+	mov   bx,[si]
+	test  bh,20H
+	jne   ddaQ1sx
+	and   bx,9000H
+	cmp   bx,1000H
+	jne   ddaQ1
+ddaQ1sx:
+	xor   bx,bx
+	jmp   near ddaStop
+ddaQ1y:
+	add   cx,di
+	add   si,128
+	mov   bx,[si]
+	test  bh,20H
+	jne   ddaQ1sy
+	and   bx,9000H
+	cmp   bx,1000H
+	jne   ddaQ1
+ddaQ1sy:
+	mov   bx,1
+	jmp   near ddaStop
+
+public _ddaWalk2:
+	push  ax
+	mov   di,ax
+	mov   si,[di]
+	mov   ax,[di][2]
+	mov   cx,[di][4]
+	mov   dx,[di][6]
+	mov   di,[di][8]
+ddaQ2:
+	cmp   ax,cx
+	jae   ddaQ2y
+	add   ax,dx
+	inc   si
+	inc   si
+	mov   bx,[si]
+	test  bh,20H
+	jne   ddaQ2sx
+	and   bx,9000H
+	cmp   bx,1000H
+	jne   ddaQ2
+ddaQ2sx:
+	xor   bx,bx
+	jmp   near ddaStop
+ddaQ2y:
+	add   cx,di
+	sub   si,128
+	mov   bx,[si]
+	test  bh,20H
+	jne   ddaQ2sy
+	and   bx,9000H
+	cmp   bx,1000H
+	jne   ddaQ2
+ddaQ2sy:
+	mov   bx,1
+	jmp   near ddaStop
+
+public _ddaWalk3:
+	push  ax
+	mov   di,ax
+	mov   si,[di]
+	mov   ax,[di][2]
+	mov   cx,[di][4]
+	mov   dx,[di][6]
+	mov   di,[di][8]
+ddaQ3:
+	cmp   ax,cx
+	jae   ddaQ3y
+	add   ax,dx
+	dec   si
+	dec   si
+	mov   bx,[si]
+	test  bh,20H
+	jne   ddaQ3sx
+	and   bx,9000H
+	cmp   bx,1000H
+	jne   ddaQ3
+ddaQ3sx:
+	xor   bx,bx
+	jmp   near ddaStop
+ddaQ3y:
+	add   cx,di
+	sub   si,128
+	mov   bx,[si]
+	test  bh,20H
+	jne   ddaQ3sy
+	and   bx,9000H
+	cmp   bx,1000H
+	jne   ddaQ3
+ddaQ3sy:
+	mov   bx,1
+
+ddaStop:
+	pop   di
+	mov   [di],si
+	mov   [di][2],ax
+	mov   [di][4],cx
+	mov   ax,bx
+	ret 0
+
+end

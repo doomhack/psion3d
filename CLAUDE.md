@@ -56,7 +56,7 @@ Working-tree line endings are mixed (git stores LF, some files are CRLF on disk)
 | `automap.c` | The pause menu's level plan, rendered into `screenBm` with `bitmap.c` and copied out with `uiBlitMap` |
 | `settings.c` | The Options screen's values (`soundLevel`, `showFps`); process lifetime, no save file yet |
 | `cheat.c` | Cheats (task 24): `cheatFlags` from the Cheats screen, `cheatActive` for the mission in play (none on the benchmark map), names, texts, radio groups; the hooks themselves sit in player, enemy, draw, sprite, automap and gameloop, all testing `cheatActive` |
-| `bench.c` | The benchmark: the stations of `map97.map` in turn, world frozen, fps per station for the `MENU_BENCH` results screen |
+| `bench.c` | The benchmark: the stations of `map97.map` in turn, world frozen, fps per station for the `MENU_BENCH` results screen; under `BENCH_PROFILE` (`tools\profile.bat`) the ablation passes and per-part costs instead |
 | `hud.c` | The in-game HUD panels (health, objectives, weapons/ammo, fps) drawn through `ui.h` into the HUD target: static parts on a redraw event, values as single-call cells replaced only when they change (never invalidate the HUD window for a value; see task 8) |
 | `draw.c` | DDA ray cast, per-span wall depth buffer, sprite collection/sorting, player shot resolution |
 | `walls.c` | Default wall style + `drawWall` function-pointer global |
@@ -64,6 +64,8 @@ Working-tree line endings are mixed (git stores LF, some files are CRLF on disk)
 | `bitmap.c` | Local 1bpp screen buffers and fill/clear/pattern/line primitives |
 | `videomem.a` | JPI assembler `blitVideoMem()` — direct writes to segment 0x40 video RAM |
 | `fpasm.a` | JPI assembler `fpmul()` — the Q8 multiply, using the V30's native `IMUL` |
+| `ddaasm.a` | JPI assembler `ddaWalk0`..`ddaWalk3` — the DDA step loop, one entry per quadrant (picked once per ray through `ddaWalkers[]` in `draw.c`), all six of its values in registers, a pointer walk through `map[][]`; `pc/src/ddaasm_pc.c` is the C reference |
+| `bmasm.a` | JPI assembler `bmClearScreen()` (one `rep stosw` over both planes) and the wall styles' `bmFillRect4` / `bmClearRect4` / `bmFillPattern4` (clipping in registers, then a jump into 160 unrolled rows); `pc/src/bmasm_pc.c` is the C twin |
 | `sprite.c` | `.spr` loading into segments, frame cache, projection, drawing. A slot that failed to load draws nothing; there is no built-in fallback sprite |
 | `enemy.c` | Enemy state machine, AI tick, damage, per-type stats |
 | `player.c` | Player position/movement, weapon table and firing state |
@@ -95,7 +97,7 @@ grep -aoi "N.\{0,1\}\(SgnMol\|SgnDiv\|LngShr\|LngShl\)" *.OBJ | sort | uniq -c
 
 **Column geometry.** Wall columns are 4 pixels wide, `x` aligned to a nibble boundary. Use `bmFillRect4` / `bmClearRect4` / `bmFillPattern4` for those; the general `bmFillRect` / `bmClearRect` / `bmFillPattern` are for variable-width sprites, UI, and 1-pixel detail marks.
 
-**DDA corner case.** The ray loop in `draw.c` special-cases exact grid-corner crossings to avoid one-column wall gaps. Be careful changing `f_sidedx`/`f_sidedy`, `side`, or `mapx`/`mapy` stepping.
+**DDA corner case.** The ray loop in `draw.c` special-cases exact grid-corner crossings to avoid one-column wall gaps. Be careful changing `f_sidedx`/`f_sidedy`, `side`, or the stepping, which now lives in the `ddaWalk0`..`3` walkers (`ddaasm.a`, with its C twin in `pc/src/ddaasm_pc.c` - change both). The walk steps a pointer through `map[][]` with **no bounds check**: that is safe only because every map border is solid, which `loadMapFile` enforces and nothing at run time undoes. Anything that could open a solid cell at run time breaks that guarantee.
 
 **Map cells are packed `u16`.** Flag bits (`MAP_MASK_SOLID`, `WALL`, `SPRITE`, `ENEMY`, `WALK`, `MARKED`) plus a 4-bit type in `MAP_BLOCK_TYPE_MASK` and a 6-bit id. `game_map.h` exposes `static` inline-style accessors (`mapCell`, `isWall`, `isSolid`, `canWalk`, …); out-of-range cells return a solid `WALL_TYPE_VOID` cell so callers never bounds-check. Map ASCII characters are decoded in `getCellEncoding()`; `C`/`E`/`F`/`G` delegate to `getEnemyCell()`.
 
@@ -107,33 +109,45 @@ grep -aoi "N.\{0,1\}\(SgnMol\|SgnDiv\|LngShr\|LngShl\)" *.OBJ | sort | uniq -c
 
 The renderer has been through a measured optimisation pass (14 → 20fps). **Measure before optimising.** Five predictions during that pass were wrong, three of them "this is obviously faster" changes that regressed on the target.
 
-Measured budget, the old map 1 corridor (a plain corridor, since replaced by benchmark station 1), 20fps = 50ms/frame:
+Measured budget, device, 2026-09-30 after task 26's DDA work and the assembler clear (`tools\profile.bat`), ms per frame:
 
-| Component | Cost |
-| --- | --- |
-| Wall drawing (~10ms flat column fill, ~12.5ms style detail) | 22.5ms |
-| Ray cast (per-ray setup, DDA walk, per-hit maths) | ~11ms |
-| Weapon overlay sprite | ~4ms |
-| Screen clear, blit, enemy sprites, AI, `wFlush` combined | ~12ms |
+| Station | Frame | Rays | Walls | Sprites | Weapon | Clear | Blit | Other | Resid |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Corridor | 38.2 | 10.8 | 16.8 | 0.0 | 4.9 | 1.4 | 3.5 | 0.2 | 0.6 |
+| Empty room | 27.9 | 13.7 | 4.2 | 0.0 | 4.6 | 1.0 | 3.4 | 0.7 | 0.3 |
+| Detail walls | 35.5 | 12.0 | 13.3 | 0.0 | 4.7 | 1.2 | 3.6 | 0.2 | 0.5 |
+| Openings | 65.2 | 16.6 | 38.1 | -0.4 | 4.9 | 1.0 | 3.8 | 0.3 | 0.9 |
+| Enemies | 61.9 | 13.8 | 5.1 | 32.9 | 4.8 | 1.0 | 3.3 | 0.7 | 0.3 |
+| Decorations | 69.0 | 13.8 | 4.6 | 40.4 | 4.8 | 1.2 | 3.4 | 0.5 | 0.3 |
+| Crowd | 116.6 | 14.7 | 4.7 | 86.7 | 4.9 | 1.2 | 3.4 | 0.4 | 0.6 |
+| **Mean** | **59.1** | **13.6** | **12.4** | **22.8** | **4.8** | **1.1** | **3.4** | **0.5** | **0.5** |
 
-Benchmark baseline on device, 2026-09-21 (Options → Benchmark, `map97.map`; a change's numbers go next to these in its commit message). Two runs agreed to 0.2 fps on one station and exactly elsewhere, so treat a change under 0.3 fps as noise and 0.5 as real:
+The clear was 4.1ms as an unrolled C loop; `bmasm.a`'s `rep stosw` is 1.1ms (~0.21us, ~6 clocks a word). The blit moves nearly as many words by `rep movsw` in 3.4ms (0.71us a word), so its cost is video RAM, not code.
+
+The same run before the DDA work, for comparison: Frame 45.1 / 53.6 / 47.2 / 70.5 / 81.1 / 88.2 / 139.5 (mean 75.0), Rays 15.3 / 36.5 / 21.2 / 19.7 / 29.8 / 29.8 / 34.1 (mean 26.6); every other column within noise of today's. Frame is the sum of the other columns by construction, so a misread digit shows up as a row that does not add up (this table's Decorations was first transcribed as 80.2, and chased as an 8ms build difference that never existed).
+
+Unit costs, fitted to PC-host counts of the same frames (every station within 0.5ms; task 26 has the counts). **Rays:** 4.9ms fixed (81us a ray; ~1ms of it is the border and crosshair, and the per-ray part lost ~12.5us on 2026-10-01 when the loop-invariant set-up moved out of the loop), **3.6us per DDA step**, **24us per stop** (a wall hit or collected sprite, where the assembler walk returns to `draw()`), **52us of maths per wall hit** (~39us after 2026-10-01: two accessor calls, the index multiplies and odd-address words gone), 0.14ms per sprite projected. **Walls:** 14us per hit, **24us per span call**, 2us per row (~1.15us since the fill and clear spans were unrolled in `bmasm.a`, 2026-10-01). The step was 25.6us (~690 clocks) before task 26: TopSpeed does not inline the `static` accessors in `game_map.h`, so each step made three near calls with the loop state on the stack. Writing them out made it ~17us; the walk in assembler (`ddaasm.a`, all six values in registers, a pointer through `map[][]`) made it 3.6us; the stop was then trimmed from ~34us to ~24us (average 15.3 -> 16.9 -> 19.2 -> 19.5 fps). The weapon, clear and blit are a flat 9.3ms on every frame (12.4 before the assembler clear). For sizing a change in advance, ~15 clocks per V30 instruction (~0.55us) has held against the device.
+
+Benchmark baseline on device, 2026-10-01, after the DDA work, the assembler clear, the wall hit maths, the per-ray set-up, `cpu=>286` and the unrolled wall and dither spans (Options → Benchmark, `map97.map`; a change's numbers go next to these in its commit message). Two runs agreed to 0.2 fps on one station and exactly elsewhere, so treat a change under 0.3 fps as noise and 0.5 as real - on the ~22 fps stations; on the 15-17 fps sprite stations 0.3 fps is already 1-1.3ms, and a lone reading there should be repeated before it is acted on:
 
 | Station | fps | ms/frame |
 | --- | --- | --- |
-| Corridor | 22.2 | 45 |
-| Empty room | 18.8 | 53 |
-| Detail walls | 21.3 | 47 |
-| Openings | 14.2 | 70 |
-| Enemies | 12.4 | 81 |
-| Decorations | 10.9 | 92 |
-| Crowd | 6.7 | 149 |
-| **Average** | **15.2** | |
+| Corridor | 31.6 | 32 |
+| Empty room | 38.6 | 26 |
+| Detail walls | 31.8 | 31 |
+| Openings | 18.6 | 54 |
+| Enemies | 16.7 | 60 |
+| Decorations | 14.8 | 68 |
+| Crowd | 8.6 | 116 |
+| **Average** | **22.9** | |
 
-Read it as: walls are cheaper than sprites, and sprite *rows* are what cost — one decoration at 2 cells (Decorations) is worse than six enemies further off, and the crowd's heavy filling the screen is a 149ms frame. Openings at 70ms is the arch reveals and the second face behind every see-through cell. The empty room is slower than the corridor with less on screen: that is the DDA walking 12–16 cells per ray.
+Read it as: walls are cheaper than sprites, and sprite *rows* are what cost — one decoration at 2 cells (Decorations) is worse than six enemies further off, and the crowd's heavy filling the screen is a 116ms frame. Openings at 54ms is the arch reveals and the second face behind every see-through cell. The empty room, the DDA-heavy case at 12–16 cells a ray, is now the fastest station: it was 53ms before task 26 made the step 7x cheaper.
 
 **Span call count dominates wall cost, not rows written.** Three dither bands covering 0.31× the column height measured 5.6ms — 2.6× the per-row cost of the full-height span they sit on. Fewer, larger span calls win; splitting a style into *more* calls to write *fewer* rows loses. `WALL_DETAIL_DEPTH` and the `LAB_PANEL_*` switches in `walls.h` are the tunables, with their measured costs documented there.
 
 **How to measure.** Add a `#define` that *removes* work, rebuild, and run **Options → Benchmark** on the device: it steps through the seven stations of `map/map97.map` (corridor, empty room, detail walls, openings, enemies, decorations, crowd), five seconds each with input ignored and AI frozen, and ends on a results screen with a frame rate per station in tenths and the run's average (`bench.c`, task 19). Copy that line into the commit message. One fps step is ~2.5ms at 20fps. A station is a `station = x, y, bearing, name` line in the map file, so a new aspect is a new room and a line, not a code change; `psion3d_pc --map 97 --station N` shows what a station sees, and the `bench_*` golden frames pin every scene. The HUD's FPS row (Options) is still there for an ad-hoc reading, but measure from a fixed position — active enemies move and make readings unstable.
+
+**Where the time goes, per station:** `.\tools\profile.bat` builds `PROF3D.IMG`, whose benchmark runs each station in eight ablation passes (~6 minutes) and ends on a table of ms per frame for rays, walls, sprites, weapon, clear, blit and the loop around them, plus a residue that should be noise (task 26, `bench.h`). Use it before choosing what to optimise; use the normal benchmark to measure the change. Its hooks are `#ifdef BENCH_PROFILE` and must stay so — `PSION3D.IMG` has to hash the same with or without them.
 
 Never isolate ray-loop internals by *substituting* values: everything downstream depends on the ray's result, and three such attempts came back contaminated, two reading **slower** than baseline. For work that cannot simply be removed, do it **twice** and discard the copy — the delta is one pass.
 

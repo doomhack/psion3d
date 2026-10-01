@@ -1,6 +1,7 @@
 #system epoc img
 #set epocinit=iplib
 #model small jpi
+#pragma optimize(cpu=>286)
 #compile bitmap
 #compile enemy
 #compile player
@@ -25,5 +26,7 @@
 #compile ui_psion
 #compile videomem
 #compile fpasm
+#compile ddaasm
+#compile bmasm
 #compile %main
 #link %main

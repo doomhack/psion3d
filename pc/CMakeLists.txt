@@ -16,7 +16,7 @@ set(GAME_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 # Mirrors the #compile list in ../unnamed.pr, minus the platform modules:
 # psion3d.c (WLIB windows and the event pump), debug.c (gPrintText and PLIB's
-# software float package), videomem.a and fpasm.a (JPI assembler).
+# software float package), videomem.a, fpasm.a, ddaasm.a and bmasm.a (JPI assembler).
 # Listed explicitly, never globbed -- a glob would sweep psion3d.c back in.
 set(GAME_SOURCES
     ${GAME_ROOT}/bitmap.c
@@ -45,6 +45,8 @@ set(PC_SOURCES
     src/pcclock.c       # monotonic clock; the only file that sees <windows.h>
     src/plib_pc.c       # file I/O, segments, ticks, string helpers
     src/fpasm_pc.c      # fpmul, plus the layout assertions fpdiv depends on
+    src/ddaasm_pc.c     # ddaWalk, the DDA step loop ddaasm.a runs on the device
+    src/bmasm_pc.c      # bmClearScreen, the rep stosw bmasm.a runs on the device
     src/debug_pc.c      # stands in for debug.c
     src/host.c          # the frame driver; the only PC file that includes game headers
     src/menu_pc.cpp     # ui.h with QPainter: the menu screens (not ui_*.h, which AutoUic claims)
@@ -95,4 +97,14 @@ option(PSION3D_AUDIT_CONVERSIONS "Enable -Wconversion on the game sources" OFF)
 if(PSION3D_AUDIT_CONVERSIONS AND NOT MSVC)
     set_source_files_properties(${GAME_SOURCES} PROPERTIES
         COMPILE_OPTIONS "-Wconversion;-Wsign-conversion")
+endif()
+
+# The profiling build of the benchmark (bench.h, tools\profile.bat on the
+# device). Its timings mean nothing here; this is for checking the pass
+# schedule and the results table: --bench --frames 11000 --screenshot.
+# Configure it in a build directory of its own, so pc/build stays normal.
+option(PSION3D_BENCH_PROFILE "Build the benchmark's profiling passes" OFF)
+
+if(PSION3D_BENCH_PROFILE)
+    target_compile_definitions(psion3d_pc PRIVATE BENCH_PROFILE=1)
 endif()
