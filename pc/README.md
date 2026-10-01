@@ -88,7 +88,7 @@ Useful options:
 | `--gutter` | include backbuffer columns 240-255, which the LCD hides — anything drawn out there is a clipping bug (in the window they cover the start of the right HUD panel) |
 | `--hud` | screenshot the whole 480x160 LCD - the HUD panels with the game view between them - instead of the bare 240x160 game view, which is what the gameplay goldens compare |
 | `--tick-start <n>` | seed the 16-bit tick counter, e.g. `65520`, to hit its wraparound in the first second rather than after 34 minutes |
-| `-v` | report every failed file open, including `loadSprite`'s routine probe past each sprite's last frame |
+| `-v` | report every failed file open, including the mission index's routine probe past the last map |
 
 ## What this build is not for
 

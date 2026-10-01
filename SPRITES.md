@@ -18,12 +18,12 @@ frame (32.9 of 62 with the old decoders), 60.4 ms of the Crowd station's 87
 ## The pipeline in one view
 
 ```
- PNG (<= 64x64)
-   | tools\convert_sprite.bat
+ base0.png .. base7.png (<= 64x64 each)
+   | tools\convert_sprite.bat: pixels, row spans, box, count
    v
- base<N>.spr  -- 16 byte header + 1,024 byte 2bpp frame, one file a frame
-   | loadSprite(base, slot), at mission start (loadMapData)
-   |   buildRowSpans(): + 64 span bytes, one a source row; + the header's box
+ base.spr  -- one file a sprite, 1-8 frames of 1,104 B, each as it is loaded
+   | loadSprite(base, slot), at mission start (loadMapData): one open,
+   |   one read and copy a frame, nothing computed
    v
  far segment SPR<slot>  -- every frame of the slot, 1,104 B each
    | getSpriteFrame(): LRU, 9 frames
@@ -65,52 +65,56 @@ two bits at a time yields its pixels left to right, and rotating each pixel's
 two bits into two registers leaves the first pixel in bit 0 - the screen's own
 low-bit-first order.
 
-### The `.spr` file
+### The `.spr` file (format 2)
 
-Exactly 1,040 bytes; `loadSprite` rejects any other length (it checks that the
-read after the payload returns `E_FILE_EOF`).
+One file a sprite, `<base>.spr`, holding its frames back to back: 1 to 8
+frames of exactly 1,104 bytes (`SPRITE_FRAME_BYTES`), so a sprite with four
+frames is a 4,416 byte file. Each frame is laid out exactly as `loadSprite`
+keeps it in the slot's segment and the cache, and everything in it is worked
+out by the converter, so loading is a read and a copy:
 
 | Offset | Bytes | Field |
 | --- | --- | --- |
-| 0 | 4 | `'S' 'P' 'R'` and format version `1` |
-| 4 | 1 | `left` - first opaque column, a multiple of 4 |
-| 5 | 1 | `top` - first opaque row |
-| 6 | 1 | `right` - one past the last opaque column, a multiple of 4 |
-| 7 | 1 | `bottom` - one past the last opaque row |
-| 8 | 8 | `bands` - one byte per 8-row band (rows 0-7, 8-15, ...) |
-| 16 | 1,024 | the frame |
+| 0 | 1,024 | the pixels, row-major, as above |
+| 1,024 | 64 | row spans, one a source row (below) |
+| 1,088 | 1 | `left` - first opaque column, a multiple of 4 (`SPRITE_FRAME_BOX`) |
+| 1,089 | 1 | `top` - first opaque row |
+| 1,090 | 1 | `right` - one past the last opaque column, a multiple of 4 |
+| 1,091 | 1 | `bottom` - one past the last opaque row |
+| 1,092 | 4 | `'S' 'P' 'R'` and format version `2` (`SPRITE_FRAME_TAG`) |
+| 1,096 | 1 | the sprite's frame count, the same in every frame (`SPRITE_FRAME_COUNT`) |
+| 1,097 | 1 | this frame's index (`SPRITE_FRAME_INDEX`) |
+| 1,098 | 6 | zero |
 
 The bounding box is in pixels but measured in whole 4-pixel groups, so
 `left` and `right` always land on a source byte boundary. A frame with nothing
 opaque has a box of all zeros, and `right == 0` is what every caller tests for
-"draw nothing". The box is all the game keeps from the header.
+"draw nothing". Box and trailer fill the paragraph the frame needs anyway
+(segments are allocated in 16-byte paragraphs), so they cost no memory, and a
+frame's geometry travels with it rather than in a near table of its own.
 
-Each band byte holds the first and last opaque 4-pixel group in those eight
-rows, as `(firstGroup << 4) | lastGroup`, with `0xF0` for a band with nothing
-opaque. The old decoders drew by band; the row loops use a span byte per
-**row** instead (below), so the loader ignores the bands. The converter still
-writes them and the format is unchanged.
+Format 1 (2026-10-01 and before) was a file a frame, `base0.spr` ...
+`base7.spr`, each a 16-byte header - tag, box and eight 8-row band bytes - and
+the 1,024 bytes of pixels. The loader then probed for frames, opened every file
+twice, and built the span bytes itself; a format 1 file fails the tag check.
 
-### Span bytes, built at load
+### Row spans
 
-`buildRowSpans()` appends 64 bytes to each frame as it is loaded, one per
-source row, in the bands' encoding: `(first << 4) | last` for the row's first
-and last 4-pixel group with anything opaque in it, `0xF0` for an empty row. A
-group is one source byte, so this is a scan for the row's first and last
-non-zero byte. 19 of the art's 2,238 opaque rows span all 16 groups, which is
-why it is first and last rather than first and a 4-bit count.
-
-The spans are built from the pixels, so the `.spr` files and the converter are
-unchanged. A frame in memory is therefore **1,104 bytes**: the 1,024 bytes of
-pixels, the 64 span bytes, then a paragraph whose first four bytes are the
-header's box (`SPRITE_FRAME_BOX`; the other 12 are padding, since segments
-are allocated in paragraphs). It travels as one block through the far segment
-and the cache, so a frame's geometry needs no near table of its own.
-
+One byte per source row: `(first << 4) | last` for the row's first and last
+4-pixel group with anything opaque in it, `0xF0` for an empty row (first after
+last, which the row loops read as empty). A group is one source byte, so this
+is the row's first and last non-zero byte. 19 of the art's 2,238 opaque rows
+span all 16 groups, which is why it is first and last rather than first and a
+4-bit count. They replaced format 1's per-band bytes, which covered 8 rows
+each.
 ### Making one
 
-`tools\convert_sprite.bat` turns a PNG of at most 64 x 64 into a frame. A
-smaller image is centred in the 64 x 64 frame (rounded down, left and up).
+`tools\convert_sprite.bat /f sprites\sci spr\sci.spr` turns `sprites\sci0.png`,
+`sci1.png` and so on, until one is missing, into `sci.spr`; given a `.png`
+instead of a base path it makes a one-frame sprite. `tools\convert_all_sprites.bat`
+redoes every sprite in `sprites\`, one `.spr` per `*0.png`. Each PNG is at
+most 64 x 64; a smaller image is centred in the 64 x 64 frame (rounded down,
+left and up).
 Colours map as:
 
 | Source pixel | Value |
@@ -122,15 +126,18 @@ Colours map as:
 | anything else | 1 grey |
 
 Raw output (`/f`, or `-OutputPath`) is the `.spr`; without it the script prints
-a C array of the same bytes, which nothing uses any more. Do not redirect the
+a C array of the same bytes, which nothing uses any more. `-WhiteTransparent`
+applies to every frame of the sprite. Do not redirect the
 raw output with PowerShell's `>`, which re-encodes it. The files go in `spr\`
 on the PC and `M:\IMG\SPR\` on the device.
 
 ### Frames and file names
 
-A sprite is up to eight frames, one file each: `base0.spr` to `base7.spr`.
-`loadSprite` takes frame 0 and then consecutive frames until one is missing, so
-a sprite with four frames is `base0` to `base3` and the gap ends it.
+A sprite is up to eight frames. Their source PNGs are `base0.png` to
+`base7.png` in `sprites\`, and the converter takes frame 0 then consecutive
+frames until one is missing, so a sprite with four frames is `base0` to
+`base3` and the gap ends it. The count goes into the file; the game never
+looks for frames.
 
 ## Slots, frames and sprite ids
 
@@ -168,17 +175,18 @@ all eleven slots when a mission starts. Each call:
 1. Closes the slot's segment if an earlier mission left one, and drops its
    frames from the cache. Each slot's segment is named `SPR<slot>`, so reusing
    a name without closing the old one would leak a segment a mission.
-2. Opens `LOC::M:\IMG\SPR\<base><n>.spr` for n = 0, 1, ... and validates each:
-   the header magic and version, a box inside 64 x 64, exactly 1,024 bytes of
-   frame and then end of file.
-3. Creates one far segment of exactly the frames found
-   (`p_sgcreate(..., E_SEGMENT_HIGH)`, 69 paragraphs a frame).
-4. Opens every file a second time and assembles the frame in the 1,104 byte
-   `spriteLoadBuffer` - the header's box into its slot after the spans, the
-   pixels at the start, the span bytes built from them - and copies the whole
-   frame into the segment.
+2. Opens `LOC::M:\IMG\SPR\<base>.spr`, the only open, and reads frame 0. The
+   frame is staged in cache slot 0 (emptied first; a cache slot only ever holds
+   a copy), so loading needs no buffer of its own.
+3. Checks its trailer - the tag and format 2, a frame count of 1-8, index 0 -
+   and that its box lies inside 64 x 64 (`checkSpriteFrame`), then creates one
+   far segment of exactly that many frames (`p_sgcreate(..., E_SEGMENT_HIGH)`,
+   69 paragraphs a frame) and copies the frame in.
+4. Reads, checks and copies each remaining frame the same way, its trailer
+   carrying the same count and its own index, then insists on end of file.
 
-A frame that fails validation fails the whole slot; a slot that fails to load
+A file that is missing, short, too long, or has any frame out of place fails
+the whole slot; a slot that fails to load
 has no segment and a frame count of 0, and `getSpriteFrame` then reports every
 frame empty, so it **draws nothing** rather than a placeholder. There is
 deliberately no built-in fallback sprite: one cost 2 KB of near data
@@ -432,16 +440,17 @@ than the carried quotient, so the simulation also compares the two methods.
 
 | Where | Bytes | What |
 | --- | ---: | --- |
-| far | 55,200 | 50 frames in 11 segments, 1,104 B each (pixels, spans, box) |
-| DGROUP | 9,936 | `spriteCache`, nine frames |
-| DGROUP | 1,104 | `spriteLoadBuffer`, used only while loading |
+| far | 55,200 | 50 frames in 11 segments, 1,104 B each (pixels, spans, box, trailer) |
+| DGROUP | 9,936 | `spriteCache`, nine frames; slot 0 doubles as the load buffer |
 | DGROUP | 72 | `spriteRows` (42) and `spriteColVisible` (30) |
-| code | ~2,920 | `sprite.c` 1,601 and `sprasm.a` ~1,318 |
+| code | ~2,700 | `sprite.c` ~1,385 and `sprasm.a` ~1,318 |
+| RAM disk | 55,200 | the 11 `.spr` files: the same bytes as the far segments |
 
-About 11 KB of near data in all (MEMORY_BUDGET.md), 3.6 KB less than the
+About 10 KB of near data in all (MEMORY_BUDGET.md), 4.7 KB less than the
 decoders needed: their three 256-entry mask tables and column and row buffers
-went, and so did `spriteFrameBounds`, for the 720 bytes of spans and boxes in
-the cache. Each extra cache slot is another 1,104 bytes of it; an extra sprite
+went, and so did `spriteFrameBounds` and, once the converter made the frames
+ready to copy, the load and header buffers - for the 720 bytes of spans and
+boxes in the cache. Each extra cache slot is another 1,104 bytes of it; an extra sprite
 slot costs no near data at all.
 
 ## Cost
@@ -488,7 +497,6 @@ than 9. Measure a change; do not predict it.
   `sprasm.a`, so a field added or moved in `sprasm.h` must be matched there.
   Every member is two bytes so the offsets are `2n`.
 - **Frame numbers wrap** modulo the slot's frame count instead of failing.
-- **Loading opens every file twice**, once to validate and count, once to copy.
 - **A missing or malformed file blanks its whole slot**, silently on the
   device (the PC host's `-v` reports failed opens).
 - **21 slots are free**; filling them is far memory only.

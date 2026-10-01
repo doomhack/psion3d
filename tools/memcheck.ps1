@@ -165,12 +165,12 @@ function Measure-Map($map)
 }
 
 # Far sprite bytes: every loadSprite() call in game_map.c, resolved against the
-# frame files in spr/ the same way the loader does - frame 0 then consecutive
-# frames until one is missing. Each frame is stored as SPRITE_FRAME_BYTES in
-# sprite.c, 1,104 bytes: the 1,024 bytes of pixels from the file, the 64
-# span bytes loadSprite builds after them, and a paragraph holding the
-# header's box. Keep this in step with that.
+# sprite files in spr/: one <base>.spr a sprite, its frames back to back, each
+# SPRITE_FRAME_BYTES in sprite.c (1,104: pixels, row spans, box and trailer)
+# and loaded into the segment unchanged, with the frame count at
+# $FrameCountOffset of every frame. Keep this in step with that.
 $FrameBytes = 1104
+$FrameCountOffset = 1096
 
 function Measure-FarSprites($root)
 {
@@ -186,16 +186,18 @@ function Measure-FarSprites($root)
 
 	foreach($m in [regex]::Matches([IO.File]::ReadAllText($source), 'loadSprite\s*\(\s*"([^"]+)"'))
 	{
-		$base = $m.Groups[1].Value
+		$file = Join-Path $sprDir "$($m.Groups[1].Value).spr"
 
-		for($frame = 0; $frame -lt 8; $frame++)
+		if(-not (Test-Path $file))
 		{
-			if(-not (Test-Path (Join-Path $sprDir "$base$frame.spr")))
-			{
-				break
-			}
+			continue
+		}
 
-			$frames++
+		$bytes = [IO.File]::ReadAllBytes($file)
+
+		if($bytes.Length -ge $FrameBytes)
+		{
+			$frames += $bytes[$FrameCountOffset]
 		}
 	}
 

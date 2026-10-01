@@ -75,8 +75,8 @@ int main(int argc, char **argv)
 		"0x0800 is Mirror Mode. The radio groups are not enforced here. The "
 		"benchmark map ignores cheats.", "mask");
 	QCommandLineOption verboseOpt({"v", "verbose-io"},
-		"Report every failed file open, including loadSprite's routine probe "
-		"past the last frame of each sprite.");
+		"Report every failed file open, including the mission index's routine "
+		"probe past the last map.");
 
 	parser.addOption(assetsOpt);
 	parser.addOption(mapOpt);

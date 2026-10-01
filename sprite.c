@@ -24,15 +24,20 @@
 #define SPRITE_SIZE 64
 #define SPRITE_ROW_BYTES 16
 #define SPRITE_BYTES (SPRITE_SIZE * SPRITE_ROW_BYTES)
-#define SPRITE_HEADER_BYTES 16
 #define SPRITE_MAX_FRAMES 8
-/* A frame as stored in its slot's segment and in the cache: the 1,024 bytes of
-   pixels from the file, one span byte per row (buildRowSpans), then the
-   header's box in a paragraph of its own, so it arrives with the frame and no
-   near table holds it for every frame that could be loaded. */
+/* A frame as stored in the .spr file, its slot's segment and the cache alike
+   (format 2, tools\convert_sprite.ps1): the 1,024 bytes of pixels, one span
+   byte per row - the row's first and last opaque 4 pixel group, as
+   (first << 4) | last, or 0xF0 for an empty row - then a paragraph of the box,
+   the format tag, the sprite's frame count and this frame's index. All of it
+   is worked out by the converter, so a frame is loaded by copying it. */
 #define SPRITE_FRAME_BOX (SPRITE_BYTES + SPRITE_SIZE)
+#define SPRITE_FRAME_TAG (SPRITE_FRAME_BOX + 4)
+#define SPRITE_FRAME_COUNT (SPRITE_FRAME_TAG + 4)
+#define SPRITE_FRAME_INDEX (SPRITE_FRAME_COUNT + 1)
 #define SPRITE_FRAME_BYTES (SPRITE_FRAME_BOX + 16)
 #define SPRITE_FRAME_PARAS (SPRITE_FRAME_BYTES / 16)
+#define SPRITE_FORMAT 2
 #define SPRITE_SCALE_BITS 8
 #define SPRITE_NUM_MASK 0x1f
 #define SPRITE_FRAME_MASK 0x07
@@ -71,8 +76,6 @@ typedef struct sprite_bounds_t
 	u8 bottom;
 } sprite_bounds_t;
 
-static u8 spriteLoadBuffer[SPRITE_FRAME_BYTES];
-static u8 spriteHeader[SPRITE_HEADER_BYTES];
 static HANDLE spriteSegs[SPRITE_SLOT_CAPACITY];
 static u8 spriteFrameCounts[SPRITE_SLOT_CAPACITY];
 static u8 spriteCache[SPRITE_CACHE_FRAMES * SPRITE_FRAME_BYTES];
@@ -187,21 +190,16 @@ static const u8* getSpriteFrame(const u8 spriteId, sprite_bounds_t* bounds)
 	return frame;
 }
 
-/* The header's box, validated, into bounds. Its band bytes are not read: the
-   span bytes built at load (buildRowSpans) are per row and replaced them. */
-static u16 readSpriteHeader(VOID* fileHandle, sprite_bounds_t* bounds)
+/* A frame's trailer - the format tag, the sprite's frame count (the same in
+   every frame) and the frame's own index - and the sanity of its box. */
+static u16 checkSpriteFrame(const u8* frame, const u8 frameCount, const u8 frameIndex)
 {
-	INT bytesRead = p_read(fileHandle, &spriteHeader[0], SPRITE_HEADER_BYTES);
+	const sprite_bounds_t* bounds = (const sprite_bounds_t*)(frame + SPRITE_FRAME_BOX);
+	const u8* tag = frame + SPRITE_FRAME_TAG;
 
-	if(bytesRead != SPRITE_HEADER_BYTES ||
-		spriteHeader[0] != 'S' || spriteHeader[1] != 'P' ||
-		spriteHeader[2] != 'R' || spriteHeader[3] != 1)
+	if(tag[0] != 'S' || tag[1] != 'P' || tag[2] != 'R' || tag[3] != SPRITE_FORMAT ||
+		frame[SPRITE_FRAME_COUNT] != frameCount || frame[SPRITE_FRAME_INDEX] != frameIndex)
 		return FALSE;
-
-	bounds->left = spriteHeader[4];
-	bounds->top = spriteHeader[5];
-	bounds->right = spriteHeader[6];
-	bounds->bottom = spriteHeader[7];
 
 	if(bounds->left > bounds->right || bounds->right > SPRITE_SIZE ||
 		bounds->top > bounds->bottom || bounds->bottom > SPRITE_SIZE)
@@ -210,49 +208,22 @@ static u16 readSpriteHeader(VOID* fileHandle, sprite_bounds_t* bounds)
 	return TRUE;
 }
 
-/* After a frame's pixels, one byte per row: the row's first and last 4 pixel
-   group with anything opaque in it, as (first << 4) | last - the encoding the
-   header's 8 row bands use - or 0xF0 for a row with nothing opaque. A group is
-   one source byte, so this is a scan for the row's first and last non-zero
-   byte. Built here, once a frame, rather than stored in the .spr files. */
-static void buildRowSpans(u8* frame)
-{
-	u8* span = frame + SPRITE_BYTES;
-	const u8* row = frame;
-	u8 y;
-
-	for(y = 0; y < SPRITE_SIZE; y++, row += SPRITE_ROW_BYTES)
-	{
-		u8 first = 0;
-		u8 last = SPRITE_ROW_BYTES - 1;
-
-		while(first < SPRITE_ROW_BYTES && row[first] == 0)
-			first++;
-
-		if(first == SPRITE_ROW_BYTES)
-		{
-			span[y] = 0xf0;
-			continue;
-		}
-
-		while(row[last] == 0)
-			last--;
-
-		span[y] = (u8)((first << 4) | last);
-	}
-}
-
+/* One file a sprite, LOC::M:\IMG\SPR\<base>.spr: its frames back to back, each
+   already in the form the segment and the cache hold, so loading is a read and
+   a copy per frame. The first frame's count sizes the segment; a file that is
+   short, long, or has a frame out of place loads nothing, and the slot draws
+   nothing. */
 HANDLE loadSprite(TEXT* baseName, u8 id)
 {
 	TEXT fileName[SPRITE_FILE_NAME_LEN];
 	TEXT segName[SPRITE_SEG_NAME_LEN];
 	VOID* fileHandle;
-	HANDLE segHandle;
-	u16 frame;
-	u16 frameCount;
+	HANDLE segHandle = 0;
+	u8* staging = cacheFramePtr(0);
+	u8 frame = 0;
+	u8 frameCount = 0;
+	s8 extra;
 	u8 spriteNum = id & SPRITE_NUM_MASK;
-	/* The box lands where the frame keeps it, after the span bytes. */
-	sprite_bounds_t* loadBounds = (sprite_bounds_t*)&spriteLoadBuffer[SPRITE_FRAME_BOX];
 
 	/* A slot loaded for an earlier mission still holds its segment. Release
 	   it first: the new one is created under the same SPR<n> name, and a
@@ -265,90 +236,46 @@ HANDLE loadSprite(TEXT* baseName, u8 id)
 		invalidateSpriteCache(spriteNum);
 	}
 
-	for(frame = 0; frame < SPRITE_MAX_FRAMES; frame++)
-	{
-		INT bytesRead;
-		s8 extra;
+	/* Frames are staged in cache slot 0 rather than a buffer of their own: a
+	   cache slot only ever holds a copy, so it is emptied here and refilled on
+	   demand once the mission is running. */
+	spriteCacheEntries[0].valid = FALSE;
 
-		p_atos(&fileName[0], "LOC::M:\\IMG\\SPR\\%s%d.spr", baseName, frame);
+	p_atos(&fileName[0], "LOC::M:\\IMG\\SPR\\%s.spr", baseName);
 
-		if(p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
-		{
-			if(frame == 0)
-				return 0;
-
-			break;
-		}
-
-		if(!readSpriteHeader(fileHandle, loadBounds))
-		{
-			p_close(fileHandle);
-			return 0;
-		}
-
-		bytesRead = p_read(fileHandle, &spriteLoadBuffer[0], SPRITE_BYTES);
-
-		if(bytesRead != SPRITE_BYTES)
-		{
-			p_close(fileHandle);
-			return 0;
-		}
-
-		bytesRead = p_read(fileHandle, &extra, 1);
-
-		if(bytesRead != E_FILE_EOF)
-		{
-			p_close(fileHandle);
-			return 0;
-		}
-
-		p_close(fileHandle);
-	}
-
-	if(frame == 0)
+	if(p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
 		return 0;
 
-	frameCount = frame;
+	if(p_read(fileHandle, staging, SPRITE_FRAME_BYTES) == SPRITE_FRAME_BYTES)
+		frameCount = staging[SPRITE_FRAME_COUNT];
 
-	p_atos(&segName[0], "SPR%d", spriteNum);
+	if(frameCount >= 1 && frameCount <= SPRITE_MAX_FRAMES && checkSpriteFrame(staging, frameCount, 0))
+	{
+		p_atos(&segName[0], "SPR%d", spriteNum);
+		segHandle = p_sgcreate(&segName[0], frameCount * SPRITE_FRAME_PARAS, E_SEGMENT_HIGH);
+	}
 
-	segHandle = p_sgcreate(&segName[0], frameCount * SPRITE_FRAME_PARAS, E_SEGMENT_HIGH);
+	for(frame = 0; segHandle > 0 && frame < frameCount; frame++)
+	{
+		if(frame > 0 &&
+			(p_read(fileHandle, staging, SPRITE_FRAME_BYTES) != SPRITE_FRAME_BYTES ||
+			!checkSpriteFrame(staging, frameCount, frame)))
+			break;
+
+		p_sgcopyto(segHandle, ((u32)frame) * SPRITE_FRAME_BYTES, staging, SPRITE_FRAME_BYTES);
+	}
+
+	/* Every frame read, and nothing after them. */
+	if(segHandle > 0 && (frame < frameCount || p_read(fileHandle, &extra, 1) != E_FILE_EOF))
+	{
+		p_sgclose(segHandle);
+		segHandle = 0;
+	}
+
+	p_close(fileHandle);
 
 	if(segHandle <= 0)
 		return 0;
-
-	for(frame = 0; frame < frameCount; frame++)
-	{
-		INT bytesRead;
-
-		p_atos(&fileName[0], "LOC::M:\\IMG\\SPR\\%s%d.spr", baseName, frame);
-
-		if(p_open(&fileHandle, &fileName[0], P_FOPEN | P_FSTREAM) != 0)
-		{
-			p_sgclose(segHandle);
-			return 0;
-		}
-
-		if(!readSpriteHeader(fileHandle, loadBounds))
-		{
-			p_close(fileHandle);
-			p_sgclose(segHandle);
-			return 0;
-		}
-
-		bytesRead = p_read(fileHandle, &spriteLoadBuffer[0], SPRITE_BYTES);
-
-		p_close(fileHandle);
-
-		if(bytesRead != SPRITE_BYTES)
-		{
-			p_sgclose(segHandle);
-			return 0;
-		}
-
-		buildRowSpans(&spriteLoadBuffer[0]);
-		p_sgcopyto(segHandle, ((u32)frame) * SPRITE_FRAME_BYTES, &spriteLoadBuffer[0], SPRITE_FRAME_BYTES);
-	}
 
 	invalidateSpriteCache(spriteNum);
 	spriteFrameCounts[spriteNum] = (u8)frameCount;

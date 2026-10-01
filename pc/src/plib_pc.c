@@ -127,10 +127,11 @@ INT p_open(VOID **handle, const TEXT *name, UINT mode)
 
 	if(!f)
 	{
-		/*  Off by default, because a failed open is usually not a fault:
-		    loadSprite() finds a sprite's frame count by opening base0.spr,
-		    base1.spr and so on until one is missing, so the last probe of
-		    every slot lands here. When something really is absent, the
+		/*  Off by default, because a failed open is not always a fault:
+		    the mission index reads map1, map2 and so on until one is
+		    missing, so the first absent map lands here at every start-up.
+		    A sprite file (one per sprite, <base>.spr) is never probed, so
+		    a failure there is real. When something really is absent, the
 		    resolved path is what you want, hence -v. */
 		if(g_ioVerbose)
 			fprintf(stderr, "p_open: cannot open %s (from %s)\n", resolved, name);

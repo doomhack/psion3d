@@ -11,8 +11,8 @@ extern "C" {
 void        pcSetAssetRoot(const char *root);
 const char *pcGetAssetRoot(void);
 
-/* Report every failed p_open. Off by default: loadSprite probes past the last
-   frame of every sprite, so failures are routine rather than faults. */
+/* Report every failed p_open. Off by default: the mission index reads maps
+   until one is missing, so one failure at start-up is routine, not a fault. */
 void pcSetIoVerbose(int on);
 int  pcGetIoVerbose(void);
 
