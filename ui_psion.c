@@ -117,7 +117,7 @@ static void createFullWindow(uiwin_t *w, const UINT handle)
 	windata.extent.tl.y = 0;
 	windata.extent.width = UI_W;
 	windata.extent.height = UI_H;
-	windata.background = W_WIN_BACK_CLR | W_WIN_BACK_GREY_CLR;
+	windata.background = W_WIN_BACK_NONE | W_WIN_BACK_GREY_NONE;
 
 	w->win = wCreateWindow(0, W_WIN_EXTENT | W_WIN_BACKGROUND, &windata, handle);
 	wInitialiseWindowTree(w->win);
