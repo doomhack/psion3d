@@ -825,6 +825,35 @@ keep a second table.
 - [ ] The occlusion tests compare a sprite's perpendicular depth with a wall's distance along its ray. Off centre the wall reads up to 15% further than it is (1/cos 30 degrees at the screen edge), so a sprite standing just behind a wall near the edge of the view can still draw in front of it. Comparing against `f_wallDepth * cos(ray angle)` would fix it, in `draw()`, `resolvePlayerShot`, `drawImpact` and the per column clip together.
 - [ ] Decide whether a decoded-row cache per (frame, size bucket) is worth its memory - after the row decode above is measured.
 
+**Theoretical floor, 2026-10-01** - what sprites would cost if the only work
+were stepping interpolants, reading pixels and writing them. Units counted on
+the PC host per frame (sprites / rows / pixels drawn / pixels decoded / full,
+partial and skipped destination bytes): Enemies 6 / 142 / 2,115 / 2,115 / 54,
+261, 91; Decorations 8 / 117 / 2,946 / 2,946 / 149, 209, 85; Crowd 8 / 294 /
+9,967 / 6,982 / 569, 619, 347 (48 magnified rows reuse their decode); the
+weapon 41 rows, 1,316 pixels at 1:1. Priced with a model calibrated on this
+session's measured loops (~2.4 clocks a byte of code fetched, ~21 a
+read-modify-write, ~10 a plain memory access, ~9 a taken branch: it gives the
+C fill loop's 54 clocks a row and the unrolled span's 31) for an ideal kernel:
+the column table built once a sprite by the x interpolant, a pre-expanded
+source of one byte a pixel holding its opaque / black / grey bits, eight
+pixels shifted into the byte being built without a branch, then both planes
+stored (whole byte) or and-ed / or-ed (partial). That is ~63 clocks (2.3us) a
+pixel, 1.5us a whole byte, 4.7us a partial byte, 4us a row, 16us a sprite.
+Floor: Enemies 7.1ms against 32.9 measured, Decorations 8.9 against 40.4,
+Crowd 21.9 against 86.7 - 4 to 4.7x - and the weapon, stored pre-built as
+planes since it never scales, 1.1ms against 4.8. The bus alone (every byte
+moved, no instructions) is 0.2-0.6ms, so the floor is instruction-bound,
+not memory-bound. Today's code spends 8.7-15.6us a drawn pixel against the
+floor's 2.3; the per-row and per-source-byte overheads of the small-sprite
+path are most of the gap (37us a row and 10us a source byte, measured
+2026-09-22). With sprites and weapon at the floor and nothing else changed:
+Corridor 35.9, Empty room 44.6, Detail walls 35.9, Openings 20.0, Enemies
+32.9, Decorations 30.9, Crowd 21.0 fps, average 31.6 against 22.9 now; with
+the kernel 30% cheaper or 40% dearer, 29.9-33.2. The floor assumes formats
+with a memory cost: a pre-expanded source is 4 KB a frame (the near cache
+holds 9 KB), and a pre-built weapon 1.5 KB a frame.
+
 The row decode (2026-09-22). The TopSpeed disassembler (`tsda SPRITE out.txt`
 in DOSBox) showed the per-pixel loop in `buildSpriteRowMasks` was ~22
 instructions with 7 memory reads and 4 branches: its three mask

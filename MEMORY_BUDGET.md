@@ -1,10 +1,11 @@
 # Memory budget
 
-Measured 2026-09-22 from `PSION3D.MAP`, clean tree at `205e35e` (task 24,
-cheats). Re-measure with the recipe at the end whenever a global array is
-added; the numbers here go stale, the shape of the budget does not. The history
-table is appended by `memcheck -Record` on every change and is the current
-figure when it disagrees with the tables above it - refresh those when it does.
+Measured 2026-10-01 from `PSION3D.MAP`, clean tree at `59faa59` (task 26,
+profiling and the renderer optimisations). Re-measure with the recipe at the
+end whenever a global array is added; the numbers here go stale, the shape of
+the budget does not. The history table is appended by `memcheck -Record` on
+every change and is the current figure when it disagrees with the tables above
+it - refresh those when it does.
 
 ## The three limits
 
@@ -13,65 +14,78 @@ segments, and the SIBO machine has 512 KB total.
 
 | Limit | Used | Of | Headroom |
 | --- | ---: | ---: | ---: |
-| Near code (`_TEXT`) | 44,972 | 65,536 (68.6%) | 20,564 |
-| **Near data (DGROUP)** | **47,504** | **65,536 (72.5%)** | **18,032** |
-| System RAM (process + RAM disk) | ~267 KB | 512 KB (52%) | ~245 KB less OS |
+| Near code (`_TEXT`) | 49,052 | 65,536 (74.8%) | 16,484 |
+| **Near data (DGROUP)** | **47,616** | **65,536 (72.7%)** | **17,920** |
+| System RAM (process + RAM disk) | ~276 KB | 512 KB (54%) | ~236 KB less OS |
 
 **DGROUP is the binding constraint.** Every global, `static` and string
-literal lands there, and `memcheck` fails the build check above 48 KB - 1,648
-bytes away. Code is no longer far behind: it has almost doubled since
-2026-09-12, nearly all of it the front end (menus, HUD, mission index,
-benchmark, cheats). The 512 KB figure is not a useful ceiling for anything but
-the sprite asset count.
+literal lands there, and `memcheck` fails the build check above 48 KB - 1,536
+bytes away. Task 26's optimisations added nothing to it but an 8 byte table.
+
+**Code has overtaken it in share of its segment** (74.8% against 72.7%), and is
+the one growing: +4,080 since 2026-09-22, nearly all of it the assembler of
+task 26. Of `bmasm.a`'s 3,509 bytes, 3,200 are the unrolled row tables of the
+three wall spans (640 + 640 + 1,920), bought for ~11 ms a frame on the
+wall-heavy benchmark stations; unrolling anything else is a code decision as
+much as a speed one. The 512 KB figure is not a useful ceiling for anything
+but the sprite asset count.
 
 The linker map lays code, stack and DGROUP out linearly and the total is over
-64 KB (`0x17946`); that is fine because `CS` and `DS` are separate selectors.
+64 KB (`0x189A8`); that is fine because `CS` and `DS` are separate selectors.
 Do not read the image total as a segment limit.
 
-## Program image - 96,582 bytes resident
+## Program image - 100,776 bytes resident
 
 | Segment | Class | Bytes | What it is |
 | --- | --- | ---: | --- |
-| `_TEXT` | CODE | 44,972 | all C and assembler modules plus PLIB/WLIB stubs, by module below |
+| `_TEXT` | CODE | 49,052 | all C and assembler modules plus PLIB/WLIB stubs, by module below |
 | `STACK` | STACK | 4,096 | see stack below |
 | `_MAGIC` | MAGIC | 4,096 | SIBO process control area, fixed by the runtime |
 | `_INIT` | DATA | 2 | |
-| `_CONST` | DATA | 4,237 | `sincos_tab` 2,048, `enemyStats`, `ammoTypes`, `weapons`, and ~1,800 of string literals and const tables (menu labels, cheat names, HUD text) |
-| `_DATA` | DATA | 383 | initialised globals: `rayIdxOffset` 120, `player`, `blackBm`/`greyBm`, bitmap masks, RNG seeds, mode/mission/settings/bench/cheat state |
-| `_BSS` | BSS | 38,780 | zero-initialised globals - the real cost, broken down below |
-| `BSS_END` | BSS | 6 | |
+| `_CONST` | DATA | 4,249 | `sincos_tab` 2,048, `enemyStats`, `ammoTypes`, `weapons`, `ddaWalkers` 8, and ~1,800 of string literals and const tables (menu labels, cheat names, HUD text) |
+| `_DATA` | DATA | 387 | initialised globals: `rayIdxOffset` 120, `player`, `blackBm`/`greyBm`, bitmap masks, RNG seeds, mode/mission/settings/bench/cheat state |
+| `_BSS` | BSS | 38,875 | zero-initialised globals - the real cost, broken down below |
+| `BSS_END` | BSS | 7 | |
 
-DGROUP is `_MAGIC` through `BSS_END`: 4,096 + 2 + 4,237 + 383 + 38,780 + 6
-plus alignment = 47,504.
+DGROUP is `_MAGIC` through `BSS_END`: 4,096 + 2 + 4,249 + 387 + 38,875 + 7
+plus alignment = 47,616.
 
-The `.IMG` file (49,664 bytes) is `_TEXT` + `_CONST` + `_DATA` + headers.
+The `.IMG` file (53,760 bytes) is `_TEXT` + `_CONST` + `_DATA` + headers.
 `STACK`, `_MAGIC` and `_BSS` are allocated at load and cost nothing on disk.
 
-## `_TEXT` by module - 44,972 bytes
+The profiling build (`PROF3D.IMG`, `tools\profile.bat`) is not this image: its
+DGROUP is 47,952, +336 for the pass tables, 1,200 to the limit. Keep it inside
+the limit too.
+
+## `_TEXT` by module - 49,052 bytes
 
 Only extern functions are published, so a module is measured from its lowest
 public to the next module's; a module's leading `static` functions are counted
 in the one before it. Treat the figures as +/- a couple of hundred bytes.
+`psion3d.c` publishes only `main`, so its statics sit after `bmasm.a`; that
+split is taken from the end of `bmasm.a`'s pattern table (0xB975).
 
 | Module | Bytes | | Module | Bytes |
 | --- | ---: | --- | --- | ---: |
-| `menu.c` | 6,679 | | `hud.c` | 1,950 |
-| `walls.c` | 5,994 | | `player.c` | 1,877 |
-| `draw.c` | 5,961 | | `mission.c` | 1,355 |
-| `enemy.c` | 4,590 | | `ui_psion.c` | 1,237 |
-| `game_map.c` | 3,170 | | `labwall.c` | 1,139 |
-| `bitmap.c` | 2,653 | | `cheat.c` | 583 |
-| `sprite.c` | 2,387 | | `automap.c` + `bench.c` | 479 |
-| `gameloop.c` | 2,235 | | `pickup.c` + `decor.c` + `level.c` | 428 |
-| `psion3d.c` + `fpasm.a` | ~815 | | `videomem.a` | 92 |
-| runtime start-up | 575 | | SDK stubs, `N$` helpers | 773 |
+| `menu.c` | 6,633 | | `hud.c` | 1,925 |
+| `walls.c` | 5,985 | | `player.c` | 1,865 |
+| `draw.c` | 5,923 | | `mission.c` | 1,287 |
+| `enemy.c` | 4,584 | | `ui_psion.c` | 1,203 |
+| `bmasm.a` | 3,509 | | `labwall.c` | 1,133 |
+| `sprite.c` | 3,270 | | `psion3d.c` + `fpasm.a` | 812 |
+| `game_map.c` | 3,233 | | `cheat.c` | 583 |
+| `bitmap.c` | 2,229 | | `automap.c` + `bench.c` | 477 |
+| `gameloop.c` | 2,215 | | `pickup.c` + `decor.c` + `level.c` | 424 |
+| SDK start-up and stubs, `N$` helpers | 1,346 | | `ddaasm.a` + `videomem.a` | 416 |
 
-Grouped: renderer (bitmap, draw, walls, labwall, sprite, videomem) ~18.2 KB;
+Grouped: renderer (bitmap, draw, walls, labwall, sprite, and the assembler
+`bmasm`, `ddaasm`, `videomem`) ~22.5 KB, up from 18.2, all of it task 26;
 game (enemy, player, map, gameloop, pickups) ~12.3 KB; front end (menu,
-mission, hud, automap, bench, cheat, ui) ~12.3 KB; runtime and `main` ~2.2 KB.
-`debug.c`, `fp_math.c` and `settings.c` contribute data only.
+mission, hud, automap, bench, cheat, ui) ~12.1 KB; runtime and `main` ~2.2 KB.
+`debug.c`, `fp_math.c` and `settings.c` contribute data only. `bitmap.c` lost
+~420 bytes to `bmasm.a` (the clear and the three spans moved out).
 
-## `_BSS` - 38,780 bytes
+## `_BSS` - 38,875 bytes
 
 The linker publishes only extern symbols, so file-scope `static`s appear as
 gaps between consecutive publics. Regions below are those gaps, attributed from
@@ -91,9 +105,11 @@ the declarations.
 | `spriteCol` / `ColShift` / `RowPix` | 545 | `sprite.c` | per-column source byte or column, bit shift (small sprites), and the current source row unpacked a pixel per byte (magnified sprites) |
 | `mapInfo` | ~88 | `game_map.c` | level numbers and text offsets, 8 benchmark stations |
 | `benchFps10` | 16 | `bench.c` | per-station result |
-| everything else | ~340 | | sprite row masks, segment handles and frame counts, cache entries, `objectiveState`, window and font statics, runtime |
+| everything else | ~435 | | sprite row masks and `spriteColVisible` (30, the per-column wall clip), segment handles and frame counts, cache entries, `objectiveState`, window and font statics, runtime |
 
-Sprite working set total (`drawWall` through `map` in the map): 14,800.
+Sprite working set total (`drawWall` through `map` in the map): 14,895, up 95
+from 2026-09-22 with the sprite clipping and decoder work. The profiling
+build adds `passFrames` / `passTicks` (2 x 128) and `benchSkip` to `bench.c`.
 
 ## Far segments - 55,760 bytes
 
@@ -120,26 +136,30 @@ half the machine. Nothing enforces a ceiling; keep an eye on it as slots fill.
 `DIRECT_VIDEO_MEM_ACCESS` is defined in `psion3d.c`. The compatibility blit
 path it disables would add one 10,240-byte segment-backed WLIB bitmap.
 
-## Stack - 4,096 allocated, ~400 used
+## Stack - 4,096 allocated, ~500 used
 
-Last measured 2026-09-12. Deepest frame is `draw()`: `f_wallDepth[60]` 120 +
-`spriteHits[8]` 80 + `markedSprites[8]` 16 + `wallhits[3]` 30 + `wallImpact`
-10 + scalars, about 290 bytes, with under 100 more in `drawWall` /
-`projectSprite` beneath it. `loadSprite()` at ~80 (`fileName[64]` +
-`segName[16]`) is the next largest.
+Measured 2026-10-01 from the `sub sp` in each function's `tsda` listing.
+Deepest is `draw()`: 374 bytes of locals (0x176) - `f_wallDepth[60]` 120,
+`spriteHits[8]`, `markedSprites[8]` 16, `wallhits[3]` 42 since `wallhit_t`
+went to 14 bytes, the `ddaray_t` block 10, the hoisted per-frame values and
+scalars - plus five saved registers, ~390 bytes, up from ~290. Under it
+`drawProjectedSprite` takes 92 + 10 and the wall styles and `ddaWalk` walkers
+a few words each, so ~500 at the deepest. `loadMapFile()` at 226 (its 64 byte
+read chunk and parser state) and `loadSprite()` at 94 are the next largest,
+and never under `draw()`.
 
 The unused ~3.6 KB is the cheapest reserve if DGROUP ever gets tight: the stack
 is not part of DGROUP, but shrinking it and moving a table there is a single
 edit in the project file.
 
-## RAM disk - ~121,519 bytes
+## RAM disk - ~125,615 bytes
 
 Assets are opened from `LOC::M:\IMG\...`, so if the game is installed on the
 internal RAM disk its files are also RAM.
 
 | File | Bytes |
 | --- | ---: |
-| `PSION3D.IMG` | 49,664 |
+| `PSION3D.IMG` | 53,760 |
 | 50 x `.spr` at 1,040 | 52,000 |
 | 4 x `.map` (`map1`, `map97`-`map99`) | 19,855 |
 
@@ -149,11 +169,11 @@ Installing to an SSD (`A:` / `B:`) removes this from the budget entirely.
 
 | | Bytes | % of 512 KB |
 | --- | ---: | ---: |
-| Program image | 96,582 | 18.4% |
+| Program image | 100,776 | 19.2% |
 | Far segments | 55,760 | 10.6% |
-| **Process** | **152,342** | **29.1%** |
-| RAM disk | 121,519 | 23.2% |
-| **Total** | **~267 KB** | **52.2%** |
+| **Process** | **156,536** | **29.9%** |
+| RAM disk | 125,615 | 24.0% |
+| **Total** | **~276 KB** | **53.8%** |
 
 The OS, window server and file system take their own share on top.
 
@@ -175,19 +195,28 @@ The OS, window server and file system take their own share on top.
 | 2026-09-21 | 43,636 | 45,568 | 51,200 | task 19: benchmark (bench.c, stations in mapInfo, results screen) |
 | 2026-09-21 | 43,636 | 46,592 | 51,200 | task 22: sprite frame cache 8 -> 9 slots (Decorations thrash, 3.2 ms) |
 | 2026-09-22 | 44,972 | 47,504 | 51,200 | task 24: cheats (cheat.c, Cheats screen, 16 hooks) |
+| 2026-09-30 | 45,798 | 47,616 | 51,200 | sprite decoder and clipping, mission index (97ad1b3..08d632b); task 26 profiling build, nothing in this image |
+| 2026-09-30 | 46,206 | 47,616 | 51,200 | task 26: DDA walk in assembler (ddaasm.a), solid map border check, walker table 8 B |
+| 2026-09-30 | 46,127 | 47,616 | 51,200 | task 26: screen clear as `rep stosw` (bmasm.a) |
+| 2026-10-01 | 46,097 | 47,616 | 51,200 | task 26: wall hit maths, per-ray set-up hoisted |
+| 2026-10-01 | 45,869 | 47,616 | 51,200 | task 26: `cpu=>286`, push-immediate only |
+| 2026-10-01 | 47,155 | 47,616 | 51,200 | task 26: fill and clear spans unrolled (2 x 640 B of row table) |
+| 2026-10-01 | 49,052 | 47,616 | 51,200 | task 26: dither span unrolled (1,920 B of row table) |
 
-Code has grown ~20 KB since 2026-09-12 and data ~4.7 KB, of which 1 KB was
+Code has grown ~24 KB since 2026-09-12 and data ~4.8 KB, of which 1 KB was
 the ninth sprite cache frame and most of the rest `menu.c`'s buffers and
-`_CONST` strings. Features should keep landing as code and far data, not as
-near arrays - but at this rate `_TEXT` is the next limit to watch.
+`_CONST` strings. Task 26 added 4.1 KB of code and 8 bytes of data for a
+15.3 -> 22.9 fps benchmark: the trade the budget wants, speed bought in the
+segment with room. Features should keep landing as code and far data, not as
+near arrays - but `_TEXT` is now the fuller segment by share, with 16 KB left.
 
 ## Rules of thumb
 
 - **Before adding a global array, check DGROUP.** Run `.\tools\memcheck.bat`,
   or read `__bss_end` in the map relative to the DGROUP segment paragraph
-  (e.g. `0BFB:B990` → 47,504).
+  (e.g. `0CFA:BA00` → 47,616).
 - **Bulk data goes far.** Sprites, level prose and the mission index already
-  do. A 128x128 map is 32,768 bytes against 18,032 free and cannot live in
+  do. A 128x128 map is 32,768 bytes against 17,920 free and cannot live in
   `map[][]` as declared; it would need a far segment and accessor changes in
   `game_map.h`.
 - **`{0}` initialisers move a variable from `_BSS` to `_DATA`.** Same DGROUP

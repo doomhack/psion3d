@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `TASKS.md` is the project task list - planned features and their current state. Check it before starting new work, and tick items off there as they land.
 
-`MEMORY_BUDGET.md` is the measured memory breakdown - near data (DGROUP) is the binding limit at ~65% of 64 KB, not the 512 KB system total. Check it before adding a global array, and run `.\tools\memcheck.bat` after the build to see the numbers and the delta (`-Baseline old.MAP` names the regions that moved; `-Record "note"` appends the history row).
+`MEMORY_BUDGET.md` is the measured memory breakdown - near data (DGROUP) is the binding limit at 72.7% of 64 KB (1.5 KB to memcheck's 48 KB limit), not the 512 KB system total, and near code is at 74.8% and the one growing. Check it before adding a global array, and run `.\tools\memcheck.bat` after the build to see the numbers and the delta (`-Baseline old.MAP` names the regions that moved; `-Record "note"` appends the history row).
 
 ## What this is
 
@@ -58,7 +58,7 @@ Working-tree line endings are mixed (git stores LF, some files are CRLF on disk)
 | `cheat.c` | Cheats (task 24): `cheatFlags` from the Cheats screen, `cheatActive` for the mission in play (none on the benchmark map), names, texts, radio groups; the hooks themselves sit in player, enemy, draw, sprite, automap and gameloop, all testing `cheatActive` |
 | `bench.c` | The benchmark: the stations of `map97.map` in turn, world frozen, fps per station for the `MENU_BENCH` results screen; under `BENCH_PROFILE` (`tools\profile.bat`) the ablation passes and per-part costs instead |
 | `hud.c` | The in-game HUD panels (health, objectives, weapons/ammo, fps) drawn through `ui.h` into the HUD target: static parts on a redraw event, values as single-call cells replaced only when they change (never invalidate the HUD window for a value; see task 8) |
-| `draw.c` | DDA ray cast, per-span wall depth buffer, sprite collection/sorting, player shot resolution |
+| `draw.c` | DDA ray cast, per-span wall depth buffer, sprite collection (in ray order, no depth sort), player shot resolution |
 | `walls.c` | Default wall style + `drawWall` function-pointer global |
 | `labwall.c` | Lab environment wall style (`drawWallLab`) |
 | `bitmap.c` | Local 1bpp screen buffers and fill/clear/pattern/line primitives |
@@ -66,7 +66,7 @@ Working-tree line endings are mixed (git stores LF, some files are CRLF on disk)
 | `fpasm.a` | JPI assembler `fpmul()` — the Q8 multiply, using the V30's native `IMUL` |
 | `ddaasm.a` | JPI assembler `ddaWalk0`..`ddaWalk3` — the DDA step loop, one entry per quadrant (picked once per ray through `ddaWalkers[]` in `draw.c`), all six of its values in registers, a pointer walk through `map[][]`; `pc/src/ddaasm_pc.c` is the C reference |
 | `bmasm.a` | JPI assembler `bmClearScreen()` (one `rep stosw` over both planes) and the wall styles' `bmFillRect4` / `bmClearRect4` / `bmFillPattern4` (clipping in registers, then a jump into 160 unrolled rows); `pc/src/bmasm_pc.c` is the C twin |
-| `sprite.c` | `.spr` loading into segments, frame cache, projection, drawing. A slot that failed to load draws nothing; there is no built-in fallback sprite |
+| `sprite.c` | `.spr` loading into segments, frame cache, projection, drawing. A slot that failed to load draws nothing; there is no built-in fallback sprite. [SPRITES.md](SPRITES.md) explains the whole pipeline |
 | `enemy.c` | Enemy state machine, AI tick, damage, per-type stats |
 | `player.c` | Player position/movement, weapon table and firing state |
 | `game_map.c` | 64x64 `map[][]`, ASCII-to-cell encoding, map file loading, per-level asset/wall-style selection |
