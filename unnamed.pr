@@ -28,5 +28,6 @@
 #compile fpasm
 #compile ddaasm
 #compile bmasm
+#compile sprasm
 #compile %main
 #link %main

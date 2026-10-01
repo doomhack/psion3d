@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `TASKS.md` is the project task list - planned features and their current state. Check it before starting new work, and tick items off there as they land.
 
-`MEMORY_BUDGET.md` is the measured memory breakdown - near data (DGROUP) is the binding limit at 72.7% of 64 KB (1.5 KB to memcheck's 48 KB limit), not the 512 KB system total, and near code is at 74.8% and the one growing. Check it before adding a global array, and run `.\tools\memcheck.bat` after the build to see the numbers and the delta (`-Baseline old.MAP` names the regions that moved; `-Record "note"` appends the history row).
+`MEMORY_BUDGET.md` is the measured memory breakdown - near data (DGROUP) is the binding limit at 67.1% of 64 KB (5.0 KB to memcheck's 48 KB limit), not the 512 KB system total, and near code is at 74.3% and the one that grows. Check it before adding a global array, and run `.\tools\memcheck.bat` after the build to see the numbers and the delta (`-Baseline old.MAP` names the regions that moved; `-Record "note"` appends the history row).
 
 ## What this is
 
@@ -66,6 +66,7 @@ Working-tree line endings are mixed (git stores LF, some files are CRLF on disk)
 | `fpasm.a` | JPI assembler `fpmul()` — the Q8 multiply, using the V30's native `IMUL` |
 | `ddaasm.a` | JPI assembler `ddaWalk0`..`ddaWalk3` — the DDA step loop, one entry per quadrant (picked once per ray through `ddaWalkers[]` in `draw.c`), all six of its values in registers, a pointer walk through `map[][]`; `pc/src/ddaasm_pc.c` is the C reference |
 | `bmasm.a` | JPI assembler `bmClearScreen()` (one `rep stosw` over both planes) and the wall styles' `bmFillRect4` / `bmClearRect4` / `bmFillPattern4` (clipping in registers, then a jump into 160 unrolled rows); `pc/src/bmasm_pc.c` is the C twin |
+| `sprasm.a` | JPI assembler `spriteDrawRows()` — a scaled sprite's row loop, set up by `drawProjectedSprite` in one global block (`spriteRows`): per row the Y interpolant and span byte, per pixel the X interpolant and two `shr`/`rcr` pairs into the plane bits, all in registers; `pc/src/sprasm_pc.c` is the C twin |
 | `sprite.c` | `.spr` loading into segments, frame cache, projection, drawing. A slot that failed to load draws nothing; there is no built-in fallback sprite. [SPRITES.md](SPRITES.md) explains the whole pipeline |
 | `enemy.c` | Enemy state machine, AI tick, damage, per-type stats |
 | `player.c` | Player position/movement, weapon table and firing state |
@@ -109,39 +110,39 @@ grep -aoi "N.\{0,1\}\(SgnMol\|SgnDiv\|LngShr\|LngShl\)" *.OBJ | sort | uniq -c
 
 The renderer has been through a measured optimisation pass (14 → 20fps). **Measure before optimising.** Five predictions during that pass were wrong, three of them "this is obviously faster" changes that regressed on the target.
 
-Measured budget, device, 2026-09-30 after task 26's DDA work and the assembler clear (`tools\profile.bat`), ms per frame:
+Measured budget, device, 2026-10-01, branch `sprite_optimisation` with everything below in it (`tools\profile.bat`), ms per frame:
 
 | Station | Frame | Rays | Walls | Sprites | Weapon | Clear | Blit | Other | Resid |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Corridor | 38.2 | 10.8 | 16.8 | 0.0 | 4.9 | 1.4 | 3.5 | 0.2 | 0.6 |
-| Empty room | 27.9 | 13.7 | 4.2 | 0.0 | 4.6 | 1.0 | 3.4 | 0.7 | 0.3 |
-| Detail walls | 35.5 | 12.0 | 13.3 | 0.0 | 4.7 | 1.2 | 3.6 | 0.2 | 0.5 |
-| Openings | 65.2 | 16.6 | 38.1 | -0.4 | 4.9 | 1.0 | 3.8 | 0.3 | 0.9 |
-| Enemies | 61.9 | 13.8 | 5.1 | 32.9 | 4.8 | 1.0 | 3.3 | 0.7 | 0.3 |
-| Decorations | 69.0 | 13.8 | 4.6 | 40.4 | 4.8 | 1.2 | 3.4 | 0.5 | 0.3 |
-| Crowd | 116.6 | 14.7 | 4.7 | 86.7 | 4.9 | 1.2 | 3.4 | 0.4 | 0.6 |
-| **Mean** | **59.1** | **13.6** | **12.4** | **22.8** | **4.8** | **1.1** | **3.4** | **0.5** | **0.5** |
+| Corridor | 30.5 | 9.5 | 12.0 | 0.2 | 3.6 | 1.5 | 3.7 | -0.2 | 0.2 |
+| Empty room | 24.3 | 12.2 | 3.6 | -0.1 | 3.3 | 1.2 | 3.5 | 0.3 | 0.3 |
+| Detail walls | 30.2 | 10.6 | 10.9 | 0.0 | 3.4 | 1.2 | 3.5 | 0.3 | 0.3 |
+| Openings | 52.9 | 14.9 | 28.6 | 0.0 | 3.3 | 1.2 | 3.5 | 0.3 | 1.1 |
+| Enemies | 42.9 | 12.4 | 4.2 | 17.8 | 3.2 | 1.2 | 3.4 | 0.4 | 0.3 |
+| Decorations | 45.1 | 12.5 | 3.7 | 20.3 | 3.1 | 1.3 | 3.4 | 0.3 | 0.5 |
+| Crowd | 86.6 | 13.3 | 4.3 | 60.4 | 3.3 | 1.7 | 3.6 | -0.3 | 0.3 |
+| **Mean** | **44.6** | **12.2** | **9.6** | **14.0** | **3.3** | **1.3** | **3.5** | **0.1** | **0.4** |
 
-The clear was 4.1ms as an unrolled C loop; `bmasm.a`'s `rep stosw` is 1.1ms (~0.21us, ~6 clocks a word). The blit moves nearly as many words by `rep movsw` in 3.4ms (0.71us a word), so its cost is video RAM, not code.
+The clear was 4.1ms as an unrolled C loop; `bmasm.a`'s `rep stosw` is 1.1-1.3ms (~0.21us, ~6 clocks a word). The blit moves nearly as many words by `rep movsw` in 3.5ms (0.71us a word), so its cost is video RAM, not code.
 
-The same run before the DDA work, for comparison: Frame 45.1 / 53.6 / 47.2 / 70.5 / 81.1 / 88.2 / 139.5 (mean 75.0), Rays 15.3 / 36.5 / 21.2 / 19.7 / 29.8 / 29.8 / 34.1 (mean 26.6); every other column within noise of today's. Frame is the sum of the other columns by construction, so a misread digit shows up as a row that does not add up (this table's Decorations was first transcribed as 80.2, and chased as an 8ms build difference that never existed).
+Earlier runs of the same profile, for comparison. Before task 26: Frame 45.1 / 53.6 / 47.2 / 70.5 / 81.1 / 88.2 / 139.5 (mean 75.0), Rays mean 26.6. After the DDA work and the assembler clear, with the old sprite decoders: Frame 38.2 / 27.9 / 35.5 / 65.2 / 61.9 / 69.0 / 116.6 (mean 59.1), Rays 13.6, Walls 12.4 (Openings 38.1, Corridor 16.8 before the spans were unrolled), Sprites 32.9 / 40.4 / 86.7 on the three sprite stations, Weapon 4.8. The profile's Frame column has predicted the benchmark to within 0.5ms a station. Frame is the sum of the other columns by construction, so a misread digit shows up as a row that does not add up (this table's Decorations was first transcribed as 80.2, and chased as an 8ms build difference that never existed).
 
-Unit costs, fitted to PC-host counts of the same frames (every station within 0.5ms; task 26 has the counts). **Rays:** 4.9ms fixed (81us a ray; ~1ms of it is the border and crosshair, and the per-ray part lost ~12.5us on 2026-10-01 when the loop-invariant set-up moved out of the loop), **3.6us per DDA step**, **24us per stop** (a wall hit or collected sprite, where the assembler walk returns to `draw()`), **52us of maths per wall hit** (~39us after 2026-10-01: two accessor calls, the index multiplies and odd-address words gone), 0.14ms per sprite projected. **Walls:** 14us per hit, **24us per span call**, 2us per row (~1.15us since the fill and clear spans were unrolled in `bmasm.a`, 2026-10-01). The step was 25.6us (~690 clocks) before task 26: TopSpeed does not inline the `static` accessors in `game_map.h`, so each step made three near calls with the loop state on the stack. Writing them out made it ~17us; the walk in assembler (`ddaasm.a`, all six values in registers, a pointer through `map[][]`) made it 3.6us; the stop was then trimmed from ~34us to ~24us (average 15.3 -> 16.9 -> 19.2 -> 19.5 fps). The weapon, clear and blit are a flat 9.3ms on every frame (12.4 before the assembler clear). For sizing a change in advance, ~15 clocks per V30 instruction (~0.55us) has held against the device.
+Unit costs, fitted to PC-host counts of the same frames (every station within 0.5ms; task 26 has the counts). **Rays:** 4.9ms fixed (81us a ray; ~1ms of it is the border and crosshair, and the per-ray part lost ~12.5us on 2026-10-01 when the loop-invariant set-up moved out of the loop), **3.6us per DDA step**, **24us per stop** (a wall hit or collected sprite, where the assembler walk returns to `draw()`), **52us of maths per wall hit** (~39us after 2026-10-01: two accessor calls, the index multiplies and odd-address words gone), 0.14ms per sprite projected. **Walls:** 14us per hit, **24us per span call**, 2us per row (~1.15us since the fill and clear spans were unrolled in `bmasm.a`, 2026-10-01). The step was 25.6us (~690 clocks) before task 26: TopSpeed does not inline the `static` accessors in `game_map.h`, so each step made three near calls with the loop state on the stack. Writing them out made it ~17us; the walk in assembler (`ddaasm.a`, all six values in registers, a pointer through `map[][]`) made it 3.6us; the stop was then trimmed from ~34us to ~24us (average 15.3 -> 16.9 -> 19.2 -> 19.5 fps). The weapon, clear and blit are a flat ~8.1ms on every frame (12.4 before the assembler clear, 9.3 before the weapon moved to `spriteBlitRows`). **Sprites** (`sprasm.a`, [SPRITES.md](SPRITES.md)): ~5us a drawn pixel and ~50us a row, so for the 11-30 pixel sprites on screen the row overhead is about half the cost. For sizing a change in advance, ~15 clocks per V30 instruction (~0.55us) has held against the device.
 
-Benchmark baseline on device, 2026-10-01, after the DDA work, the assembler clear, the wall hit maths, the per-ray set-up, `cpu=>286` and the unrolled wall and dither spans (Options → Benchmark, `map97.map`; a change's numbers go next to these in its commit message). Two runs agreed to 0.2 fps on one station and exactly elsewhere, so treat a change under 0.3 fps as noise and 0.5 as real - on the ~22 fps stations; on the 15-17 fps sprite stations 0.3 fps is already 1-1.3ms, and a lone reading there should be repeated before it is acted on:
+Benchmark baseline on device, 2026-10-01, branch `sprite_optimisation` at its wrap-up: everything on main (DDA work, assembler clear, wall hit maths, per-ray set-up, `cpu=>286`, unrolled spans; average 22.9) plus the direct sprite draw and weapon blit in `sprasm.a` with lean rows and inlined middle bytes (Options → Benchmark, `map97.map`; a change's numbers go next to these in its commit message). Two runs agreed to 0.2 fps on one station and exactly elsewhere, so treat a change under 0.3 fps as noise and 0.5 as real - on the 20-40 fps stations; on the crowd at 11.5 fps 0.3 fps is already 2.3ms, and a lone reading there should be repeated before it is acted on:
 
 | Station | fps | ms/frame |
 | --- | --- | --- |
-| Corridor | 31.6 | 32 |
-| Empty room | 38.6 | 26 |
-| Detail walls | 31.8 | 31 |
-| Openings | 18.6 | 54 |
-| Enemies | 16.7 | 60 |
-| Decorations | 14.8 | 68 |
-| Crowd | 8.6 | 116 |
-| **Average** | **22.9** | |
+| Corridor | 33.4 | 30 |
+| Empty room | 41.2 | 24 |
+| Detail walls | 33.4 | 30 |
+| Openings | 19.1 | 52 |
+| Enemies | 23.4 | 43 |
+| Decorations | 22.2 | 45 |
+| Crowd | 11.5 | 87 |
+| **Average** | **26.3** | |
 
-Read it as: walls are cheaper than sprites, and sprite *rows* are what cost — one decoration at 2 cells (Decorations) is worse than six enemies further off, and the crowd's heavy filling the screen is a 116ms frame. Openings at 54ms is the arch reveals and the second face behind every see-through cell. The empty room, the DDA-heavy case at 12–16 cells a ray, is now the fastest station: it was 53ms before task 26 made the step 7x cheaper.
+Read it as: walls are cheaper than sprites, and sprite *rows* are what cost — one decoration at 2 cells (Decorations) is worse than six enemies further off, and the crowd's heavy filling the screen is an 87ms frame. Openings at 52ms, now the slowest station but the crowd, is the arch reveals and the second face behind every see-through cell. The empty room, the DDA-heavy case at 12–16 cells a ray, is now the fastest station: it was 53ms before task 26 made the step 7x cheaper.
 
 **Span call count dominates wall cost, not rows written.** Three dither bands covering 0.31× the column height measured 5.6ms — 2.6× the per-row cost of the full-height span they sit on. Fewer, larger span calls win; splitting a style into *more* calls to write *fewer* rows loses. `WALL_DETAIL_DEPTH` and the `LAB_PANEL_*` switches in `walls.h` are the tunables, with their measured costs documented there.
 
@@ -160,7 +161,8 @@ Never isolate ray-loop internals by *substituting* values: everything downstream
 | Coarse block skip in the DDA | map1 is 98% solid wall with ~75 walkable cells and **zero** empty 8×8 blocks. Check the map before any spatial optimisation. |
 | 32×32 textured walls | 16fps against 20 at best, after three implementations. Code removed. |
 | Run-length texture rendering | Fixed 32 texel iterations per column, but `wallHeight` is `30720 / distance` so a wall 4 cells away is only 30 rows tall — fewer rows than iterations. |
-| Colour-run (RLE / transposed Doom post) sprite format | Measured 2026-09-21 with the decoder in C and then in assembler, identical numbers: Corridor 22.2 → 17.7, Enemies 12.4 → 9.6, Crowd 6.7 → 6.3. At on-screen sizes (11–30 px) a run is 1–4 destination pixels, so 1.6–2.8× fewer units at 2–3.5× the cost each; and the weapon lost its 4-pixels-per-lookup 1:1 path. TopSpeed's code for these loops is as tight as hand assembler, so "rewrite in asm" is not a lever either. Task 22 has the figures. |
+| Colour-run (RLE / transposed Doom post) sprite format | Measured 2026-09-21 with the decoder in C and then in assembler, identical numbers: Corridor 22.2 → 17.7, Enemies 12.4 → 9.6, Crowd 6.7 → 6.3. At on-screen sizes (11–30 px) a run is 1–4 destination pixels, so 1.6–2.8× fewer units at 2–3.5× the cost each; and the weapon lost its 4-pixels-per-lookup 1:1 path. TopSpeed's code for that decoder was as tight as hand assembler - true of that loop, not in general (next row). Task 22 has the figures. |
+| A scaled sprite draw in C with no decode | Measured 2026-10-01: TopSpeed spills the whole pixel loop to the stack (~34 instructions, ~20us a pixel), Sprites Enemies 32.9 -> 39.1ms, Crowd 86.7 -> 164.9. The same loop in `sprasm.a` with its state in registers is what shipped (17.8 / 60.4). `tsda` the C before deciding it cannot be beaten. |
 
 ## Assets
 

@@ -166,7 +166,12 @@ function Measure-Map($map)
 
 # Far sprite bytes: every loadSprite() call in game_map.c, resolved against the
 # frame files in spr/ the same way the loader does - frame 0 then consecutive
-# frames until one is missing, 1,024 bytes each.
+# frames until one is missing. Each frame is stored as SPRITE_FRAME_BYTES in
+# sprite.c, 1,104 bytes: the 1,024 bytes of pixels from the file, the 64
+# span bytes loadSprite builds after them, and a paragraph holding the
+# header's box. Keep this in step with that.
+$FrameBytes = 1104
+
 function Measure-FarSprites($root)
 {
 	$source = Join-Path $root "game_map.c"
@@ -194,7 +199,7 @@ function Measure-FarSprites($root)
 		}
 	}
 
-	return $frames * 1024
+	return $frames * $FrameBytes
 }
 
 # --- baseline ----------------------------------------------------------------
@@ -346,7 +351,7 @@ Write-Output ("memcheck: {0}  {1}" -f (Split-Path -Leaf $MapPath), $baseLabel)
 Write-Output ""
 Write-Row "Near code (_TEXT)" $now.Text $textDelta ("of {0:N0}" -f $SegmentSize)
 Write-Row "Near data (DGROUP)" $now.DGroup $dgroupDelta ("of {0:N0} ({1}%), limit {2:N0}, {3:N0} to limit" -f $SegmentSize, $percent, $Limit, $free)
-Write-Row "Far sprites" $far $farDelta "loadSprite() frames x 1,024, from spr/"
+Write-Row "Far sprites" $far $farDelta "loadSprite() frames x 1,104, from spr/"
 Write-Output ""
 
 foreach($seg in $now.Segments)

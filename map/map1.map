@@ -74,23 +74,32 @@ mappos   = 130, 44      ; pixel position on the world map screen
 
 [BRIEFING]
 As you are no doubt aware, [BADGUY ORG] has been conducting a thriving business on the dark web, supplying advanced technology to anyone with deep pockets and shallow principles.
-Their latest offering is something they call [PRODUCT_CODENAME]. We have no idea what it is. Nobody else seems particularly keen to discuss it either, which rarely indicates good news.
+
+Their latest offering is something they call [PRODUCT_CODENAME]. We have no idea what it is. Nobody else seems particularly keen to discuss it either.
+
 One of our clients has expressed a strong interest in obtaining a sample for "research purposes". Unfortunately, [BADGUY ORG] has repeatedly declined every offer made on the client's behalf.
 Since our good-faith negotiations have clearly reached a stalemate, our client has authorised us to make a bad-faith offer.
-As you might expect, [BADGUY ORG] do not advertise the location of their headquarters on their website. They also appear to have neglected to publish an organisational chart, annual accounts, or a helpful contact number.
-Fortunately, one of their less security-conscious employees signed an encrypted message with a cryptographic key we were able to trace back to [FRONT COMPANY].
+
+As you might expect, [BADGUY ORG] do not advertise the location of their headquarters on their website. Fortunately, one of their less security-conscious employees signed an encrypted message with a cryptographic key we were able to trace back to [FRONT COMPANY].
+
 Your destination is [CITY], where intelligence indicates [FRONT COMPANY] operates a research laboratory. We need you to pop in and install a small piece of software that will allow us to access their network remotely. We would prefer they remain unaware of this arrangement.
 Security is provided by a number of hired mercenaries. They are unlikely to appreciate your visit and may express this professionally. You are authorised to respond in kind.
-Laboratory personnel are not considered hostile and are not to be harmed. They can usually be identified by their white lab coats and the frankly excessive number of pens they insist on carrying. We have yet to establish why.
+
+Laboratory personnel are not considered hostile and are not to be harmed. They can usually be identified by their white lab coats and the frankly excessive number of pens they insist on carrying.
 
 [OBJECTIVE]
-Infiltrate the laboratory
-You will need to find a way to access the secured lab area.
+Access the Laboratory
+The main laboratory is inside a restricted section of the facility.
+Find a way past the security measures and gain access to the secured lab area.
 
 [OBJECTIVE]
-Install network backdoor
-We need to gain access their computer network. Find the reseach directors computer and install the rootkit.
+Install the Backdoor
+We need persistent access to the laboratory's computer network.
+Locate the Research Director's computer and install the supplied rootkit.
+Once installed, our people will handle the rest remotely.
 
 [OBJECTIVE]
-Avoid harming staff
-Try not to cause an international incident.
+Protect the Staff
+The scientists and support staff are not part of this operation.
+Avoid harming them unless absolutely necessary.
+We are trying to obtain intelligence, not create an international incident.

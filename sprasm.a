@@ -1,0 +1,647 @@
+module sprasm
+
+extrn _spriteRows
+extrn _spriteColVisible
+extrn _blackBm
+
+segment _TEXT(CODE,48H)
+
+public _spriteDrawRows:
+	push  bp
+	push  si
+	push  di
+	mov   bx,[_spriteRows+18]
+	mov   ax,1024
+	xor   dx,dx
+	div   bx
+	mov   si,ax
+	mov   cx,dx
+	mov   di,[_spriteRows+2]
+	mov   ax,[_spriteRows+16]
+	mov   [di],ax
+	lea   bp,[di][32]
+	mov   [_spriteRows+34],bp
+	xor   dx,dx
+sgEdge:
+	add   ax,si
+	add   dx,cx
+	sub   dx,bx
+	sbb   bp,bp
+	and   bp,bx
+	add   dx,bp
+	cmp   bp,1
+	adc   ax,0
+	mov   bp,dx
+	neg   bp
+	mov   bp,ax
+	adc   bp,0
+	inc   di
+	inc   di
+	mov   [di],bp
+	cmp   di,[_spriteRows+34]
+	jb    sgEdge
+	mov   ax,[_spriteRows+6]
+	test  ax,ax
+	jne   sdRow
+	jmp   near sdDone
+
+sdRow:
+	mov   bl,[_spriteRows+9]
+	xor   bh,bh
+	mov   si,[_spriteRows]
+	mov   al,[bx][si][1024]
+	mov   cl,4
+	shl   bx,cl
+	add   si,bx
+	mov   ah,al
+	shr   ah,cl
+	and   al,0FH
+	cmp   ah,al
+	jbe   sdSpan
+	jmp   near sdNext
+sdSpan:
+	mov   bx,[_spriteRows+20]
+	test  bx,bx
+	je    sdGroups
+	xchg  ah,al
+	xor   ax,0F0FH
+sdGroups:
+	mov   di,[_spriteRows+2]
+	mov   bl,ah
+	xor   bh,bh
+	add   bx,bx
+	mov   cx,[bx][di]
+	mov   bl,al
+	xor   bh,bh
+	add   bx,bx
+	mov   dx,[bx][di][2]
+	cmp   cx,[_spriteRows+12]
+	jge   sdClipL
+	mov   cx,[_spriteRows+12]
+sdClipL:
+	cmp   dx,[_spriteRows+14]
+	jle   sdClipR
+	mov   dx,[_spriteRows+14]
+sdClipR:
+	cmp   cx,dx
+	jl    sdDraw
+	jmp   near sdNext
+
+sdDraw:
+	mov   di,cx
+	shr   di,1
+	shr   di,1
+	shr   di,1
+	mov   bp,dx
+	dec   bp
+	mov   bx,bp
+	shr   bx,1
+	shr   bx,1
+	shr   bx,1
+	sub   bx,di
+	mov   [_spriteRows+34],bx
+	add   di,[_spriteRows+4]
+	mov   ax,bp
+	and   ax,7
+	mov   dx,7
+	sub   dx,ax
+	mov   [_spriteRows+40],dx
+	mov   bp,cx
+	and   bp,7
+	test  bx,bx
+	jne   sdMulti
+	mov   ax,bp
+	add   ax,dx
+	mov   bl,27
+	mul   bl
+	add   ax,sdPix0
+	mov   [_spriteRows+36],ax
+	jmp   sdPixels
+sdMulti:
+	mov   ax,dx
+	mov   bl,27
+	mul   bl
+	add   ax,sdPix0
+	mov   [_spriteRows+38],ax
+	mov   ax,bp
+	mov   bl,27
+	mul   bl
+	add   ax,sdPix0
+	mov   [_spriteRows+36],ax
+sdPixels:
+	mov   ax,cx
+	sub   ax,[_spriteRows+16]
+	imul  word [_spriteRows+26]
+	add   ax,[_spriteRows+24]
+	mov   dx,ax
+	mov   bp,[_spriteRows+26]
+	xor   ax,ax
+	xor   cx,cx
+	xor   bx,bx
+	call  word [_spriteRows+36]
+	mov   bx,[_spriteRows+34]
+	test  bx,bx
+	jne   sdFirst
+	mov   cl,[_spriteRows+40]
+	shr   ah,cl
+	shr   ch,cl
+	call  near sdFlush
+	jmp   near sdNext
+sdFirst:
+	call  near sdFlush
+	inc   di
+	dec   word [_spriteRows+34]
+	jne   sdMiddle
+	jmp   near sdLast
+sdMiddle:
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   al,ah
+	or    al,ch
+	mov   bx,[_spriteRows+22]
+	test  bx,bx
+	je    smVisible
+	mov   bx,di
+	sub   bx,[_blackBm]
+	and   bx,31
+	mov   bl,[bx][_spriteColVisible]
+	and   al,bl
+	and   ah,bl
+	and   ch,bl
+smVisible:
+	test  al,al
+	je    smDone
+	mov   bl,ah
+	not   bl
+	and   bl,ch
+	mov   cl,ch
+	not   cl
+	and   cl,ah
+	cmp   al,0FFH
+	jne   smPartial
+	mov   [di],bl
+	mov   [di][5120],cl
+	xor   bx,bx
+	jmp   sdMidNext
+smPartial:
+	not   al
+	and   [di],al
+	or    [di],bl
+	and   [di][5120],al
+	or    [di][5120],cl
+smDone:
+	xor   bx,bx
+sdMidNext:
+	inc   di
+	dec   word [_spriteRows+34]
+	je    sdLast
+	jmp   near sdMiddle
+sdLast:
+	call  word [_spriteRows+38]
+	mov   cl,[_spriteRows+40]
+	shr   ah,cl
+	shr   ch,cl
+	call  near sdFlush
+
+sdNext:
+	mov   ax,[_spriteRows+4]
+	add   ax,32
+	mov   [_spriteRows+4],ax
+	mov   ax,[_spriteRows+8]
+	add   ax,[_spriteRows+10]
+	mov   [_spriteRows+8],ax
+	dec   word [_spriteRows+6]
+	je    sdDone
+	jmp   near sdRow
+sdDone:
+	pop   di
+	pop   si
+	pop   bp
+	ret 0
+
+sdFlush:
+	mov   al,ah
+	or    al,ch
+	mov   bx,[_spriteRows+22]
+	test  bx,bx
+	je    sfVisible
+	mov   bx,di
+	sub   bx,[_blackBm]
+	and   bx,31
+	mov   bl,[bx][_spriteColVisible]
+	and   al,bl
+	and   ah,bl
+	and   ch,bl
+sfVisible:
+	test  al,al
+	je    sfDone
+	mov   bl,ah
+	not   bl
+	and   bl,ch
+	mov   cl,ch
+	not   cl
+	and   cl,ah
+	cmp   al,0FFH
+	jne   sfPartial
+	mov   [di],bl
+	mov   [di][5120],cl
+	xor   bx,bx
+	ret 0
+sfPartial:
+	not   al
+	and   [di],al
+	or    [di],bl
+	and   [di][5120],al
+	or    [di][5120],cl
+sfDone:
+	xor   bx,bx
+	ret 0
+
+sdPix0:
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	mov   bl,dh
+	mov   cl,bl
+	shr   bl,1
+	shr   bl,1
+	and   cl,3
+	add   cl,cl
+	mov   al,[bx][si]
+	shr   al,cl
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	add   dx,bp
+	ret 0
+
+public _spriteBlitRows:
+	push  bp
+	push  si
+	push  di
+	cld
+	mov   ax,[_spriteRows+6]
+	test  ax,ax
+	jne   sbStart
+	jmp   near sbDone
+sbStart:
+	mov   bl,[_spriteRows+9]
+	xor   bh,bh
+	mov   si,[_spriteRows]
+	lea   bp,[bx][si][1024]
+	mov   cl,4
+	shl   bx,cl
+	add   si,bx
+	mov   di,[_spriteRows+4]
+sbRow:
+	mov   al,[bp]
+	inc   bp
+	mov   ah,al
+	mov   cl,4
+	shr   ah,cl
+	and   al,0FH
+	cmp   ah,[_spriteRows+28]
+	jae   sbFirstOk
+	mov   ah,[_spriteRows+28]
+sbFirstOk:
+	cmp   al,[_spriteRows+30]
+	jbe   sbLastOk
+	mov   al,[_spriteRows+30]
+sbLastOk:
+	cmp   ah,al
+	jbe   sbDraw
+	jmp   near sbNext
+sbDraw:
+	push  si
+	push  di
+	mov   dl,al
+	sub   dl,ah
+	inc   dl
+	xor   dh,dh
+	mov   bl,ah
+	xor   bh,bh
+	add   si,bx
+	add   bx,[_spriteRows+32]
+	mov   cx,bx
+	shr   cx,1
+	add   di,cx
+	xor   ax,ax
+	xor   cx,cx
+	test  bl,1
+	je    sbPairs
+	lodsb
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	call  near sbFlush
+	inc   di
+	dec   dx
+sbPairs:
+	cmp   dx,2
+	jl    sbOdd
+	lodsb
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	lodsb
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	call  near sbFlush
+	inc   di
+	sub   dx,2
+	jmp   sbPairs
+sbOdd:
+	test  dx,dx
+	je    sbRowEnd
+	lodsb
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	shr   al,1
+	rcr   ah,1
+	shr   al,1
+	rcr   ch,1
+	mov   cl,4
+	shr   ah,cl
+	shr   ch,cl
+	call  near sbFlush
+sbRowEnd:
+	pop   di
+	pop   si
+sbNext:
+	add   si,16
+	add   di,32
+	dec   word [_spriteRows+6]
+	je    sbDone
+	jmp   near sbRow
+sbDone:
+	pop   di
+	pop   si
+	pop   bp
+	ret 0
+
+sbFlush:
+	mov   al,ah
+	or    al,ch
+	je    sbfDone
+	mov   bl,ah
+	not   bl
+	and   bl,ch
+	mov   cl,ch
+	not   cl
+	and   cl,ah
+	cmp   al,0FFH
+	jne   sbfPart
+	mov   [di],bl
+	mov   [di][5120],cl
+	ret 0
+sbfPart:
+	not   al
+	and   [di],al
+	or    [di],bl
+	and   [di][5120],al
+	or    [di][5120],cl
+sbfDone:
+	ret 0
+
+end

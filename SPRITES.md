@@ -1,15 +1,19 @@
 # Sprites
 
-How the game's sprites work as of 2026-10-01: the file format, where frames
-live in memory, how the ray cast finds them, and how a frame is scaled, clipped
-and drawn into the two bitplanes. Everything is in [sprite.c](sprite.c) and
-[sprite.h](sprite.h) unless noted; slot ids are in [sprslot.h](sprslot.h), and
-the collection and draw calls are in `draw()` in [draw.c](draw.c).
+How the game's sprites work as of 2026-10-01 (branch `sprite_optimisation`):
+the file format, where frames live in memory, how the ray cast finds them, and
+how a frame is scaled, clipped and drawn into the two bitplanes. The C side is
+[sprite.c](sprite.c) and [sprite.h](sprite.h); the row loops are assembler in
+[sprasm.a](sprasm.a), declared in [sprasm.h](sprasm.h), with their C twin in
+[pc/src/sprasm_pc.c](pc/src/sprasm_pc.c). Slot ids are in
+[sprslot.h](sprslot.h), and the collection and draw calls are in `draw()` in
+[draw.c](draw.c).
 
 Costs quoted are device measurements from the benchmark and its profiling build
-(TASKS.md tasks 22 and 26). Sprites are now the largest cost wherever they are
-on screen: 32.9 ms of the Enemies station's 60 ms frame, 86.7 ms of the Crowd
-station's 116.
+(TASKS.md tasks 22 and 26). Sprites are still the largest cost wherever they
+are on screen, but half what they were: 17.8 ms of the Enemies station's 43 ms
+frame (32.9 of 62 with the old decoders), 60.4 ms of the Crowd station's 87
+(86.7 of 117).
 
 ## The pipeline in one view
 
@@ -19,17 +23,20 @@ station's 116.
    v
  base<N>.spr  -- 16 byte header + 1,024 byte 2bpp frame, one file a frame
    | loadSprite(base, slot), at mission start (loadMapData)
+   |   buildRowSpans(): + 64 span bytes, one a source row; + the header's box
    v
- far segment SPR<slot>  -- every frame of the slot, 1 KB each
+ far segment SPR<slot>  -- every frame of the slot, 1,104 B each
    | getSpriteFrame(): LRU, 9 frames
    v
- near cache spriteCache[]  -- what the decoders read
+ near cache spriteCache[]  -- what the row loops read
    |
    |   draw(): the ray cast marks sprite cells it passes through,
    |           projectSprite() turns each into a screen column, height, depth
    v
- drawProjectedSprite()  -- clip, map columns, decode rows to masks, blit
- drawSprite()           -- the weapon overlay, 1:1, no scaling
+ drawProjectedSprite()  -- clip, wall clip, fill spriteRows
+   -> spriteDrawRows()  -- sprasm.a: scaled, straight from the source pixels
+ drawSprite()           -- the weapon overlay, 1:1: clip, fill spriteRows
+   -> spriteBlitRows()  -- sprasm.a: four pixels a source byte, no interpolant
    v
  screenBm  (black plane, then grey plane)
 ```
@@ -53,6 +60,10 @@ way for a sprite to hide what is behind it without darkening it.
 
 Rows are 16 bytes, four pixels a byte, **low bits first**: pixel `x` of a row
 is bits `(x & 3) * 2` of byte `x >> 2`. The frame is row-major, 1,024 bytes.
+That order is what the row loops are built on: shifting a source byte right
+two bits at a time yields its pixels left to right, and rotating each pixel's
+two bits into two registers leaves the first pixel in bit 0 - the screen's own
+low-bit-first order.
 
 ### The `.spr` file
 
@@ -70,16 +81,31 @@ read after the payload returns `E_FILE_EOF`).
 | 16 | 1,024 | the frame |
 
 The bounding box is in pixels but measured in whole 4-pixel groups, so
-`left` and `right` always land on a source byte boundary. Each band byte holds
-the first and last opaque 4-pixel group in those eight rows, as
-`(firstGroup << 4) | lastGroup` with groups 0-15; a band with nothing opaque is
-`0xF0` (first 15 after last 0), which the drawing code reads as empty. The box
-lets the draw skip transparent margins of the whole frame; the bands let it
-skip them row by row, which matters for figures much narrower at the head than
-at the shoulders.
+`left` and `right` always land on a source byte boundary. A frame with nothing
+opaque has a box of all zeros, and `right == 0` is what every caller tests for
+"draw nothing". The box is all the game keeps from the header.
 
-A frame with nothing opaque has a box of all zeros, and `right == 0` is what
-every caller tests for "draw nothing".
+Each band byte holds the first and last opaque 4-pixel group in those eight
+rows, as `(firstGroup << 4) | lastGroup`, with `0xF0` for a band with nothing
+opaque. The old decoders drew by band; the row loops use a span byte per
+**row** instead (below), so the loader ignores the bands. The converter still
+writes them and the format is unchanged.
+
+### Span bytes, built at load
+
+`buildRowSpans()` appends 64 bytes to each frame as it is loaded, one per
+source row, in the bands' encoding: `(first << 4) | last` for the row's first
+and last 4-pixel group with anything opaque in it, `0xF0` for an empty row. A
+group is one source byte, so this is a scan for the row's first and last
+non-zero byte. 19 of the art's 2,238 opaque rows span all 16 groups, which is
+why it is first and last rather than first and a 4-bit count.
+
+The spans are built from the pixels, so the `.spr` files and the converter are
+unchanged. A frame in memory is therefore **1,104 bytes**: the 1,024 bytes of
+pixels, the 64 span bytes, then a paragraph whose first four bytes are the
+header's box (`SPRITE_FRAME_BOX`; the other 12 are padding, since segments
+are allocated in paragraphs). It travels as one block through the far segment
+and the cache, so a frame's geometry needs no near table of its own.
 
 ### Making one
 
@@ -144,12 +170,13 @@ all eleven slots when a mission starts. Each call:
    a name without closing the old one would leak a segment a mission.
 2. Opens `LOC::M:\IMG\SPR\<base><n>.spr` for n = 0, 1, ... and validates each:
    the header magic and version, a box inside 64 x 64, exactly 1,024 bytes of
-   frame and then end of file. The box and bands go straight into
-   `spriteFrameBounds[slot][frame]`.
+   frame and then end of file.
 3. Creates one far segment of exactly the frames found
-   (`p_sgcreate(..., E_SEGMENT_HIGH)`, 64 paragraphs a frame).
-4. Opens every file a second time and copies its frame into the segment
-   through the 1 KB `spriteLoadBuffer`.
+   (`p_sgcreate(..., E_SEGMENT_HIGH)`, 69 paragraphs a frame).
+4. Opens every file a second time and assembles the frame in the 1,104 byte
+   `spriteLoadBuffer` - the header's box into its slot after the spans, the
+   pixels at the start, the span bytes built from them - and copies the whole
+   frame into the segment.
 
 A frame that fails validation fails the whole slot; a slot that fails to load
 has no segment and a frame count of 0, and `getSpriteFrame` then reports every
@@ -158,23 +185,25 @@ deliberately no built-in fallback sprite: one cost 2 KB of near data
 (MEMORY_BUDGET.md).
 
 The far segments are why art is cheap and near data is not: 50 frames are
-51,200 bytes of far memory and none of DGROUP.
+55,200 bytes of far memory and none of DGROUP.
 
 ## The frame cache
 
-The decoders read frames from near memory, so frames are copied out of their
-far segments on demand into `spriteCache`, **nine** 1 KB slots managed least
-recently used (`getSpriteFrame`):
+The row loops read frames from near memory, so frames are copied out of their
+far segments on demand into `spriteCache`, **nine** 1,104 byte slots managed
+least recently used (`getSpriteFrame`):
 
 - A hit is a scan of nine entries for the id, and a touch of a 16-bit use
   clock. When the clock wraps every entry's age is flattened to 0, so LRU
   order survives the wrap approximately.
-- A miss evicts the least recently used entry (or an empty one) and copies 1 KB
-  with `p_sgcopyfr`. That copy is the cost a miss carries - bringing far memory
-  near measured about 0.35 ms per KB.
-- The box and bands are not in the cache: they stay in
-  `spriteFrameBounds`, near, for all 32 x 8 possible frames, so a frame's
-  geometry is known without touching its pixels.
+- A miss evicts the least recently used entry (or an empty one) and copies
+  the frame - pixels, spans and box together - with `p_sgcopyfr`. That copy is the
+  cost a miss carries - bringing far memory near measured about 0.35 ms per KB.
+- Either way `getSpriteFrame` then hands back the frame and copies its box
+  out of it. Nothing near is sized by the slot count: the box used to sit in
+  `spriteFrameBounds`, 12 bytes for each of the 32 x 8 frames that could ever
+  load (3 KB of DGROUP, two thirds of it the bands), and the span bytes could
+  never have lived near that way (256 x 64 is 16 KB).
 
 Nine is a measured number. The Decorations benchmark station shows nine
 distinct frames at once (four decorations, four pickups, the weapon); with
@@ -236,95 +265,144 @@ whether the sprite can be shot.
 
 ## Drawing a projected sprite
 
-`drawProjectedSprite(hit, f_wallDepth)` does the rest. In order:
+Nothing is decoded ahead of the draw. There is no column table, no row buffer
+and no mask table: each destination pixel is read from the source frame
+through two interpolants and written as part of its destination byte. The
+split is C for what happens once a sprite, assembler for what happens once a
+row and once a pixel - written in C, TopSpeed kept every value of the pixel
+loop on the stack and a pixel cost ~20 us (TASKS.md task 22); in registers it
+is ~5.
 
-### 1. Place and clip
+### 1. Place and clip (C, `drawProjectedSprite`)
 
 The sprite is centred on its column (`spanX * 4 + 2`) and on screen row 80, the
 horizon, plus its offsets. The rectangle is clipped to the 240 x 160 view, then
 shrunk to the frame's opaque box scaled to this size (`scaleBound`, a rounded-up
-16-bit divide). A mirrored sprite has its box and bands mirrored first.
+16-bit divide). A mirrored sprite has its box mirrored first. The two steps are
+`(64 << 8) / width` and `/ height`: 8.8 fixed point, source pixels per
+destination pixel.
 
-### 2. Clip against walls, column by column
+### 2. Clip against walls, column by column (C)
 
 The centre test above decides *whether* a sprite is drawn; this decides *which
 of its columns*. Walking in from each end, columns whose wall is nearer than the
 sprite are dropped, narrowing the span to the outermost columns it is in front
 of. If a nearer wall also cuts through the middle - a window frame, a pillar -
 `spriteColVisible` gets a 4-bit nibble per column, set where the sprite is in
-front, and every decoded row is masked with it. Hidden columns are therefore
-neither decoded nor drawn over the wall. The comparison is the sprite's
-perpendicular depth against the wall's distance *along the ray*, which reads up
-to 15% far at the screen edge (TASKS.md task 22 has the fix, not yet done).
+front, and the block's `occluded` flag tells the row loop to mask every byte it
+writes with it. The comparison is the sprite's perpendicular depth against the
+wall's distance *along the ray*, which reads up to 15% far at the screen edge
+(TASKS.md task 22 has the fix, not yet done).
 
-### 3. Build the per-row spans
+### 3. Fill the block (C)
 
-Each 8-row band of the source gives a destination x range from its band byte,
-scaled to this size and clipped to the span. Rows of a band with nothing opaque
-are skipped outright.
+`spriteRows` is one global block of two-byte fields ([sprasm.h](sprasm.h)),
+which the assembler reaches by absolute address so it needs no register for a
+pointer: the frame, the first destination row, the row count, the Y
+interpolant's start and step, the clipped span `xStart`..`xEnd` and the
+unclipped `left`, the X step, the mirror and occlusion flags, and the X
+interpolant's start and direction. The mirror is folded into those last two -
+`accBase` is 0 or 16,383 (the far edge, `(64 << 8) - 1`) and `advance` is plus
+or minus the step - so the row loop takes no branch for it. `groupX` points at
+a 17-entry table on the C stack that the assembler fills.
 
-### 4. Map destination columns to source columns, once
+### 4. The group edges (`spriteDrawRows` prologue)
 
-Every row samples the same source column at a given screen column, so the
-mapping is built once for the sprite by stepping a fixed-point accumulator
-(`SPRITE_SCALE_BITS` = 8 fractional bits) across the span, backwards when
-mirrored. What is stored depends on the decoder:
+`groupX[g]` is the destination x where source group `g`'s left edge lands:
+`left + ceil(4g * 256 / step)`, the same rounding as `scaleBound`, so a row's
+span byte converts to destination pixels by two lookups. All 17 come from one
+`div`: the quotient and remainder of `1024 / step` are added in turn, a
+remainder reaching the step carries into the quotient branch-free (`sub` /
+`sbb` / `and` / `add`, then `cmp` / `adc`), and a non-zero remainder rounds up
+(`neg` / `adc`). In C it was a call and a divide per entry, ~245 us of a
+sprite's ~295 us of set-up. The method was checked against `scaleBound`
+exhaustively, every step 1-16,384 and every group, 0 different.
 
-- Small sprites: `spriteCol[x]` is the source byte and `spriteColShift[x]` the
-  bit shift of the pixel within it.
-- Magnified sprites: `spriteCol[x]` is the source pixel column, with columns
-  outside the sprite set to 64, an index that always reads transparent.
+### 5. A row (`spriteDrawRows`)
 
-### 5. Walk the rows
+For each destination row:
 
-A second accumulator steps the source row. A destination row is only decoded
-when its source row differs from the last one decoded; a sprite drawn larger
-than 64 rows repeats source rows, and those repeats only re-blit the masks
-already built. Decoding produces three mask bytes per destination byte -
-**opaque**, **black** and **grey** - in `spriteRowOpaque`, `spriteRowBlack` and
-`spriteRowGrey`.
+1. The Y interpolant's high byte is the source row; its span byte is
+   `frame[1024 + row]`. A span with first after last (`0xF0`) skips the row.
+2. Mirrored, the span becomes `15 - last`, `15 - first`: an `xchg` of its two
+   nibbles and an `xor ax,0F0FH`.
+3. `x0 = groupX[first]` and `x1 = groupX[last + 1]`, clipped to
+   `xStart`..`xEnd`; an empty result skips the row.
+4. The X interpolant starts at `accBase + (x0 - left) * advance`, one `imul`.
+5. The row is split into its destination bytes: a first byte that may start
+   part way in, middle bytes of eight pixels, and a last byte that may end
+   early. A row inside one byte is both first and last.
 
-### 6. Decode - two decoders, split at 64 rows
+### 6. The pixel block
 
-Measured per size, neither decoder wins everywhere (TASKS.md task 22), so the
-height picks one:
+Eight pixels of straight-line code, 27 bytes and 13 instructions each, with
+the interpolant in `DX` and its step in `BP`:
 
-- **Below 64 (`buildSpriteRowMasks`)**: one pixel at a time - read the source
-  byte, shift out two bits, branch on transparent / black / grey and set a bit
-  in the masks. About 11 us a pixel.
-- **64 and over (`buildMagnifiedRowMasks`)**: the source pixels the span covers
-  are first unpacked to one byte each (`spriteRowPix`); then each destination
-  byte gathers its eight pixels' 2-bit values into a word in the source's own
-  packed layout, and three 256-entry tables (`spriteOpaqueMask`,
-  `spriteBlackMask`, `spriteGreyMask`, built once, four pixels a lookup) turn
-  each half into mask nibbles. About 4.4 us a pixel, but ~37 us a row and
-  ~10 us a source byte of unpacking, which only rows as wide as a magnified
-  sprite's pay back. The end bytes are masked to the span afterwards.
+```
+mov bl,dh / mov cl,bl / shr bl,1 / shr bl,1   source byte = column >> 2
+and cl,3 / add cl,cl                          bit shift = (column & 3) * 2
+mov al,[bx][si]  / shr al,cl                  the pixel in bits 0-1
+shr al,1 / rcr ah,1                           its low bit into AH
+shr al,1 / rcr ch,1                           its high bit into CH
+add dx,bp                                     next destination pixel
+```
 
-### 7. Blit
+After eight pixels the first is in bit 0 of `AH` and `CH`, the screen's order,
+and the byte's colours fall out of the two registers: **grey** is
+`AH & ~CH` (value 1), **black** `CH & ~AH` (value 2), **opaque** `AH | CH`
+(white, 3, is opaque with neither colour). No pixel tests anything.
 
-For each destination byte of the row, both planes through one pointer (the
-grey plane is `BM_BYTES` past the black one):
+The block is entered by computed call - the entry is the block's address plus
+27 times the slot - so a partial byte simply runs fewer pixels: the first byte
+of a row starting at bit `p` enters at slot `p` and its pixels land in bits
+`p`..7; a last byte ending at bit `q` enters at slot `p + 7 - q` and is shifted
+down by `7 - q` after. Middle bytes, always eight pixels, run their own inlined
+copy of the block and of the write, so they make no call at all.
 
-- opaque mask `0xFF`: both plane bytes are stored outright, no read;
-- opaque mask 0: skipped;
+### 7. The write
+
+Per destination byte, both planes through one pointer (the grey plane is
+`BM_BYTES` past the black one), after masking all three values with
+`spriteColVisible` when the sprite is occluded:
+
+- opaque `0xFF`: both plane bytes are stored outright, no read;
+- opaque 0: skipped;
 - otherwise: `plane = (plane & ~opaque) | colour` on each plane, a read and a
   write.
 
 So a transparent pixel leaves the background alone, a white one clears both
 planes, and black or grey set their own plane and clear the other.
 
+A sprite drawn larger than 64 rows reads its repeated source rows again: the
+old magnified decoder reused them, and the direct draw is faster without it.
+
 ## The weapon overlay
 
 `drawSprite(spanX, y, spriteId)` draws the player's weapon, last in `draw()`
 before the crosshair: frame 0 of the current weapon's slot normally, frame 1
 while firing, at the weapon's `spanX * 4` and `y` from the weapon table in
-[player.c](player.c), lowered by the switch animation and the recoil. It is
-never scaled, so it has its own 1:1 path: rows clipped by the box and the
-bands, then two source bytes (eight pixels) at a time into one destination byte
-through the same three mask tables, with the same whole-byte fast path, and
-half-byte cases at row ends that are 4- but not 8-pixel aligned. It costs a
-flat ~4.8 ms a frame.
+[player.c](player.c), lowered by the switch animation and the recoil.
+
+It is never scaled, so it has no interpolant. The C clips to the screen and the
+box - every edge a multiple of 4, so whole groups clip exactly - and fills the
+same block, plus three per-sprite constants: `firstGroup` and `lastGroup`, the
+groups the clip allows, and `leftGroup`, the screen group source group 0 lands
+on. `spriteBlitRows` then walks the rows with `BP` on the span bytes and `SI` /
+`DI` on the source and destination rows (stepped by 16 and 32):
+
+- the row's span is trimmed to `firstGroup`..`lastGroup`, an empty one skipped;
+- the destination byte is screen group `leftGroup + first` shifted down, its
+  low bit saying which half;
+- each group is a `lodsb` and four pixels of `shr al,1` / `rcr ah,1` /
+  `shr al,1` / `rcr ch,1` into the same plane bits as the scaled path, two
+  groups inlined per destination byte. A row starting on the odd nibble fills
+  its first byte's top half, which is where four rotates put its pixels; a last
+  group that lands alone in a byte's low half is shifted down by 4;
+- the write is the scaled path's, without the occlusion mask.
+
+The held pistol is 41 rows and 1,080 pixels once the spans trim it (1,316 with
+the bands), and the overlay costs 3.1-3.6 ms a frame against 4.8 for the old
+1:1 loop and its mask tables.
 
 ## Other users
 
@@ -338,43 +416,63 @@ flat ~4.8 ms a frame.
   stand on the same floor line.
 - Tracers are lines, not sprites, but read the projected enemies' columns.
 
+## The C twin
+
+[pc/src/sprasm_pc.c](pc/src/sprasm_pc.c) is both row loops in plain C - a pixel
+at a time, the masks built with tests - and is what the PC host runs, so every
+golden frame with a sprite in it checks the C twin, not the assembler. The
+assembler was checked against it by simulation: an interpreter of the `.a`
+text, fed the real frames at every size, mirror and clip the benchmark and
+random placements produce (11,345 scaled sprites and 2,948 blits at the last
+change, 0 mismatches), with planted bugs to show the check bites. **Change
+both together.** The twin builds `groupX` with the `scaleBound` formula rather
+than the carried quotient, so the simulation also compares the two methods.
+
 ## Memory
 
 | Where | Bytes | What |
 | --- | ---: | --- |
-| far | 51,200 | 50 frames in 11 segments |
-| DGROUP | 9,216 | `spriteCache`, nine frames |
-| DGROUP | 3,072 | `spriteFrameBounds`, 32 slots x 8 frames x 12 bytes - 11 slots used |
-| DGROUP | 1,024 | `spriteLoadBuffer`, used only while loading |
-| DGROUP | 768 | the three 256-entry mask tables |
-| DGROUP | ~650 | column map, shift, unpacked row, row masks, `spriteColVisible` |
+| far | 55,200 | 50 frames in 11 segments, 1,104 B each (pixels, spans, box) |
+| DGROUP | 9,936 | `spriteCache`, nine frames |
+| DGROUP | 1,104 | `spriteLoadBuffer`, used only while loading |
+| DGROUP | 72 | `spriteRows` (42) and `spriteColVisible` (30) |
+| code | ~2,920 | `sprite.c` 1,601 and `sprasm.a` ~1,318 |
 
-About 14.7 KB of near data in all, the second largest user after the screen
-buffer (MEMORY_BUDGET.md). Each extra cache slot is another 1 KB of it.
+About 11 KB of near data in all (MEMORY_BUDGET.md), 3.6 KB less than the
+decoders needed: their three 256-entry mask tables and column and row buffers
+went, and so did `spriteFrameBounds`, for the 720 bytes of spans and boxes in
+the cache. Each extra cache slot is another 1,104 bytes of it; an extra sprite
+slot costs no near data at all.
 
 ## Cost
 
-Measured on the benchmark's sprite stations (profile, 2026-09-30), with what
+Measured on the benchmark's sprite stations (profile, 2026-10-01), with what
 they draw a frame (counted on the PC host):
 
-| Station | Sprites | Rows | Pixels drawn | Bytes written | Sprite ms | per pixel |
+| Station | Sprites | Rows | Pixels drawn | Sprite ms | before | per pixel, all in |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Enemies | 6 | 142 | 2,115 | 315 | 32.9 | 15.6 us |
-| Decorations | 8 | 117 | 2,946 | 358 | 40.4 | 13.7 us |
-| Crowd | 8 | 294 | 9,967 | 1,188 | 86.7 | 8.7 us |
+| Enemies | 6 | 142 | 2,115 | 17.8 | 32.9 | 8.4 us |
+| Decorations | 8 | 117 | 2,946 | 20.3 | 40.4 | 6.9 us |
+| Crowd | 8 | 294 | 9,967 | 60.4 | 86.7 | 6.1 us |
 
-The weapon is 1,316 pixels at 1:1 for 4.8 ms. Crowd is cheapest per pixel
-because its screen-filling heavy goes through the magnified decoder and repeats
-source rows.
+"Before" is the old decoders on main. A sprite costs about **5 us a drawn
+pixel plus ~50 us a row**, so for the 11-30 pixel sprites the benchmark shows,
+the row is about half the cost; the middle bytes, inlined, are the cheapest
+pixels. On the benchmark that made the average 22.9 -> 26.3 fps: Enemies
+16.7 -> 23.4, Decorations 14.8 -> 22.2, Crowd 8.6 -> 11.5, and the wall
+stations +0.5-2.6 fps from the cheaper weapon alone.
 
-What the work itself needs - stepping the interpolants, reading pixels, writing
-them, nothing else - was priced on 2026-10-01 from a cost model calibrated on
-this device (TASKS.md task 22): about 2.3 us a pixel, so 7.1 ms for Enemies,
-8.9 for Decorations, 21.9 for Crowd and 1.1 for the weapon, 4-4.7x under
-today's. The bus alone would be 0.2-0.6 ms, so sprites are bound by
-instructions, not memory. That floor assumes a source format of one byte a
-pixel (4 KB a frame) and a weapon stored ready-built as planes, both memory the
-current format does not spend.
+The floor - stepping the interpolants, reading pixels and writing them, priced
+on 2026-10-01 from the device-calibrated cost model (TASKS.md task 22) - is
+7.1 ms for Enemies, 8.9 for Decorations, 21.9 for Crowd and 1.1 for the weapon:
+today's are 2.3-2.8x over it, and were 4-4.7x. That floor assumes a source
+format of one byte a pixel (4 KB a frame) and a weapon stored ready-built as
+planes, memory the current format does not spend.
+
+Estimates for this code ran optimistic every time, by 1.5-2x: the row code is
+dense in taken branches, calls and memory operands, and on the V30 each taken
+branch or call discards the prefetch queue, so price those nearer 30 clocks
+than 9. Measure a change; do not predict it.
 
 ## Limits and gotchas
 
@@ -383,16 +481,18 @@ current format does not spend.
 - **No depth sort**: overlapping sprites found by different rays can be drawn
   in the wrong order.
 - **Nine cache frames**: more distinct frames than that on screen thrash, a
-  1 KB far copy per miss.
+  1,104 byte far copy per miss.
 - **Occlusion depth mismatch** at the screen edges (perpendicular sprite depth
   against along-ray wall distance), up to 15%.
+- **`spriteRows` is assembler-addressed**: its offsets are written into
+  `sprasm.a`, so a field added or moved in `sprasm.h` must be matched there.
+  Every member is two bytes so the offsets are `2n`.
 - **Frame numbers wrap** modulo the slot's frame count instead of failing.
 - **Loading opens every file twice**, once to validate and count, once to copy.
 - **A missing or malformed file blanks its whole slot**, silently on the
   device (the PC host's `-v` reports failed opens).
-- **21 slots are free**; filling them is far memory only, but each slot's
-  bounds already reserve their 96 bytes of near data.
+- **21 slots are free**; filling them is far memory only.
 
-Rejected before, with figures in CLAUDE.md and TASKS.md task 22: a colour-run
-(RLE) source format, in C and in assembler, and an assembler rewrite of the
-same decoder loop.
+Rejected, with figures in CLAUDE.md and TASKS.md task 22: a colour-run (RLE)
+source format, in C and in assembler; and the direct scaled draw in C, which
+was slower than the decoders it replaced until its loop moved to assembler.

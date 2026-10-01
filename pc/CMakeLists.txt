@@ -16,7 +16,7 @@ set(GAME_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 # Mirrors the #compile list in ../unnamed.pr, minus the platform modules:
 # psion3d.c (WLIB windows and the event pump), debug.c (gPrintText and PLIB's
-# software float package), videomem.a, fpasm.a, ddaasm.a and bmasm.a (JPI assembler).
+# software float package), videomem.a, fpasm.a, ddaasm.a, bmasm.a and sprasm.a (JPI assembler).
 # Listed explicitly, never globbed -- a glob would sweep psion3d.c back in.
 set(GAME_SOURCES
     ${GAME_ROOT}/bitmap.c
@@ -47,6 +47,7 @@ set(PC_SOURCES
     src/fpasm_pc.c      # fpmul, plus the layout assertions fpdiv depends on
     src/ddaasm_pc.c     # ddaWalk, the DDA step loop ddaasm.a runs on the device
     src/bmasm_pc.c      # bmClearScreen, the rep stosw bmasm.a runs on the device
+    src/sprasm_pc.c     # spriteDrawRows, the scaled sprite row loop sprasm.a runs on the device
     src/debug_pc.c      # stands in for debug.c
     src/host.c          # the frame driver; the only PC file that includes game headers
     src/menu_pc.cpp     # ui.h with QPainter: the menu screens (not ui_*.h, which AutoUic claims)
