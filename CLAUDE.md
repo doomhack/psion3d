@@ -172,6 +172,8 @@ Sprites are 64x64, one file per sprite, `<base>.spr`, holding its 1-8 frames bac
 
 Convert PNGs with `tools\convert_sprite.bat`. For raw output use `.\tools\convert_sprite.bat /f sprites\sci spr\sci.spr` (a base path takes `sci0.png`, `sci1.png` ... until one is missing; a single `.png` makes a one-frame sprite) or `-OutputPath`, and `tools\convert_all_sprites.bat` to redo every sprite in `sprites\` — do not use PowerShell redirection, it corrupts binary output. Pass `-WhiteTransparent true` only when near-white should become transparent (the default preserves it as white).
 
+Sounds are `.wve` files: a 32-byte PLIB `SndFile` header, then 8kHz A-law, one byte a sample (8,000 bytes a second). Convert WAVs with `.\tools\convert_sound.bat in.wav out.wve`; it resamples and encodes, and `-Gain 100` (default) matches the SDK's `wav2wve`, which uses only half the codec's range - `-Gain 200` is full scale, `-Normalize` puts the peak at 4095. The Psion's A-law sign bit is set for *negative* samples, the reverse of most G.711 code, so do not swap in a library encoder. AGENTS.md has the header layout and how the converter was checked. Playback is one channel with no mixer (task 12).
+
 ## Working style
 
 Keep edits narrow. Do not reformat the generated trig table or other large tables unless asked, and do not delete the generated Psion artifacts (`*.OBJ`, `PSION3D.EXE`, `PSION3D.IMG`, `PSION3D.MAP`) unless explicitly asked to clean up. Follow the existing C style: tabs, braces on their own line, `static` helpers, project typedefs (`s16`, `u16`, `f16`, `s32`), and an `f_` prefix on fixed-point variables where scale matters.
